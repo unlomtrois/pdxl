@@ -1,22 +1,24 @@
 package parser
 
-// Fixture-based tests: parse each .txt in testdata/, pretty-print the AST,
-// and compare against the corresponding .golden file.
+// Fixture-based golden tests.
 //
-// To regenerate all golden files after a deliberate AST/printer change:
+// Each .txt in testdata/ is parsed; the pretty-printed AST is compared
+// against the corresponding .golden file.
+//
+// Regenerate goldens after a deliberate change:
 //
 //	go test ./internal/parser/... -update
 //
-// Each fixture is named for the PDXScript construct it exercises:
+// Fixture inventory (see testdata/ at project root):
 //
-//	advance.txt               — simple key=value block, potential trigger
-//	government_reform.txt     — modifier block, negative numbers (-0.25)
-//	international_organizations.txt — tagged block (rgb {...}), identifier lists
-//	international_organization.txt  — scope chains (c:GEN, scope:actor ?= {...})
-//	modifier_types.txt        — no-whitespace assignment (key=value), game_data block
-//	parliament_types.txt      — colon-prefixed type refs (parliament_type:foo)
-//	special_statuses.txt      — pipe in path (define:Name|CONSTANT), color tagged block
-//	subject_type.txt          — negative float (-0.1), scope:actor = {...} pattern
+//	advance                  — simple fields, potential trigger
+//	government_reform        — modifier block, negative numbers (-0.25)
+//	international_organizations — tagged block (rgb {…}), identifier lists
+//	international_organization  — scope chains, ?= operator
+//	modifier_types           — no-whitespace assignment, game_data block
+//	parliament_types         — colon-prefixed type refs
+//	special_statuses         — pipe paths (define:Name|CONSTANT)
+//	subject_type             — negative float, scope:actor pattern
 
 import (
 	"bytes"
@@ -26,17 +28,20 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"pdxl/internal/testutil"
 )
 
 var update = flag.Bool("update", false, "regenerate golden files instead of comparing")
 
 func TestFixtures(t *testing.T) {
-	fixtures, err := filepath.Glob("testdata/*.txt")
+	td := testutil.TestdataDir()
+	fixtures, err := filepath.Glob(filepath.Join(td, "*.txt"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(fixtures) == 0 {
-		t.Fatal("no fixture files found in testdata/")
+		t.Fatalf("no fixture files found in %s", td)
 	}
 
 	for _, fixturePath := range fixtures {
@@ -53,7 +58,7 @@ func TestFixtures(t *testing.T) {
 			}
 
 			got := renderFile(ast)
-			goldenPath := filepath.Join("testdata", name+".golden")
+			goldenPath := filepath.Join(td, name+".golden")
 
 			if *update {
 				if err := os.WriteFile(goldenPath, []byte(got), 0644); err != nil {
@@ -76,8 +81,7 @@ func TestFixtures(t *testing.T) {
 	}
 }
 
-// renderFile pretty-prints a parsed File to a string — same logic as the CLI
-// printer but returns a string so tests can compare without side effects.
+// renderFile pretty-prints a parsed File to a string for golden comparison.
 func renderFile(f *File) string {
 	var b bytes.Buffer
 	for _, item := range f.Items {
@@ -118,7 +122,6 @@ func indent(depth int) string {
 	return strings.Repeat("  ", depth)
 }
 
-// diffLines produces a simple line-by-line diff for test failure messages.
 func diffLines(got, want string) string {
 	gotLines := strings.Split(got, "\n")
 	wantLines := strings.Split(want, "\n")
