@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"go-pdxl/internal/lexer"
+	"pdxl/internal/lexer"
 )
 
 func main() {

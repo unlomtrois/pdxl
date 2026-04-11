@@ -1,4 +1,4 @@
-module go-pdxl
+module pdxl
 
 go 1.25
 

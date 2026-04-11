@@ -7,7 +7,7 @@ lint:
 	golangci-lint run ./...
 
 build:
-	go build -o bin/paradox_studio ./cmd/paradox_studio
+	go build -o bin/pdxl ./cmd/pdxl
 
 clean:
 	rm -rf bin/
