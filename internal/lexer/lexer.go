@@ -45,12 +45,18 @@ func (l *Lexer) Next() *Token {
 		// Otherwise, treat as number
 		if !l.isAtEnd() && (isAlpha(byte(l.peek())) || l.peek() == '_') {
 			l.pos -= size
-			tag = l.lexIdentifier(startPos)
+			tag = l.lexIdentifier()
 		} else {
 			tag = l.lexNumber()
 		}
 	case isIdentifierStart(c):
-		tag = l.lexIdentifier(startPos)
+		tag = l.lexIdentifier()
+		if tag == identifier {
+			switch string(l.source[startPos:l.pos]) {
+			case "yes", "no":
+				tag = literal_boolean
+			}
+		}
 	default:
 		switch c {
 		case '"':
@@ -135,31 +141,11 @@ func (l *Lexer) Next() *Token {
 	}
 }
 
-// lexIdentifier scans an identifier or keyword
-func (l *Lexer) lexIdentifier(start int) Tag {
+// lexIdentifier scans an identifier
+func (l *Lexer) lexIdentifier() Tag {
 	for !l.isAtEnd() && isIdentifierChar(l.peek()) {
 		l.advance()
 	}
-	end := l.pos
-
-	// Check if this might be a keyword (yes/no)
-	isPotentialKeyword := false
-	if start >= 0 && start < len(l.source) {
-		switch l.source[start] {
-		case 'y', 'n':
-			if end-start <= 3 {
-				isPotentialKeyword = true
-			}
-		}
-	}
-
-	if isPotentialKeyword {
-		content := l.source[start:end]
-		if bytes.Equal(content, []byte("yes")) || bytes.Equal(content, []byte("no")) {
-			return literal_boolean
-		}
-	}
-
 	return identifier
 }
 
