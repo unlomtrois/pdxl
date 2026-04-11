@@ -1,11 +1,11 @@
 { pkgs ? import <nixpkgs> {} }:
 
 pkgs.mkShell {
-  buildInputs = [
-    pkgs.go
-    pkgs.golangci-lint
-    pkgs.gopls
-    pkgs.gnumake
+  buildInputs = with pkgs; [
+    go_1_25
+    golangci-lint
+    gopls
+    gnumake
   ];
 
   shellHook = ''

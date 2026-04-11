@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/unlomtrois/go-pdxl/internal/lexer"
+	"go-pdxl/internal/lexer"
 )
 
 func main() {

@@ -1,6 +1,6 @@
-module github.com/unlomtrois/go-pdxl
+module go-pdxl
 
-go 1.20
+go 1.25
 
 require (
 	// Add dependencies as needed
