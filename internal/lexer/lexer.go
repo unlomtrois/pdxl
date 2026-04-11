@@ -233,7 +233,9 @@ func (l *Lexer) isAtEnd() bool {
 	return l.pos >= len(l.source)
 }
 
-// advance consumes and returns the current rune and its byte size
+// advance consumes and returns the current rune and its byte size.
+// Note: invalid UTF-8 bytes produce utf8.RuneError (U+FFFD) with size 1.
+// Since RuneError > 127, it passes isIdentifierChar — no validation is performed.
 func (l *Lexer) advance() (rune, int) {
 	if l.isAtEnd() {
 		return 0, 0
