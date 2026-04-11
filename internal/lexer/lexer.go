@@ -51,11 +51,9 @@ func (l *Lexer) Next() *Token {
 		}
 	case isIdentifierStart(c):
 		tag = l.lexIdentifier()
-		if tag == identifier {
-			switch string(l.source[startPos:l.pos]) {
-			case "yes", "no":
-				tag = literal_boolean
-			}
+		switch string(l.source[startPos:l.pos]) {
+		case "yes", "no":
+			tag = literal_boolean
 		}
 	default:
 		switch c {
