@@ -1,42 +1,41 @@
 version: "2"
 
 linters:
+  # 1. Enable linters directly in the linters block
   enable:
     - revive
-    - prealloc    # Essential for slice capacity optimization
-    - perfsprint  # Avoids expensive fmt.Sprintf allocations
-    - gocritic    # Catches large struct copies and string conversions
-    - unconvert   # Removes redundant, allocating conversions
-    - staticcheck # General performance checks
+    - prealloc    # Essential: finds non-preallocated slices
+    - perfsprint  # Essential: replaces heavy fmt.Sprintf with strconv
+    - gocritic    # Performance checks like hugeParam (copying large structs)
+    - unconvert   # Removes redundant type conversions
+    - staticcheck # Industry standard for performance & bugs
 
-linters-settings:
-  revive:
-    rules:
-      - name: var-naming
-        disabled: true
-        
-  errcheck:
-    exclude-functions:
-      - (*os.File).Close
-      - (io.ReadCloser).Close
+  # 2. Settings are now nested directly inside the linters block in v2
+  settings:
+    revive:
+      # disable-all-rules: true # Use this if you only want specific rules
+      rules:
+        - name: var-naming
+          disabled: true
+    
+    errcheck:
+      exclude-functions:
+        - (*os.File).Close
+        - (io.ReadCloser).Close
 
-  # Specific settings to target memory efficiency
-  gocritic:
-    enabled-checks:
-      - hugeParam      # Flags large structs passed by value (copies)
-      - rangeValCopy   # Flags large values copied in for-range loops
-      - stringXbytes   # Flags inefficient string/byte conversions
-      - appendCombine  # Merges multiple appends into one allocation
-  
-  prealloc:
-    simple: true
-    range-loops: true
-    for-loops: true
+    gocritic:
+      enabled-checks:
+        - hugeParam     # Passing large structs by value
+        - rangeValCopy  # Large value copies in loops
+        - stringXbytes  # Inefficient string/byte conversions
+    
+    prealloc:
+      simple: true
+      range-loops: true
 
-  perfsprint:
-    # Optimizes fmt.Sprintf to strconv where possible
-    int-conversion: true
-    err-error: true
-    error-f: true
-    sprintf1: true
-    strconcat: true
+# 3. Global exclusions for rules that still leak through (like staticcheck's naming)
+issues:
+  exclude-rules:
+    - linters:
+        - staticcheck
+      text: "ST1003" # Silences staticcheck's version of var-naming
