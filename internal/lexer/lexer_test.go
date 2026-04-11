@@ -158,3 +158,46 @@ func TestIdentifierCanContainAmpersand(t *testing.T) {
 	source := []byte("ghw_region_finland_&_estonia = something")
 	testTokenize(t, source, []Tag{identifier, equal, identifier})
 }
+
+func TestUTF8Identifier(t *testing.T) {
+	source := []byte("flag:Linnéa José")
+	testTokenize(t, source, []Tag{identifier, colon, identifier, identifier})
+}
+
+func TestUTF8IdentifierValues(t *testing.T) {
+	source := []byte("flag:Linnéa José")
+	l := Init(source)
+
+	expected := []string{"flag", ":", "Linnéa", "José"}
+	for _, want := range expected {
+		tok := l.Next()
+		if tok == nil {
+			t.Fatalf("unexpected EOF, wanted %q", want)
+		}
+		if got := string(tok.GetValue(source)); got != want {
+			t.Errorf("got %q, want %q", got, want)
+		}
+	}
+	if l.Next() != nil {
+		t.Fatal("expected EOF")
+	}
+}
+
+func TestUTF8StringLiteral(t *testing.T) {
+	source := []byte(`flag = "Linnéa José"`)
+	testTokenize(t, source, []Tag{identifier, equal, literal_string})
+}
+
+func TestUTF8StringValue(t *testing.T) {
+	source := []byte(`flag = "Linnéa José"`)
+	l := Init(source)
+	l.Next() // flag
+	l.Next() // =
+	tok := l.Next()
+	if tok == nil || tok.Tag != literal_string {
+		t.Fatal("expected literal_string")
+	}
+	if got := string(tok.GetValue(source)); got != `"Linnéa José"` {
+		t.Errorf("got %q, want %q", got, `"Linnéa José"`)
+	}
+}

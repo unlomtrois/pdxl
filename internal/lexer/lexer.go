@@ -1,6 +1,9 @@
 package lexer
 
-import "bytes"
+import (
+	"bytes"
+	"unicode/utf8"
+)
 
 // UTF8_BOM_SEQUENCE represents the UTF-8 BOM bytes
 const UTF8_BOM_SEQUENCE = "\xEF\xBB\xBF"
@@ -33,70 +36,69 @@ func (l *Lexer) Next() *Token {
 	}
 
 	startPos := l.pos
-	c := l.advance()
+	c, _ := l.advance()
 
 	var tag Tag
-	switch c {
-	case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+	switch {
+	case c >= '0' && c <= '9':
 		// If next char is non-digit identifier char (like _ or letter), treat as identifier
 		// Otherwise, treat as number
-		if !l.isAtEnd() && (isAlpha(l.peek()) || l.peek() == '_') {
+		if !l.isAtEnd() && (isAlpha(byte(l.peek())) || l.peek() == '_') {
 			l.pos--
-			tag = l.lexIdentifier()
+			tag = l.lexIdentifier(startPos)
 		} else {
 			tag = l.lexNumber()
 		}
-	case 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
-		'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
-		'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
-		'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
-		'_':
-		tag = l.lexIdentifier()
-	case '"':
+	case (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_':
+		tag = l.lexIdentifier(startPos)
+	case c > 127:
+		// non-ASCII Unicode: treat as identifier start
+		tag = l.lexIdentifier(startPos)
+	case c == '"':
 		tag = l.lexString()
 
 	// scope operators
-	case '.':
+	case c == '.':
 		tag = dot
-	case ':':
+	case c == ':':
 		tag = colon
-	case '@':
+	case c == '@':
 		tag = at
-	case '|':
+	case c == '|':
 		tag = pipe
-	case '$':
+	case c == '$':
 		tag = dollar
 
 	// special
-	case '%':
+	case c == '%':
 		tag = percent
 
 	// operators
-	case '=':
+	case c == '=':
 		if l.match('=') {
 			tag = equal_equal
 		} else {
 			tag = equal
 		}
-	case '>':
+	case c == '>':
 		if l.match('=') {
 			tag = greater_equal
 		} else {
 			tag = greater_than
 		}
-	case '<':
+	case c == '<':
 		if l.match('=') {
 			tag = less_equal
 		} else {
 			tag = less_than
 		}
-	case '!':
+	case c == '!':
 		if l.match('=') {
 			tag = not_equal
 		} else {
 			tag = invalid
 		}
-	case '?':
+	case c == '?':
 		if l.match('=') {
 			tag = question_equal
 		} else {
@@ -104,23 +106,22 @@ func (l *Lexer) Next() *Token {
 		}
 
 	// arithmetic operators
-	case '+':
+	case c == '+':
 		tag = plus
-	case '-':
+	case c == '-':
 		tag = minus
-	case '*':
+	case c == '*':
 		tag = multiply
-	case '/':
+	case c == '/':
 		tag = divide
 
-	//
-	case '{':
+	case c == '{':
 		tag = l_brace
-	case '}':
+	case c == '}':
 		tag = r_brace
-	case '[':
+	case c == '[':
 		tag = l_bracket
-	case ']':
+	case c == ']':
 		tag = r_bracket
 
 	default:
@@ -128,16 +129,14 @@ func (l *Lexer) Next() *Token {
 	}
 
 	return &Token{
-		Tag: tag,
+		Tag:   tag,
 		Start: startPos,
 		End:   l.pos,
 	}
 }
 
 // lexIdentifier scans an identifier or keyword
-func (l *Lexer) lexIdentifier() Tag {
-	start := l.pos - 1
-
+func (l *Lexer) lexIdentifier(start int) Tag {
 	for !l.isAtEnd() && isIdentifierChar(l.peek()) {
 		l.advance()
 	}
@@ -166,12 +165,12 @@ func (l *Lexer) lexIdentifier() Tag {
 
 // lexNumber scans a number literal
 func (l *Lexer) lexNumber() Tag {
-	for isDigit(l.peek()) {
+	for isDigit(byte(l.peek())) {
 		l.advance()
 	}
 
 	if isIdentifierChar(l.peek()) {
-		for isAlpha(l.peek()) {
+		for isAlpha(byte(l.peek())) {
 			l.advance()
 		}
 		return identifier
@@ -213,12 +212,15 @@ func (l *Lexer) skipWhitespace() {
 	}
 }
 
-// isIdentifierChar reports whether a character can be part of an identifier
-func isIdentifierChar(c byte) bool {
-	if isAlphaNumeric(c) {
+// isIdentifierChar reports whether a rune can be part of an identifier
+func isIdentifierChar(r rune) bool {
+	if r > 127 {
+		return true // any non-ASCII Unicode codepoint is valid in an identifier
+	}
+	if isAlphaNumeric(byte(r)) {
 		return true
 	}
-	switch c {
+	switch r {
 	case '_', '&', '\'':
 		return true
 	default:
@@ -231,25 +233,26 @@ func (l *Lexer) isAtEnd() bool {
 	return l.pos >= len(l.source)
 }
 
-// advance consumes and returns the current character
-func (l *Lexer) advance() byte {
+// advance consumes and returns the current rune and its byte size
+func (l *Lexer) advance() (rune, int) {
+	if l.isAtEnd() {
+		return 0, 0
+	}
+	r, size := utf8.DecodeRune(l.source[l.pos:])
+	l.pos += size
+	return r, size
+}
+
+// peek returns the current rune without consuming it
+func (l *Lexer) peek() rune {
 	if l.isAtEnd() {
 		return 0
 	}
-	c := l.source[l.pos]
-	l.pos++
-	return c
+	r, _ := utf8.DecodeRune(l.source[l.pos:])
+	return r
 }
 
-// peek returns the current character without consuming it
-func (l *Lexer) peek() byte {
-	if l.isAtEnd() {
-		return 0
-	}
-	return l.source[l.pos]
-}
-
-// match consumes the current character if it matches expected
+// match consumes the current byte if it matches expected ASCII character
 func (l *Lexer) match(expected byte) bool {
 	if l.isAtEnd() {
 		return false
