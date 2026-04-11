@@ -8,3 +8,7 @@ linters:
       exclude-functions:
         - (*os.File).Close
         - (io.ReadCloser).Close
+    revive:
+      rules:
+        - name: var-naming
+          disabled: true
