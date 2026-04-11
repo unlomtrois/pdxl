@@ -1,4 +1,4 @@
-package parser
+package v1
 
 // lexer_adapter.go — bridges internal/lexer into participle's lexer interfaces.
 //
