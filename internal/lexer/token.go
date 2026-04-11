@@ -133,6 +133,38 @@ func (t Tag) String() string {
 	}
 }
 
+// Exported Tag aliases for use outside the lexer package.
+const (
+	TagIdentifier    = identifier
+	TagLiteralNumber = literal_number
+	TagLiteralString = literal_string
+	TagLiteralBoolean = literal_boolean
+	TagLBrace        = l_brace
+	TagRBrace        = r_brace
+	TagLBracket      = l_bracket
+	TagRBracket      = r_bracket
+	TagPlus          = plus
+	TagMinus         = minus
+	TagMultiply      = multiply
+	TagDivide        = divide
+	TagGreaterThan   = greater_than
+	TagGreaterEqual  = greater_equal
+	TagLessThan      = less_than
+	TagLessEqual     = less_equal
+	TagEqual         = equal
+	TagEqualEqual    = equal_equal
+	TagNotEqual      = not_equal
+	TagQuestionEqual = question_equal
+	TagDot           = dot
+	TagColon         = colon
+	TagAt            = at
+	TagPipe          = pipe
+	TagDollar        = dollar
+	TagPercent       = percent
+	TagInvalid       = invalid
+	TagEOF           = eof
+)
+
 // IsInvalid reports whether the token is an invalid token.
 func (t Token) IsInvalid() bool {
 	return t.Tag == invalid
