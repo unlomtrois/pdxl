@@ -67,6 +67,77 @@ const (
 	eof
 )
 
+// String returns the name of the tag for display purposes.
+func (t Tag) String() string {
+	switch t {
+	case identifier:
+		return "identifier"
+	case literal_number:
+		return "literal_number"
+	case literal_string:
+		return "literal_string"
+	case literal_boolean:
+		return "literal_boolean"
+	case l_brace:
+		return "l_brace"
+	case r_brace:
+		return "r_brace"
+	case l_bracket:
+		return "l_bracket"
+	case r_bracket:
+		return "r_bracket"
+	case plus:
+		return "plus"
+	case minus:
+		return "minus"
+	case multiply:
+		return "multiply"
+	case divide:
+		return "divide"
+	case greater_than:
+		return "greater_than"
+	case greater_equal:
+		return "greater_equal"
+	case less_than:
+		return "less_than"
+	case less_equal:
+		return "less_equal"
+	case equal:
+		return "equal"
+	case equal_equal:
+		return "equal_equal"
+	case not_equal:
+		return "not_equal"
+	case question_equal:
+		return "question_equal"
+	case dot:
+		return "dot"
+	case colon:
+		return "colon"
+	case at:
+		return "at"
+	case pipe:
+		return "pipe"
+	case dollar:
+		return "dollar"
+	case percent:
+		return "percent"
+	case comment:
+		return "comment"
+	case invalid:
+		return "invalid"
+	case eof:
+		return "eof"
+	default:
+		return fmt.Sprintf("Tag(%d)", uint8(t))
+	}
+}
+
+// IsInvalid reports whether the token is an invalid token.
+func (t Token) IsInvalid() bool {
+	return t.Tag == invalid
+}
+
 // GetValue returns the literal value of the token from the source
 func (t Token) GetValue(source []byte) []byte {
 	return source[t.Start:t.End]
