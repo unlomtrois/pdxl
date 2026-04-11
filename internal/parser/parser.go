@@ -40,24 +40,24 @@ type Block struct {
 
 func (*Block) value() {}
 
-// Scalar is a single token value or a scope/path chain.
+// Scalar is a single token value or a compound token chain.
 //
-// Paradox scripting uses several compound token forms that are built from
-// individual lexer tokens:
+// Paradox scripting uses several compound token forms built from individual
+// lexer tokens:
 //
-//	c:GEN                   — scope type + colon + identifier
-//	scope:title.k_france    — scope + colon + dotted path
-//	title:k_france.capital  — same
-//	great_power_score       — plain identifier
-//	255                     — number
-//	yes / no                — boolean
-//	"text"                  — quoted string
+//	c:GEN                                        — scope:identifier
+//	scope:title.k_france                         — scope:dotted.path
+//	define:NMapColors|ORGANIZATION_COLOR         — define:name|CONSTANT
+//	-0.25                                        — negative number (Minus Number)
+//	great_power_score                            — plain identifier
+//	255                                          — number
+//	yes / no                                     — boolean
+//	"text"                                       — quoted string
 //
-// We capture the constituent tokens into Parts and join them for display.
-// Using []string with repeated @-captures lets participle accumulate each piece.
+// Parts accumulates all constituent tokens; Value() joins them back.
 type Scalar struct {
 	Pos   participleLexer.Position
-	Parts []string `parser:"@(Identifier | Number | Boolean | String) ( @(Colon | Dot) @(Identifier | Number) )*"`
+	Parts []string `parser:"( @Minus )? @(Identifier | Number | Boolean | String) ( @(Colon | Dot | Pipe) @(Identifier | Number) )*"`
 }
 
 // Value returns the scalar as a single concatenated string.
