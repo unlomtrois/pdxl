@@ -49,83 +49,83 @@ func (l *Lexer) Next() *Token {
 		} else {
 			tag = l.lexNumber()
 		}
-	case (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_':
+	case isIdentifierStart(c):
 		tag = l.lexIdentifier(startPos)
-	case c > 127:
-		// non-ASCII Unicode: treat as identifier start
-		tag = l.lexIdentifier(startPos)
-	case c == '"':
-		tag = l.lexString()
-
-	// scope operators
-	case c == '.':
-		tag = dot
-	case c == ':':
-		tag = colon
-	case c == '@':
-		tag = at
-	case c == '|':
-		tag = pipe
-	case c == '$':
-		tag = dollar
-
-	// special
-	case c == '%':
-		tag = percent
-
-	// operators
-	case c == '=':
-		if l.match('=') {
-			tag = equal_equal
-		} else {
-			tag = equal
-		}
-	case c == '>':
-		if l.match('=') {
-			tag = greater_equal
-		} else {
-			tag = greater_than
-		}
-	case c == '<':
-		if l.match('=') {
-			tag = less_equal
-		} else {
-			tag = less_than
-		}
-	case c == '!':
-		if l.match('=') {
-			tag = not_equal
-		} else {
-			tag = invalid
-		}
-	case c == '?':
-		if l.match('=') {
-			tag = question_equal
-		} else {
-			tag = invalid
-		}
-
-	// arithmetic operators
-	case c == '+':
-		tag = plus
-	case c == '-':
-		tag = minus
-	case c == '*':
-		tag = multiply
-	case c == '/':
-		tag = divide
-
-	case c == '{':
-		tag = l_brace
-	case c == '}':
-		tag = r_brace
-	case c == '[':
-		tag = l_bracket
-	case c == ']':
-		tag = r_bracket
-
 	default:
-		tag = invalid
+		switch c {
+		case '"':
+			tag = l.lexString()
+
+		// scope operators
+		case '.':
+			tag = dot
+		case ':':
+			tag = colon
+		case '@':
+			tag = at
+		case '|':
+			tag = pipe
+		case '$':
+			tag = dollar
+
+		// special
+		case '%':
+			tag = percent
+
+		// operators
+		case '=':
+			if l.match('=') {
+				tag = equal_equal
+			} else {
+				tag = equal
+			}
+		case '>':
+			if l.match('=') {
+				tag = greater_equal
+			} else {
+				tag = greater_than
+			}
+		case '<':
+			if l.match('=') {
+				tag = less_equal
+			} else {
+				tag = less_than
+			}
+		case '!':
+			if l.match('=') {
+				tag = not_equal
+			} else {
+				tag = invalid
+			}
+		case '?':
+			if l.match('=') {
+				tag = question_equal
+			} else {
+				tag = invalid
+			}
+
+		// arithmetic operators
+		case '+':
+			tag = plus
+		case '-':
+			tag = minus
+		case '*':
+			tag = multiply
+		case '/':
+			tag = divide
+
+		case '{':
+			tag = l_brace
+		case '}':
+			tag = r_brace
+		case '[':
+			tag = l_bracket
+		case ']':
+			tag = r_bracket
+
+		default:
+			tag = invalid
+		}
 	}
 
 	return &Token{
@@ -210,6 +210,11 @@ func (l *Lexer) skipWhitespace() {
 			return
 		}
 	}
+}
+
+// isIdentifierStart reports whether a rune can begin an identifier
+func isIdentifierStart(r rune) bool {
+	return r > 127 || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '_'
 }
 
 // isIdentifierChar reports whether a rune can be part of an identifier
