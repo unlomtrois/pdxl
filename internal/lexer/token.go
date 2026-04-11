@@ -23,46 +23,46 @@ const (
 	identifier Tag = iota
 
 	// Literals
-	literal_number
-	literal_string
-	literal_boolean
+	literal_number  // 108
+	literal_string  // "something.dds"
+	literal_boolean // yes / no
 
 	// Delimiters
-	l_brace
-	r_brace
-	l_bracket
-	r_bracket
+	l_brace   // {
+	r_brace   // }
+	l_bracket // [
+	r_bracket // ]
 
 	// Arithmetic operators
-	plus
-	minus
-	multiply
-	divide
+	plus     // +
+	minus    // -
+	multiply // *
+	divide   // /
 
 	// Comparison operators
-	greater_than
-	greater_equal
-	less_than
-	less_equal
+	greater_than  // >
+	greater_equal // >=
+	less_than     // <
+	less_equal    // <=
 
 	// Assignment operators
-	equal
+	equal // =
 
 	// Equality operators
-	equal_equal
-	not_equal
-	question_equal
+	equal_equal    // ==
+	not_equal      // !=
+	question_equal // ?=
 
 	// Scope resolution operators
-	dot
-	colon
-	at
-	pipe
-	dollar
+	dot    // .
+	colon  // :
+	at     // @
+	pipe   // |
+	dollar // $
 
-	percent
+	percent // %
 
-	comment
+	comment // # Something
 	invalid
 	eof
 )
