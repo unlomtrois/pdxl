@@ -41,13 +41,19 @@ func (l *Lexer) Next() *Token {
 	var tag Tag
 	switch {
 	case c >= '0' && c <= '9':
-		// If next char is non-digit identifier char (like _ or letter), treat as identifier
-		// Otherwise, treat as number
 		if !l.isAtEnd() && (isAlpha(byte(l.peek())) || l.peek() == '_') {
+			// digit followed immediately by letter/underscore — treat whole thing as identifier
 			l.pos -= size
 			tag = l.lexIdentifier()
 		} else {
 			tag = l.lexNumber()
+			// trailing identifier chars after number (e.g. 1abc) — treat as identifier
+			if isIdentifierChar(l.peek()) {
+				for isIdentifierChar(l.peek()) {
+					l.advance()
+				}
+				tag = identifier
+			}
 		}
 	case isIdentifierStart(c):
 		tag = l.lexIdentifier()
@@ -158,13 +164,6 @@ func (l *Lexer) lexNumber() Tag {
 		for isDigit(byte(l.peek())) {
 			l.advance()
 		}
-	}
-
-	if isIdentifierChar(l.peek()) {
-		for isAlpha(byte(l.peek())) {
-			l.advance()
-		}
-		return identifier
 	}
 
 	return literal_number
