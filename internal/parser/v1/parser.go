@@ -13,6 +13,7 @@ package v1
 
 import (
 	"bytes"
+	"strings"
 
 	"github.com/alecthomas/participle/v2"
 	participleLexer "github.com/alecthomas/participle/v2/lexer"
@@ -62,11 +63,7 @@ type Scalar struct {
 
 // Value returns the scalar as a single concatenated string.
 func (s *Scalar) Value() string {
-	result := ""
-	for _, p := range s.Parts {
-		result += p
-	}
-	return result
+	return strings.Join(s.Parts, "")
 }
 
 func (*Scalar) value() {}
@@ -97,11 +94,7 @@ type Field struct {
 
 // Key returns the field key as a single concatenated string.
 func (f *Field) Key() string {
-	result := ""
-	for _, p := range f.KeyParts {
-		result += p
-	}
-	return result
+	return strings.Join(f.KeyParts, "")
 }
 
 // ── File root ─────────────────────────────────────────────────────────────────
