@@ -21,7 +21,6 @@
 # vendor/
 
 # binary
-/pomo
-/result
+/bin
 
 *.csv
