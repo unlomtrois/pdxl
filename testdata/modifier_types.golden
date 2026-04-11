@@ -1,0 +1,48 @@
+cci_superba_can_participate_in_parliament = {
+  boolean = yes
+  game_data = {
+    category = internationalorganization
+  }
+}
+cci_superba_agenda_impact = {
+  percent = yes
+  game_data = {
+    category = internationalorganization
+  }
+}
+cci_ghazaria_can_participate_in_parliament = {
+  boolean = yes
+  game_data = {
+    category = internationalorganization
+  }
+}
+cci_ghazaria_agenda_impact = {
+  percent = yes
+  game_data = {
+    category = internationalorganization
+  }
+}
+cci_state_bank_can_participate_in_parliament = {
+  boolean = yes
+  game_data = {
+    category = internationalorganization
+  }
+}
+cci_state_bank_agenda_impact = {
+  percent = yes
+  game_data = {
+    category = internationalorganization
+  }
+}
+cci_maona_can_participate_in_parliament = {
+  boolean = yes
+  game_data = {
+    category = internationalorganization
+  }
+}
+cci_maona_agenda_impact = {
+  percent = yes
+  game_data = {
+    category = internationalorganization
+  }
+}

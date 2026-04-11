@@ -1,0 +1,72 @@
+﻿# Modifier types
+# color = good(default)/neutral/bad
+# boolean = no(default)/yes
+# percent = no(default)/yes
+# already_percent = no(default)/yes
+# decimals = 2(default)/x (int)
+# in game_data = {}
+# 	category = all(default)/none/country/location/province/character/unit/mercenary/religion/internationalorganizatiuon/rebel/dynasty
+#	min = -infinity(default)/x (fixed point)
+#	max = +infinity(default)/x (fixed point)
+#	cap_zero_to_one = no(default)/yes
+#	scale_with_pop = no(default)/yes
+# 	format = ""(default)/FormatPopCaps/FormatManPower/FormatGold
+# 	ai = no(default)/yes
+# 	bias_type = opinion/trust/voting (can have more than 1 entry - default=none of them)
+# 	should_show_in_modifiers_tab = yes(default)/no (should modifier appear in the government modifiers tab)
+
+cci_superba_can_participate_in_parliament={
+	boolean=yes
+	game_data={
+		category=internationalorganization
+	}
+}
+
+cci_superba_agenda_impact={
+	percent=yes
+	game_data={
+		category=internationalorganization
+	}
+}
+
+cci_ghazaria_can_participate_in_parliament={
+	boolean=yes
+	game_data={
+		category=internationalorganization
+	}
+}
+
+cci_ghazaria_agenda_impact={
+	percent=yes
+	game_data={
+		category=internationalorganization
+	}
+}
+
+cci_state_bank_can_participate_in_parliament={
+	boolean=yes
+	game_data={
+		category=internationalorganization
+	}
+}
+
+cci_state_bank_agenda_impact={
+	percent=yes
+	game_data={
+		category=internationalorganization
+	}
+}
+
+cci_maona_can_participate_in_parliament={
+	boolean=yes
+	game_data={
+		category=internationalorganization
+	}
+}
+
+cci_maona_agenda_impact={
+	percent=yes
+	game_data={
+		category=internationalorganization
+	}
+}

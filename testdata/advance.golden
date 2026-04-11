@@ -1,0 +1,8 @@
+maona_advance = {
+  age = age_1_traditions
+  potential = {
+    has_or_had_tag = GEN
+  }
+  unlock_subject_type = maona
+  requires = guilds
+}
