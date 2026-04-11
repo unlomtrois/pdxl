@@ -147,10 +147,17 @@ func (l *Lexer) lexIdentifier() Tag {
 	return identifier
 }
 
-// lexNumber scans a number literal
+// lexNumber scans a number literal, including an optional decimal part (e.g. 0.1)
 func (l *Lexer) lexNumber() Tag {
 	for isDigit(byte(l.peek())) {
 		l.advance()
+	}
+
+	if l.peek() == '.' && isDigit(byte(l.peekNext())) {
+		l.advance() // consume '.'
+		for isDigit(byte(l.peek())) {
+			l.advance()
+		}
 	}
 
 	if isIdentifierChar(l.peek()) {
@@ -240,6 +247,20 @@ func (l *Lexer) peek() rune {
 		return 0
 	}
 	r, _ := utf8.DecodeRune(l.source[l.pos:])
+	return r
+}
+
+// peekNext returns the rune after the current one without consuming either
+func (l *Lexer) peekNext() rune {
+	if l.isAtEnd() {
+		return 0
+	}
+	_, size := utf8.DecodeRune(l.source[l.pos:])
+	next := l.pos + size
+	if next >= len(l.source) {
+		return 0
+	}
+	r, _ := utf8.DecodeRune(l.source[next:])
 	return r
 }
 

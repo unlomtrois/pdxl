@@ -43,6 +43,11 @@ func TestNumbers(t *testing.T) {
 	testTokenize(t, source, []Tag{identifier, equal, literal_number})
 }
 
+func TestDecimalNumber(t *testing.T) {
+	source := []byte("value = 0.1")
+	testTokenize(t, source, []Tag{identifier, equal, literal_number})
+}
+
 func TestStrings(t *testing.T) {
 	source := []byte(`"test string"`)
 	testTokenize(t, source, []Tag{literal_string})
