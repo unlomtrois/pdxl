@@ -1,11 +1,24 @@
-package parser
+package v2
 
-// Fixture-based golden tests for the flat-node-pool parser (Option A).
-// Golden files are shared with v2 — output format is identical.
+// Fixture-based golden tests.
 //
-// Regenerate goldens:
+// Each .txt in testdata/ is parsed; the pretty-printed AST is compared
+// against the corresponding .golden file.
+//
+// Regenerate goldens after a deliberate change:
 //
 //	go test ./internal/parser/... -update
+//
+// Fixture inventory (see testdata/ at project root):
+//
+//	advance                  — simple fields, potential trigger
+//	government_reform        — modifier block, negative numbers (-0.25)
+//	international_organizations — tagged block (rgb {…}), identifier lists
+//	international_organization  — scope chains, ?= operator
+//	modifier_types           — no-whitespace assignment, game_data block
+//	parliament_types         — colon-prefixed type refs
+//	special_statuses         — pipe paths (define:Name|CONSTANT)
+//	subject_type             — negative float, scope:actor pattern
 
 import (
 	"bytes"
@@ -39,12 +52,12 @@ func TestFixtures(t *testing.T) {
 				t.Fatalf("reading fixture: %v", err)
 			}
 
-			tree, err := Parse(fixturePath, src)
+			ast, err := ParseBytes(fixturePath, src)
 			if err != nil {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			got := renderTree(tree)
+			got := renderFile(ast)
 			goldenPath := filepath.Join(td, name+".golden")
 
 			if *update {
@@ -68,50 +81,45 @@ func TestFixtures(t *testing.T) {
 	}
 }
 
-// renderTree pretty-prints a Tree to a string matching the golden format.
-func renderTree(tree *Tree) string {
+// renderFile pretty-prints a parsed File to a string for golden comparison.
+func renderFile(f *File) string {
 	var b bytes.Buffer
-	root := tree.Root()
-	for _, child := range tree.Children(root) {
-		renderNode(&b, tree, child, 0)
+	for _, item := range f.Items {
+		renderItem(&b, item, 0)
 	}
 	return b.String()
 }
 
-func renderNode(b *bytes.Buffer, tree *Tree, n Node, depth int) {
-	pfx := strings.Repeat("  ", depth)
-	switch n.Kind {
-	case KindField:
-		children := tree.Children(n)
-		key := children[0].Value(tree.Src)
-		op := n.OpString()
-		val := children[1]
-		switch val.Kind {
-		case KindScalar:
-			fmt.Fprintf(b, "%s%s %s %s\n", pfx, key, op, val.Value(tree.Src))
-		case KindTaggedBlock:
-			fmt.Fprintf(b, "%s%s %s %s {\n", pfx, key, op, val.Value(tree.Src))
-			for _, item := range tree.Children(val) {
-				renderNode(b, tree, item, depth+1)
-			}
-			fmt.Fprintf(b, "%s}\n", pfx)
-		case KindBlock:
-			fmt.Fprintf(b, "%s%s %s {\n", pfx, key, op)
-			for _, item := range tree.Children(val) {
-				renderNode(b, tree, item, depth+1)
-			}
-			fmt.Fprintf(b, "%s}\n", pfx)
+func renderItem(b *bytes.Buffer, item *Item, depth int) {
+	if item.Field != nil {
+		renderField(b, item.Field, depth)
+	} else if item.Scalar != nil {
+		fmt.Fprintf(b, "%s%s\n", indent(depth), item.Scalar.Value())
+	}
+}
+
+func renderField(b *bytes.Buffer, f *Field, depth int) {
+	pfx := indent(depth)
+	switch v := f.Value.(type) {
+	case *Scalar:
+		fmt.Fprintf(b, "%s%s %s %s\n", pfx, f.Key(), f.Operator, v.Value())
+	case *TaggedBlock:
+		fmt.Fprintf(b, "%s%s %s %s {\n", pfx, f.Key(), f.Operator, v.Tag)
+		for _, item := range v.Items {
+			renderItem(b, item, depth+1)
 		}
-	case KindScalar:
-		fmt.Fprintf(b, "%s%s\n", pfx, n.Value(tree.Src))
-	case KindBlock:
-		// bare block at top level (unusual)
-		fmt.Fprintf(b, "%s{\n", pfx)
-		for _, item := range tree.Children(n) {
-			renderNode(b, tree, item, depth+1)
+		fmt.Fprintf(b, "%s}\n", pfx)
+	case *Block:
+		fmt.Fprintf(b, "%s%s %s {\n", pfx, f.Key(), f.Operator)
+		for _, item := range v.Items {
+			renderItem(b, item, depth+1)
 		}
 		fmt.Fprintf(b, "%s}\n", pfx)
 	}
+}
+
+func indent(depth int) string {
+	return strings.Repeat("  ", depth)
 }
 
 func diffLines(got, want string) string {

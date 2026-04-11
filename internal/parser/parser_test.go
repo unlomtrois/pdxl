@@ -5,137 +5,129 @@ import (
 )
 
 func TestSimpleField(t *testing.T) {
-	src := []byte(`key = value`)
-	f, err := ParseBytes("test", src)
+	tree, err := Parse("test", []byte(`key = value`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(f.Items) != 1 {
-		t.Fatalf("expected 1 item, got %d", len(f.Items))
+	root := tree.Root()
+	children := tree.Children(root)
+	if len(children) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(children))
 	}
-	field := f.Items[0].Field
-	if field == nil {
-		t.Fatal("expected Field, got Scalar")
+	field := children[0]
+	if field.Kind != KindField {
+		t.Fatalf("expected KindField, got %v", field.Kind)
 	}
-	scalar, ok := field.Value.(*Scalar)
-	if !ok {
-		t.Fatalf("expected Scalar value, got %T", field.Value)
+	if field.OpString() != "=" {
+		t.Fatalf("expected '=' operator, got %q", field.OpString())
 	}
-	if field.Key() != "key" || field.Operator != "=" || scalar.Value() != "value" {
-		t.Fatalf("unexpected field: key=%q op=%q val=%q", field.Key(), field.Operator, scalar.Value())
+	fc := tree.Children(field)
+	if len(fc) != 2 {
+		t.Fatalf("expected 2 field children (key+value), got %d", len(fc))
+	}
+	if fc[0].Value(tree.Src) != "key" {
+		t.Fatalf("expected key 'key', got %q", fc[0].Value(tree.Src))
+	}
+	if fc[1].Kind != KindScalar || fc[1].Value(tree.Src) != "value" {
+		t.Fatalf("expected scalar 'value', got %q", fc[1].Value(tree.Src))
 	}
 }
 
 func TestBlockField(t *testing.T) {
-	src := []byte(`limit = { age > 18 }`)
-	f, err := ParseBytes("test", src)
+	tree, err := Parse("test", []byte(`limit = { age > 18 }`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	field := f.Items[0].Field
-	if field == nil {
-		t.Fatal("expected Field")
+	root := tree.Root()
+	field := tree.Children(root)[0]
+	if field.Kind != KindField {
+		t.Fatalf("expected KindField")
 	}
-	block, ok := field.Value.(*Block)
-	if !ok {
-		t.Fatalf("expected Block value, got %T", field.Value)
+	fc := tree.Children(field)
+	val := fc[1]
+	if val.Kind != KindBlock {
+		t.Fatalf("expected KindBlock, got %v", val.Kind)
 	}
-	inner := block.Items[0].Field
-	if inner == nil || inner.Key() != "age" || inner.Operator != ">" {
-		t.Fatalf("unexpected inner field: %+v", inner)
+	blockChildren := tree.Children(val)
+	if len(blockChildren) != 1 {
+		t.Fatalf("expected 1 inner field, got %d", len(blockChildren))
+	}
+	inner := blockChildren[0]
+	if inner.Kind != KindField {
+		t.Fatalf("expected inner KindField")
+	}
+	if inner.Value(tree.Src) != "age" {
+		t.Fatalf("expected key 'age', got %q", inner.Value(tree.Src))
 	}
 }
 
 func TestValueListBlock(t *testing.T) {
-	// Bare values, no operators — should produce a Block with Scalar items.
-	src := []byte(`color = { 255 255 255 }`)
-	f, err := ParseBytes("test", src)
+	tree, err := Parse("test", []byte(`color = { 255 255 255 }`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	field := f.Items[0].Field
-	if field == nil {
-		t.Fatal("expected Field")
+	field := tree.Children(tree.Root())[0]
+	val := tree.Children(field)[1]
+	if val.Kind != KindBlock {
+		t.Fatalf("expected KindBlock, got %v", val.Kind)
 	}
-	block, ok := field.Value.(*Block)
-	if !ok {
-		t.Fatalf("expected Block value, got %T", field.Value)
-	}
-	if len(block.Items) != 3 {
-		t.Fatalf("expected 3 items in block, got %d", len(block.Items))
-	}
-	for i, item := range block.Items {
-		if item.Scalar == nil {
-			t.Fatalf("item %d: expected Scalar, got Field", i)
-		}
+	if n := len(tree.Children(val)); n != 3 {
+		t.Fatalf("expected 3 scalars, got %d", n)
 	}
 }
 
 func TestTaggedBlock(t *testing.T) {
-	src := []byte(`color = rgb { 218 215 56 }`)
-	f, err := ParseBytes("test", src)
+	tree, err := Parse("test", []byte(`color = rgb { 218 215 56 }`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	field := f.Items[0].Field
-	if field == nil {
-		t.Fatal("expected Field")
+	field := tree.Children(tree.Root())[0]
+	val := tree.Children(field)[1]
+	if val.Kind != KindTaggedBlock {
+		t.Fatalf("expected KindTaggedBlock, got %v", val.Kind)
 	}
-	tb, ok := field.Value.(*TaggedBlock)
-	if !ok {
-		t.Fatalf("expected TaggedBlock, got %T", field.Value)
+	if val.Value(tree.Src) != "rgb" {
+		t.Fatalf("expected tag 'rgb', got %q", val.Value(tree.Src))
 	}
-	if tb.Tag != "rgb" {
-		t.Fatalf("expected tag 'rgb', got %q", tb.Tag)
-	}
-	if len(tb.Items) != 3 {
-		t.Fatalf("expected 3 items, got %d", len(tb.Items))
+	if n := len(tree.Children(val)); n != 3 {
+		t.Fatalf("expected 3 items, got %d", n)
 	}
 }
 
-func TestIdentifierList(t *testing.T) {
-	src := []byte(`members = { GEN GAZ }`)
-	f, err := ParseBytes("test", src)
+func TestScopeKeyWithOperator(t *testing.T) {
+	tree, err := Parse("test", []byte(`scope:actor ?= { is_subject = yes }`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	field := f.Items[0].Field
-	block, ok := field.Value.(*Block)
-	if !ok {
-		t.Fatalf("expected Block, got %T", field.Value)
+	field := tree.Children(tree.Root())[0]
+	if field.Kind != KindField {
+		t.Fatalf("expected KindField")
 	}
-	if len(block.Items) != 2 {
-		t.Fatalf("expected 2 members, got %d", len(block.Items))
+	if field.Value(tree.Src) != "scope:actor" {
+		t.Fatalf("expected key 'scope:actor', got %q", field.Value(tree.Src))
 	}
 }
 
-func TestBoolean(t *testing.T) {
-	src := []byte(`is_adult = yes`)
-	f, err := ParseBytes("test", src)
+func TestNegativeNumber(t *testing.T) {
+	tree, err := Parse("test", []byte(`modifier = -0.25`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	field := f.Items[0].Field
-	scalar, ok := field.Value.(*Scalar)
-	if !ok {
-		t.Fatalf("expected Scalar, got %T", field.Value)
-	}
-	if scalar.Value() != "yes" {
-		t.Fatalf("expected 'yes', got %q", scalar.Value())
+	field := tree.Children(tree.Root())[0]
+	val := tree.Children(field)[1]
+	if val.Value(tree.Src) != "-0.25" {
+		t.Fatalf("expected '-0.25', got %q", val.Value(tree.Src))
 	}
 }
 
-func TestMultipleFields(t *testing.T) {
-	src := []byte(`
-name = "William"
-age = 42
-culture = english
-`)
-	f, err := ParseBytes("test", src)
+func TestScopeChainValue(t *testing.T) {
+	tree, err := Parse("test", []byte(`target = define:NMapColors|CONSTANT`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(f.Items) != 3 {
-		t.Fatalf("expected 3 items, got %d", len(f.Items))
+	field := tree.Children(tree.Root())[0]
+	val := tree.Children(field)[1]
+	if val.Value(tree.Src) != "define:NMapColors|CONSTANT" {
+		t.Fatalf("expected scope chain, got %q", val.Value(tree.Src))
 	}
 }

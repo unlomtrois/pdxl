@@ -6,7 +6,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"pdxl/internal/parser"
+	parser "pdxl/internal/parser/v2"
 )
 
 var parseJSON bool

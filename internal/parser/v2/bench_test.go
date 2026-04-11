@@ -1,4 +1,4 @@
-package parser
+package v2
 
 import (
 	"os"
@@ -9,12 +9,14 @@ import (
 )
 
 // BenchmarkParseFixtures measures parse throughput for each fixture file.
+// Run with: go test ./internal/parser/... -bench=. -benchmem
 func BenchmarkParseFixtures(b *testing.B) {
 	td := testutil.TestdataDir()
 	fixtures, err := filepath.Glob(filepath.Join(td, "*.txt"))
 	if err != nil {
 		b.Fatal(err)
 	}
+
 	for _, fixturePath := range fixtures {
 		src, err := os.ReadFile(fixturePath)
 		if err != nil {
@@ -26,7 +28,7 @@ func BenchmarkParseFixtures(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for b.Loop() {
-				if _, err := Parse(fixturePath, src); err != nil {
+				if _, err := ParseBytes(fixturePath, src); err != nil {
 					b.Fatal(err)
 				}
 			}
@@ -34,7 +36,8 @@ func BenchmarkParseFixtures(b *testing.B) {
 	}
 }
 
-// BenchmarkParseLarge is a stable single-file baseline on the largest fixture.
+// BenchmarkParseLarge measures parse throughput on the largest fixture
+// (international_organization.txt) as a stable single-file baseline.
 func BenchmarkParseLarge(b *testing.B) {
 	src, err := os.ReadFile(filepath.Join(testutil.TestdataDir(), "international_organization.txt"))
 	if err != nil {
@@ -44,7 +47,7 @@ func BenchmarkParseLarge(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for b.Loop() {
-		if _, err := Parse("international_organization.txt", src); err != nil {
+		if _, err := ParseBytes("international_organization.txt", src); err != nil {
 			b.Fatal(err)
 		}
 	}

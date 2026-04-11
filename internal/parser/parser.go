@@ -1,23 +1,15 @@
-// Package parser implements a hand-written recursive descent + Pratt parser
-// for PDXScript.
+// Package parser implements a flat-node-pool PDXScript parser (Option A).
 //
-// PDXScript block contents are not uniform — a block may contain:
-//   - fields:        key op value  (e.g. age > 18, name = "foo")
-//   - value lists:   bare atoms    (e.g. { 255 255 255 }, { GEN GAZ })
-//   - tagged blocks: tag { … }     (e.g. rgb { 218 215 56 })
+// All nodes live in a single []Node slice — no heap pointers inside Node.
+// Parent-child relationships are expressed via an index array: each node
+// stores a range [ChildStart, ChildEnd) into Tree.Index, and Tree.Index[i]
+// is the index of the i-th child in Tree.Nodes.
 //
-// The grammar is not LL(1) at the block level, but 2-token lookahead resolves
-// all ambiguities without backtracking:
+// String values are byte-offset ranges into the original source slice,
+// so no string copies are made during parsing.
 //
-//   - peek[0] is atom AND peek[1] is operator  → Field
-//   - peek[0] is atom AND peek[1] is '{'        → TaggedBlock (inside Value)
-//   - peek[0] is '{'                             → Block
-//   - otherwise                                  → Scalar
-//
-// Pratt parsing handles compound RHS values (scope:path.chain, define:X|Y, -0.25).
-//
-// This is parser v2. The participle-based v1 lives in internal/parser/v1/ for
-// benchmarking comparison.
+// This is the fastest variant. For the pointer-based tree see internal/parser/v2.
+// For the participle-based reference see internal/parser/v1.
 package parser
 
 import (
@@ -26,73 +18,91 @@ import (
 	"pdxl/internal/lexer"
 )
 
-// ── AST types ─────────────────────────────────────────────────────────────────
+// ── Node kinds ────────────────────────────────────────────────────────────────
 
-// Value is the sealed interface for right-hand-side values.
-type Value interface{ isValue() }
+type NodeKind uint8
 
-// TaggedBlock handles constructs like `rgb { 255 0 0 }`.
-type TaggedBlock struct {
-	Tag   string
-	Items []*Item
+const (
+	KindFile        NodeKind = iota // root; children = top-level items
+	KindField                       // children[0]=key scalar, children[1]=value; Op set
+	KindBlock                       // children = items
+	KindTaggedBlock                 // children = items; SrcStart..SrcEnd = tag text
+	KindScalar                      // leaf; SrcStart..SrcEnd is the text
+)
+
+// ── Node ──────────────────────────────────────────────────────────────────────
+
+// Node is a pointer-free AST node.
+type Node struct {
+	Kind NodeKind
+
+	// Source byte range (for scalars, field keys, tagged-block tag names).
+	SrcStart uint32
+	SrcEnd   uint32
+
+	// Op stores the operator tag for Field nodes.
+	Op lexer.Tag
+
+	// Child range into Tree.Index (not Tree.Nodes).
+	ChildStart uint32
+	ChildEnd   uint32
 }
 
-func (*TaggedBlock) isValue() {}
-
-// Block is a brace-delimited sequence of items (fields or bare scalars).
-type Block struct {
-	Items []*Item
+// Value returns the source text for this node.
+func (n Node) Value(src []byte) string {
+	return string(src[n.SrcStart:n.SrcEnd])
 }
 
-func (*Block) isValue() {}
-
-// Scalar is a single atom or compound token chain (scope:path.seg, define:X|Y, -0.25).
-// The value is stored directly as a string slice to avoid re-scanning source.
-type Scalar struct {
-	Parts []string
+// OpString returns the operator as its source symbol (e.g. "=", "?=", ">=").
+func (n Node) OpString() string {
+	switch n.Op {
+	case lexer.TagEqual:
+		return "="
+	case lexer.TagEqualEqual:
+		return "=="
+	case lexer.TagNotEqual:
+		return "!="
+	case lexer.TagQuestionEqual:
+		return "?="
+	case lexer.TagGreaterThan:
+		return ">"
+	case lexer.TagGreaterEqual:
+		return ">="
+	case lexer.TagLessThan:
+		return "<"
+	case lexer.TagLessEqual:
+		return "<="
+	}
+	return n.Op.String()
 }
 
-// Value returns the scalar as a single concatenated string.
-func (s *Scalar) Value() string {
-	out := ""
-	for _, p := range s.Parts {
-		out += p
+// ── Tree ──────────────────────────────────────────────────────────────────────
+
+// Tree is the result of parsing.
+// Nodes[0] is always the KindFile root.
+// Index provides child indirection: node.Children are Index[ChildStart:ChildEnd],
+// each element being an index into Nodes.
+type Tree struct {
+	Nodes []Node
+	Index []uint32 // child index array
+	Src   []byte
+}
+
+// Root returns the file root node.
+func (t *Tree) Root() Node { return t.Nodes[0] }
+
+// Children returns the direct children of n.
+func (t *Tree) Children(n Node) []Node {
+	refs := t.Index[n.ChildStart:n.ChildEnd]
+	out := make([]Node, len(refs))
+	for i, idx := range refs {
+		out[i] = t.Nodes[idx]
 	}
 	return out
 }
 
-func (*Scalar) isValue() {}
+// ── ParseError ────────────────────────────────────────────────────────────────
 
-// Item is one entry inside a block or at the top level.
-type Item struct {
-	Field  *Field
-	Scalar *Scalar // non-nil only when Field is nil
-}
-
-// Field is a key–operator–value triple.
-type Field struct {
-	KeyParts []string
-	Operator string
-	Value    Value
-}
-
-// Key returns the field key as a single concatenated string.
-func (f *Field) Key() string {
-	out := ""
-	for _, p := range f.KeyParts {
-		out += p
-	}
-	return out
-}
-
-// File is the root of a parsed PDXScript file.
-type File struct {
-	Items []*Item
-}
-
-// ── Parser ────────────────────────────────────────────────────────────────────
-
-// ParseError records a parse failure with its byte offset.
 type ParseError struct {
 	Filename string
 	Offset   int
@@ -106,32 +116,48 @@ func (e *ParseError) Error() string {
 	return fmt.Sprintf("offset %d: %s", e.Offset, e.Msg)
 }
 
-// parser holds the pre-lexed token stream and parser state.
+// ── parser ────────────────────────────────────────────────────────────────────
+
 type parser struct {
 	tokens   []lexer.Token
 	src      []byte
 	filename string
-	pos      int // index into tokens
+	pos      int    // current index into tokens
+	nodes    []Node // flat node pool
+	index    []uint32
 }
 
 func newParser(filename string, src []byte) *parser {
 	l := lexer.Init(src)
-	var tokens []lexer.Token
+	tokens := make([]lexer.Token, 0, len(src)/8)
 	for {
 		tok := l.Next()
 		if tok == nil {
 			break
 		}
-		// skip comments and invalid tokens
 		if tok.Tag == lexer.TagInvalid || tok.Tag == lexer.TagEOF {
 			continue
 		}
 		tokens = append(tokens, *tok)
 	}
-	return &parser{tokens: tokens, src: src, filename: filename}
+	cap := len(tokens) / 2
+	return &parser{
+		tokens:   tokens,
+		src:      src,
+		filename: filename,
+		nodes:    make([]Node, 0, cap),
+		index:    make([]uint32, 0, cap),
+	}
 }
 
-// peek returns the tag of the token at pos+offset without consuming.
+// allocNode appends a node and returns its index.
+func (p *parser) allocNode(n Node) uint32 {
+	idx := uint32(len(p.nodes))
+	p.nodes = append(p.nodes, n)
+	return idx
+}
+
+// peek returns the tag at pos+offset.
 func (p *parser) peek(offset int) lexer.Tag {
 	i := p.pos + offset
 	if i >= len(p.tokens) {
@@ -150,12 +176,6 @@ func (p *parser) advance() lexer.Token {
 	return tok
 }
 
-// tokenStr returns the source string for a token.
-func (p *parser) tokenStr(t lexer.Token) string {
-	return string(t.GetValue(p.src))
-}
-
-// currentOffset returns the source byte offset for error reporting.
 func (p *parser) currentOffset() int {
 	if p.pos < len(p.tokens) {
 		return p.tokens[p.pos].Start
@@ -166,7 +186,6 @@ func (p *parser) currentOffset() int {
 	return 0
 }
 
-// errorf creates a ParseError at the current position.
 func (p *parser) errorf(format string, args ...any) *ParseError {
 	return &ParseError{
 		Filename: p.filename,
@@ -175,7 +194,6 @@ func (p *parser) errorf(format string, args ...any) *ParseError {
 	}
 }
 
-// isAtom reports whether the tag is a value atom (not an operator or brace).
 func isAtom(tag lexer.Tag) bool {
 	switch tag {
 	case lexer.TagIdentifier, lexer.TagLiteralNumber, lexer.TagLiteralString,
@@ -185,23 +203,6 @@ func isAtom(tag lexer.Tag) bool {
 	return false
 }
 
-// peekOpAfterKey looks ahead past any leading scope-chain tokens (: .) to
-// determine whether this item is a Field (has an operator) or a bare Scalar.
-// Field key example: scope:actor ?= { ... }  → tokens: ident : ident ?= ...
-func (p *parser) peekOpAfterKey() bool {
-	i := 1
-	for {
-		tag := p.peek(i)
-		if tag == lexer.TagColon || tag == lexer.TagDot {
-			i++ // skip connector
-			i++ // skip segment
-			continue
-		}
-		return isOperator(tag)
-	}
-}
-
-// isOperator reports whether the tag is a field assignment/comparison operator.
 func isOperator(tag lexer.Tag) bool {
 	switch tag {
 	case lexer.TagEqual, lexer.TagEqualEqual, lexer.TagNotEqual,
@@ -212,9 +213,6 @@ func isOperator(tag lexer.Tag) bool {
 	return false
 }
 
-// ── Pratt binding powers ──────────────────────────────────────────────────────
-
-// bindingPower returns the infix binding power for scope-chain connectors.
 func bindingPower(tag lexer.Tag) int {
 	switch tag {
 	case lexer.TagColon, lexer.TagDot, lexer.TagPipe:
@@ -223,167 +221,203 @@ func bindingPower(tag lexer.Tag) int {
 	return 0
 }
 
-// ── Recursive descent ─────────────────────────────────────────────────────────
-
-// parseFile parses the top-level sequence of items.
-func (p *parser) parseFile() (*File, error) {
-	f := &File{}
-	for p.peek(0) != lexer.TagEOF {
-		item, err := p.parseItem()
-		if err != nil {
-			return nil, err
+func (p *parser) peekOpAfterKey() bool {
+	i := 1
+	for {
+		tag := p.peek(i)
+		if tag == lexer.TagColon || tag == lexer.TagDot {
+			i += 2
+			continue
 		}
-		if item != nil {
-			f.Items = append(f.Items, item)
-		}
+		return isOperator(tag)
 	}
-	return f, nil
 }
 
-// parseItem parses one Field or bare Scalar.
-// Returns nil, nil when nothing is available (should not happen inside parseFile).
-func (p *parser) parseItem() (*Item, error) {
+// ── Parsing ───────────────────────────────────────────────────────────────────
+
+// parseFile parses top-level items, returns root node index.
+func (p *parser) parseFile() (uint32, error) {
+	rootIdx := p.allocNode(Node{Kind: KindFile})
+	var childIdxs []uint32
+
+	for p.peek(0) != lexer.TagEOF {
+		idx, err := p.parseItem()
+		if err != nil {
+			return 0, err
+		}
+		if idx != ^uint32(0) {
+			childIdxs = append(childIdxs, idx)
+		}
+	}
+
+	start := uint32(len(p.index))
+	p.index = append(p.index, childIdxs...)
+	p.nodes[rootIdx].ChildStart = start
+	p.nodes[rootIdx].ChildEnd = uint32(len(p.index))
+	return rootIdx, nil
+}
+
+// parseItem returns the index of the parsed node, or ^uint32(0) for skipped tokens.
+func (p *parser) parseItem() (uint32, error) {
 	t0 := p.peek(0)
 	if t0 == lexer.TagEOF {
-		return nil, nil
+		return ^uint32(0), nil
 	}
-
-	// A Field starts with an atom (possibly a scope chain) followed by an operator.
-	// Minus at peek(0) is always a bare negative scalar on the LHS.
-	// We scan past any leading scope-chain connectors (: .) to find the operator.
-	if t0 != lexer.TagMinus && isAtom(t0) && p.peekOpAfterKey() {
-		field, err := p.parseField()
-		if err != nil {
-			return nil, err
-		}
-		return &Item{Field: field}, nil
-	}
-
-	// Skip stray r_brace / r_bracket that might appear in malformed input.
 	if t0 == lexer.TagRBrace || t0 == lexer.TagRBracket {
 		p.advance()
-		return nil, nil
+		return ^uint32(0), nil
 	}
-
-	scalar, err := p.parseValue(0)
-	if err != nil {
-		return nil, err
+	if t0 != lexer.TagMinus && isAtom(t0) && p.peekOpAfterKey() {
+		return p.parseField()
 	}
-	if s, ok := scalar.(*Scalar); ok {
-		return &Item{Scalar: s}, nil
-	}
-	// block-valued bare item (unusual but valid in some mod files)
-	return &Item{Scalar: &Scalar{Parts: []string{"{}"}}}, nil
+	return p.parseValue(0)
 }
 
-// parseField parses  key op value.
-func (p *parser) parseField() (*Field, error) {
-	// key: one or more tokens connected by : or .
-	keyTok := p.advance()
-	keyParts := []string{p.tokenStr(keyTok)}
+// parseField returns the index of a KindField node.
+func (p *parser) parseField() (uint32, error) {
+	// Scan key span.
+	keyStart := uint32(p.tokens[p.pos].Start)
+	keyEnd := uint32(p.tokens[p.pos].End)
+	p.advance()
 	for p.peek(0) == lexer.TagColon || p.peek(0) == lexer.TagDot {
-		sep := p.advance()
-		keyParts = append(keyParts, p.tokenStr(sep))
-		seg := p.advance()
-		keyParts = append(keyParts, p.tokenStr(seg))
+		p.advance() // connector
+		if p.pos < len(p.tokens) {
+			keyEnd = uint32(p.tokens[p.pos].End)
+			p.advance()
+		}
 	}
 
 	if !isOperator(p.peek(0)) {
-		return nil, p.errorf("expected operator, got %s", p.peek(0))
+		return 0, p.errorf("expected operator, got %s", p.peek(0))
 	}
 	opTok := p.advance()
-	op := p.tokenStr(opTok)
 
-	val, err := p.parseValue(0)
+	// Allocate key scalar.
+	keyIdx := p.allocNode(Node{Kind: KindScalar, SrcStart: keyStart, SrcEnd: keyEnd})
+
+	// Parse value.
+	valIdx, err := p.parseValue(0)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
-	return &Field{KeyParts: keyParts, Operator: op, Value: val}, nil
+	// Build field node with two children: key, value.
+	idxStart := uint32(len(p.index))
+	p.index = append(p.index, keyIdx, valIdx)
+
+	fieldIdx := p.allocNode(Node{
+		Kind:       KindField,
+		SrcStart:   keyStart,
+		SrcEnd:     keyEnd,
+		Op:         opTok.Tag,
+		ChildStart: idxStart,
+		ChildEnd:   idxStart + 2,
+	})
+	return fieldIdx, nil
 }
 
-// parseBlock parses `{ item* }`.
-func (p *parser) parseBlock() (*Block, error) {
-	p.advance() // consume '{'
-	var items []*Item
+// parseBlockItems parses items until '}' or EOF, returns child index slice.
+func (p *parser) parseBlockItems() ([]uint32, error) {
+	var items []uint32
 	for p.peek(0) != lexer.TagRBrace && p.peek(0) != lexer.TagEOF {
-		item, err := p.parseItem()
+		idx, err := p.parseItem()
 		if err != nil {
 			return nil, err
 		}
-		if item != nil {
-			items = append(items, item)
+		if idx != ^uint32(0) {
+			items = append(items, idx)
 		}
 	}
 	if p.peek(0) == lexer.TagRBrace {
-		p.advance() // consume '}'
+		p.advance()
 	}
-	return &Block{Items: items}, nil
+	return items, nil
 }
 
-// parseValue is the Pratt value parser.
-// minBP is the minimum binding power for infix continuation (pass 0 at top level).
-func (p *parser) parseValue(minBP int) (Value, error) {
-	// prefix: unary minus → negative number/identifier
+// parseValue returns the index of a value node.
+func (p *parser) parseValue(minBP int) (uint32, error) {
+	// Unary minus.
 	if p.peek(0) == lexer.TagMinus {
-		minus := p.advance()
-		if p.peek(0) == lexer.TagEOF {
-			return nil, p.errorf("unexpected EOF after '-'")
+		start := uint32(p.tokens[p.pos].Start)
+		p.advance()
+		if p.pos >= len(p.tokens) {
+			return 0, p.errorf("unexpected EOF after '-'")
 		}
-		num := p.advance()
-		parts := []string{p.tokenStr(minus), p.tokenStr(num)}
-		// consume trailing scope-chain fragments after -0.25e3 etc. (rare but possible)
+		end := uint32(p.tokens[p.pos].End)
+		p.advance()
 		for bindingPower(p.peek(0)) > minBP {
-			sep := p.advance()
-			parts = append(parts, p.tokenStr(sep))
-			seg := p.advance()
-			parts = append(parts, p.tokenStr(seg))
+			p.advance()
+			if p.pos < len(p.tokens) {
+				end = uint32(p.tokens[p.pos].End)
+				p.advance()
+			}
 		}
-		return &Scalar{Parts: parts}, nil
+		idx := p.allocNode(Node{Kind: KindScalar, SrcStart: start, SrcEnd: end})
+		return idx, nil
 	}
 
-	// prefix: tagged block — identifier followed directly by '{'
+	// Tagged block.
 	if p.peek(0) == lexer.TagIdentifier && p.peek(1) == lexer.TagLBrace {
 		tagTok := p.advance()
-		tag := p.tokenStr(tagTok)
-		block, err := p.parseBlock()
+		p.advance() // consume '{'
+		items, err := p.parseBlockItems()
 		if err != nil {
-			return nil, err
+			return 0, err
 		}
-		return &TaggedBlock{Tag: tag, Items: block.Items}, nil
+		idxStart := uint32(len(p.index))
+		p.index = append(p.index, items...)
+		idx := p.allocNode(Node{
+			Kind:       KindTaggedBlock,
+			SrcStart:   uint32(tagTok.Start),
+			SrcEnd:     uint32(tagTok.End),
+			ChildStart: idxStart,
+			ChildEnd:   uint32(len(p.index)),
+		})
+		return idx, nil
 	}
 
-	// prefix: plain block
+	// Plain block.
 	if p.peek(0) == lexer.TagLBrace {
-		return p.parseBlock()
-	}
-
-	// atom
-	if !isAtom(p.peek(0)) {
-		return nil, p.errorf("expected value, got %s", p.peek(0))
-	}
-	tok := p.advance()
-	parts := []string{p.tokenStr(tok)}
-
-	// infix loop: extend scope chains (: . |)
-	for bindingPower(p.peek(0)) > minBP {
-		sep := p.advance()
-		parts = append(parts, p.tokenStr(sep))
-		if p.peek(0) == lexer.TagEOF {
-			break
+		p.advance() // consume '{'
+		items, err := p.parseBlockItems()
+		if err != nil {
+			return 0, err
 		}
-		seg := p.advance()
-		parts = append(parts, p.tokenStr(seg))
+		idxStart := uint32(len(p.index))
+		p.index = append(p.index, items...)
+		idx := p.allocNode(Node{
+			Kind:       KindBlock,
+			ChildStart: idxStart,
+			ChildEnd:   uint32(len(p.index)),
+		})
+		return idx, nil
 	}
 
-	return &Scalar{Parts: parts}, nil
+	// Atom + optional scope-chain infix.
+	if !isAtom(p.peek(0)) {
+		return 0, p.errorf("expected value, got %s", p.peek(0))
+	}
+	start := uint32(p.tokens[p.pos].Start)
+	end := uint32(p.tokens[p.pos].End)
+	p.advance()
+	for bindingPower(p.peek(0)) > minBP {
+		p.advance() // connector
+		if p.pos < len(p.tokens) {
+			end = uint32(p.tokens[p.pos].End)
+			p.advance()
+		}
+	}
+	idx := p.allocNode(Node{Kind: KindScalar, SrcStart: start, SrcEnd: end})
+	return idx, nil
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-// ParseBytes parses a PDXScript source buffer.
-// filename is used only for error messages; it is not stored in the AST.
-func ParseBytes(filename string, src []byte) (*File, error) {
+// Parse parses src and returns a Tree. filename is used only in error messages.
+func Parse(filename string, src []byte) (*Tree, error) {
 	p := newParser(filename, src)
-	return p.parseFile()
+	if _, err := p.parseFile(); err != nil {
+		return nil, err
+	}
+	return &Tree{Nodes: p.nodes, Index: p.index, Src: src}, nil
 }
