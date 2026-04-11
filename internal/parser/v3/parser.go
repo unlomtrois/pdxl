@@ -10,7 +10,7 @@
 //
 // This is the fastest variant. For the pointer-based tree see internal/parser/v2.
 // For the participle-based reference see internal/parser/v1.
-package parser
+package v3
 
 import (
 	"fmt"

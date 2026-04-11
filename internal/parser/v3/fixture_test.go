@@ -1,4 +1,4 @@
-package parser
+package v3
 
 // Fixture-based golden tests for the flat-node-pool parser (Option A).
 // Golden files are shared with v2 — output format is identical.
