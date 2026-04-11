@@ -36,7 +36,7 @@ func (l *Lexer) Next() *Token {
 	}
 
 	startPos := l.pos
-	c, _ := l.advance()
+	c, size := l.advance()
 
 	var tag Tag
 	switch {
@@ -44,7 +44,7 @@ func (l *Lexer) Next() *Token {
 		// If next char is non-digit identifier char (like _ or letter), treat as identifier
 		// Otherwise, treat as number
 		if !l.isAtEnd() && (isAlpha(byte(l.peek())) || l.peek() == '_') {
-			l.pos--
+			l.pos -= size
 			tag = l.lexIdentifier(startPos)
 		} else {
 			tag = l.lexNumber()
