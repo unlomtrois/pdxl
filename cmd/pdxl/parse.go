@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	parser "pdxl/internal/parser/v2"
@@ -78,10 +79,5 @@ func printField(f *parser.Field, depth int) {
 }
 
 func indentStr(depth int) string {
-	const tab = "  "
-	s := ""
-	for range depth {
-		s += tab
-	}
-	return s
+	return strings.Repeat("\t", depth)
 }

@@ -91,9 +91,15 @@ type Tree struct {
 // Root returns the file root node.
 func (t *Tree) Root() Node { return t.Nodes[0] }
 
-// Children returns the direct children of n.
+// ChildRefs returns the child indices of n into Tree.Nodes without allocating.
+// Prefer this in hot paths; use Children for convenience.
+func (t *Tree) ChildRefs(n Node) []uint32 {
+	return t.Index[n.ChildStart:n.ChildEnd]
+}
+
+// Children returns the direct children of n as Node values.
 func (t *Tree) Children(n Node) []Node {
-	refs := t.Index[n.ChildStart:n.ChildEnd]
+	refs := t.ChildRefs(n)
 	out := make([]Node, len(refs))
 	for i, idx := range refs {
 		out[i] = t.Nodes[idx]

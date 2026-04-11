@@ -22,6 +22,7 @@ package v2
 
 import (
 	"fmt"
+	"strings"
 
 	"pdxl/internal/lexer"
 )
@@ -54,11 +55,7 @@ type Scalar struct {
 
 // Value returns the scalar as a single concatenated string.
 func (s *Scalar) Value() string {
-	out := ""
-	for _, p := range s.Parts {
-		out += p
-	}
-	return out
+	return strings.Join(s.Parts, "")
 }
 
 func (*Scalar) isValue() {}
@@ -78,11 +75,7 @@ type Field struct {
 
 // Key returns the field key as a single concatenated string.
 func (f *Field) Key() string {
-	out := ""
-	for _, p := range f.KeyParts {
-		out += p
-	}
-	return out
+	return strings.Join(f.KeyParts, "")
 }
 
 // File is the root of a parsed PDXScript file.
