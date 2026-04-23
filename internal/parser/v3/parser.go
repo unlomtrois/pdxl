@@ -152,18 +152,7 @@ type parser struct {
 }
 
 func newParser(filename string, src []byte) *parser {
-	l := lexer.Init(src)
-	tokens := make([]lexer.Token, 0, len(src)/8)
-	for {
-		tok := l.Next()
-		if tok == nil {
-			break
-		}
-		if tok.Tag == lexer.TagInvalid || tok.Tag == lexer.TagEOF {
-			continue
-		}
-		tokens = append(tokens, *tok)
-	}
+	tokens := lexer.Tokenize(src)
 	cap := len(tokens) / 2
 	return &parser{
 		tokens:   tokens,

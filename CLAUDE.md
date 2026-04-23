@@ -8,9 +8,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 make test         # run all tests
 make lint         # run golangci-lint
 make build        # build binary to bin/pdxl
-make bench        # run all benchmarks (lexer + all parsers)
+make bench        # run all benchmarks (lexer + all parsers + cache)
 make bench-lexer  # lexer benchmarks only
 make bench-parser # v1/v2/v3 parser benchmarks side-by-side
+make bench-cache  # cache L1/L2 read and write benchmarks
 ```
 
 To run a single test:
@@ -39,6 +40,7 @@ internal/parser/
   v1/                   — participle-based reference parser (benchmarking baseline only)
   v2/                   — hand-written recursive descent + Pratt, pointer-tree AST
   v3/                   — same algorithm, flat node-pool AST (fastest; preferred for new tools)
+internal/cache/         — two-level parse cache: in-memory LRU + on-disk gob store
 internal/testutil/      — shared TestdataDir() and DiffLines() used by all test packages
 testdata/               — shared .txt fixture files and .golden expected-output files
 pkg/mod/                — reserved for future public packages
@@ -95,6 +97,30 @@ When a block is unclosed, subsequent fields are absorbed into it — the parser 
 `internal/testutil.TestdataDir()` returns the absolute path to the project-level `testdata/` directory using `runtime.Caller()` — safe to call from any sub-package without path hacks.
 
 All parser packages share the same `testdata/*.txt` fixtures. Each has its own `fixture_test.go` that renders the parsed AST to a string and diffs against `testdata/*.golden`. Run with `-update` to regenerate goldens.
+
+### Cache layer (`internal/cache`)
+
+`lexer.Tokenize(src []byte) []Token` extracts tokens from source; `v3.newParser` delegates to it instead of inlining the loop.
+
+`Store` is the two-level cache. `NewStore(dir, lruCap)` creates the disk directory and, when `lruCap > 0`, an in-memory LRU.
+
+```go
+store, _ := cache.NewStore(".pdxl/cache", 256)
+info, _ := os.Stat(path)
+tree, diags, _ := store.Get(path, info)   // nil on miss
+if tree == nil {
+    tree, diags = v3.Parse(path, src)
+    store.Put(path, info, src, tree, diags)
+}
+```
+
+**Invalidation:** L1 compares `info.ModTime().UnixNano()`. On mtime mismatch, L2 (disk) is checked. If the disk entry's mtime also doesn't match, the source file is re-read and its SHA-256 is compared against the stored hash — a same-content/different-mtime file updates the stored mtime and returns the cached tree. A changed hash is a full miss.
+
+**Disk format:** gob-encoded `diskEntry{ModTime int64, SHA256 [32]byte, SrcGzip []byte, Nodes []v3.Node, Index []uint32, Diags []v3.Diagnostic}`. Entry filename is `sha256(filepath.Clean(path)).bin`. Source is stored gzip-compressed so hot L2 paths skip the original file entirely.
+
+**Performance baseline (i5-11400H):** L1 hit ~23 ns / 0 allocs; L2 disk read ~190 µs; disk write ~620 µs.
+
+`pdxl lint` enables the cache by default at `.pdxl/cache`; pass `--no-cache` to bypass.
 
 ### Token naming
 
