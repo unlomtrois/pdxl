@@ -1,4 +1,4 @@
-.PHONY: test lint build clean bench bench-lexer bench-parser bench-cache
+.PHONY: test lint build install clean bench bench-lexer bench-parser bench-cache
 
 test:
 	go test ./...
@@ -8,6 +8,9 @@ lint:
 
 build:
 	go build -o bin/pdxl ./cmd/pdxl
+
+install:
+	go install ./cmd/pdxl
 
 clean:
 	rm -rf bin/
