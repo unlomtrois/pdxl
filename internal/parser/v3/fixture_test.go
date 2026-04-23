@@ -39,9 +39,9 @@ func TestFixtures(t *testing.T) {
 				t.Fatalf("reading fixture: %v", err)
 			}
 
-			tree, err := Parse(fixturePath, src)
-			if err != nil {
-				t.Fatalf("parse error: %v", err)
+			tree, diags := Parse(fixturePath, src)
+			if len(diags) > 0 {
+				t.Fatalf("unexpected parse diagnostics: %v", diags)
 			}
 
 			got := renderTree(tree)
