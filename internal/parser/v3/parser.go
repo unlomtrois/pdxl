@@ -8,6 +8,10 @@
 // String values are byte-offset ranges into the original source slice,
 // so no string copies are made during parsing.
 //
+// The parser is error-tolerant: it accumulates diagnostics and produces a
+// partial tree rather than stopping at the first error. Callers should check
+// len(diags) > 0 rather than treating a non-nil tree as fully valid.
+//
 // This is the fastest variant. For the pointer-based tree see internal/parser/v2.
 // For the participle-based reference see internal/parser/v1.
 package v3
@@ -107,22 +111,35 @@ func (t *Tree) Children(n Node) []Node {
 	return out
 }
 
-// ── ParseError ────────────────────────────────────────────────────────────────
+// ── Diagnostics ───────────────────────────────────────────────────────────────
 
-type ParseError struct {
+// Severity classifies how serious a diagnostic is.
+type Severity uint8
+
+const (
+	SeverityError   Severity = iota
+	SeverityWarning
+)
+
+// Diagnostic is a parse problem with a source location.
+// Offset is a byte offset into the source; use lexer.Token{Start: d.Offset}.FormatPosition
+// to convert to a line:column string.
+type Diagnostic struct {
 	Filename string
 	Offset   int
 	Msg      string
+	Severity Severity
 }
 
-func (e *ParseError) Error() string {
-	if e.Filename != "" {
-		return fmt.Sprintf("%s: offset %d: %s", e.Filename, e.Offset, e.Msg)
-	}
-	return fmt.Sprintf("offset %d: %s", e.Offset, e.Msg)
+func (d Diagnostic) String() string {
+	tok := lexer.Token{Start: d.Offset, End: d.Offset}
+	return fmt.Sprintf("%s: %s", tok.FormatPosition(d.Filename, nil), d.Msg)
 }
 
 // ── parser ────────────────────────────────────────────────────────────────────
+
+// invalidIdx is returned by parse functions when no node was produced.
+const invalidIdx = ^uint32(0)
 
 type parser struct {
 	tokens   []lexer.Token
@@ -131,6 +148,7 @@ type parser struct {
 	pos      int    // current index into tokens
 	nodes    []Node // flat node pool
 	index    []uint32
+	diags    []Diagnostic
 }
 
 func newParser(filename string, src []byte) *parser {
@@ -192,11 +210,32 @@ func (p *parser) currentOffset() int {
 	return 0
 }
 
-func (p *parser) errorf(format string, args ...any) *ParseError {
-	return &ParseError{
+func (p *parser) addDiag(offset int, severity Severity, msg string) {
+	p.diags = append(p.diags, Diagnostic{
 		Filename: p.filename,
-		Offset:   p.currentOffset(),
-		Msg:      fmt.Sprintf(format, args...),
+		Offset:   offset,
+		Msg:      msg,
+		Severity: severity,
+	})
+}
+
+// synchronize skips tokens until a safe resumption point:
+// a closing '}', the start of a plausible new item, or EOF.
+// It does NOT consume the token it stops at.
+func (p *parser) synchronize() {
+	for {
+		switch p.peek(0) {
+		case lexer.TagEOF, lexer.TagRBrace:
+			return
+		}
+		t0 := p.peek(0)
+		if isAtom(t0) {
+			t1 := p.peek(1)
+			if isOperator(t1) || t1 == lexer.TagLBrace {
+				return
+			}
+		}
+		p.advance()
 	}
 }
 
@@ -241,17 +280,14 @@ func (p *parser) peekOpAfterKey() bool {
 
 // ── Parsing ───────────────────────────────────────────────────────────────────
 
-// parseFile parses top-level items, returns root node index.
-func (p *parser) parseFile() (uint32, error) {
+// parseFile parses top-level items and returns the root node index.
+func (p *parser) parseFile() uint32 {
 	rootIdx := p.allocNode(Node{Kind: KindFile})
 	var childIdxs []uint32
 
 	for p.peek(0) != lexer.TagEOF {
-		idx, err := p.parseItem()
-		if err != nil {
-			return 0, err
-		}
-		if idx != ^uint32(0) {
+		idx := p.parseItem()
+		if idx != invalidIdx {
 			childIdxs = append(childIdxs, idx)
 		}
 	}
@@ -260,18 +296,18 @@ func (p *parser) parseFile() (uint32, error) {
 	p.index = append(p.index, childIdxs...)
 	p.nodes[rootIdx].ChildStart = start
 	p.nodes[rootIdx].ChildEnd = uint32(len(p.index))
-	return rootIdx, nil
+	return rootIdx
 }
 
-// parseItem returns the index of the parsed node, or ^uint32(0) for skipped tokens.
-func (p *parser) parseItem() (uint32, error) {
+// parseItem returns the index of the parsed node, or invalidIdx for skipped tokens.
+func (p *parser) parseItem() uint32 {
 	t0 := p.peek(0)
 	if t0 == lexer.TagEOF {
-		return ^uint32(0), nil
+		return invalidIdx
 	}
 	if t0 == lexer.TagRBrace || t0 == lexer.TagRBracket {
 		p.advance()
-		return ^uint32(0), nil
+		return invalidIdx
 	}
 	if t0 != lexer.TagMinus && isAtom(t0) && p.peekOpAfterKey() {
 		return p.parseField()
@@ -279,9 +315,8 @@ func (p *parser) parseItem() (uint32, error) {
 	return p.parseValue(0)
 }
 
-// parseField returns the index of a KindField node.
-func (p *parser) parseField() (uint32, error) {
-	// Scan key span.
+// parseField returns the index of a KindField node, or invalidIdx on error.
+func (p *parser) parseField() uint32 {
 	keyStart := uint32(p.tokens[p.pos].Start)
 	keyEnd := uint32(p.tokens[p.pos].End)
 	p.advance()
@@ -294,24 +329,24 @@ func (p *parser) parseField() (uint32, error) {
 	}
 
 	if !isOperator(p.peek(0)) {
-		return 0, p.errorf("expected operator, got %s", p.peek(0))
+		p.addDiag(p.currentOffset(), SeverityError,
+			fmt.Sprintf("expected operator, got %s", p.peek(0)))
+		p.synchronize()
+		return invalidIdx
 	}
 	opTok := p.advance()
 
-	// Allocate key scalar.
 	keyIdx := p.allocNode(Node{Kind: KindScalar, SrcStart: keyStart, SrcEnd: keyEnd})
 
-	// Parse value.
-	valIdx, err := p.parseValue(0)
-	if err != nil {
-		return 0, err
+	valIdx := p.parseValue(0)
+	if valIdx == invalidIdx {
+		return invalidIdx
 	}
 
-	// Build field node with two children: key, value.
 	idxStart := uint32(len(p.index))
 	p.index = append(p.index, keyIdx, valIdx)
 
-	fieldIdx := p.allocNode(Node{
+	return p.allocNode(Node{
 		Kind:       KindField,
 		SrcStart:   keyStart,
 		SrcEnd:     keyEnd,
@@ -319,35 +354,36 @@ func (p *parser) parseField() (uint32, error) {
 		ChildStart: idxStart,
 		ChildEnd:   idxStart + 2,
 	})
-	return fieldIdx, nil
 }
 
-// parseBlockItems parses items until '}' or EOF, returns child index slice.
-func (p *parser) parseBlockItems() ([]uint32, error) {
+// parseBlockItems parses items until '}' or EOF.
+// lbrace is the opening '{' token, used for unclosed-block diagnostics.
+func (p *parser) parseBlockItems(lbrace lexer.Token) []uint32 {
 	var items []uint32
 	for p.peek(0) != lexer.TagRBrace && p.peek(0) != lexer.TagEOF {
-		idx, err := p.parseItem()
-		if err != nil {
-			return nil, err
-		}
-		if idx != ^uint32(0) {
+		idx := p.parseItem()
+		if idx != invalidIdx {
 			items = append(items, idx)
 		}
 	}
 	if p.peek(0) == lexer.TagRBrace {
 		p.advance()
+	} else {
+		// EOF reached without closing brace.
+		p.addDiag(int(lbrace.Start), SeverityError, "unclosed block")
 	}
-	return items, nil
+	return items
 }
 
-// parseValue returns the index of a value node.
-func (p *parser) parseValue(minBP int) (uint32, error) {
+// parseValue returns the index of a value node, or invalidIdx on error.
+func (p *parser) parseValue(minBP int) uint32 {
 	// Unary minus.
 	if p.peek(0) == lexer.TagMinus {
 		start := uint32(p.tokens[p.pos].Start)
 		p.advance()
 		if p.pos >= len(p.tokens) {
-			return 0, p.errorf("unexpected EOF after '-'")
+			p.addDiag(p.currentOffset(), SeverityError, "unexpected EOF after '-'")
+			return invalidIdx
 		}
 		end := uint32(p.tokens[p.pos].End)
 		p.advance()
@@ -358,50 +394,44 @@ func (p *parser) parseValue(minBP int) (uint32, error) {
 				p.advance()
 			}
 		}
-		idx := p.allocNode(Node{Kind: KindScalar, SrcStart: start, SrcEnd: end})
-		return idx, nil
+		return p.allocNode(Node{Kind: KindScalar, SrcStart: start, SrcEnd: end})
 	}
 
 	// Tagged block.
 	if p.peek(0) == lexer.TagIdentifier && p.peek(1) == lexer.TagLBrace {
 		tagTok := p.advance()
-		p.advance() // consume '{'
-		items, err := p.parseBlockItems()
-		if err != nil {
-			return 0, err
-		}
+		lbrace := p.advance() // consume '{'
+		items := p.parseBlockItems(lbrace)
 		idxStart := uint32(len(p.index))
 		p.index = append(p.index, items...)
-		idx := p.allocNode(Node{
+		return p.allocNode(Node{
 			Kind:       KindTaggedBlock,
 			SrcStart:   uint32(tagTok.Start),
 			SrcEnd:     uint32(tagTok.End),
 			ChildStart: idxStart,
 			ChildEnd:   uint32(len(p.index)),
 		})
-		return idx, nil
 	}
 
 	// Plain block.
 	if p.peek(0) == lexer.TagLBrace {
-		p.advance() // consume '{'
-		items, err := p.parseBlockItems()
-		if err != nil {
-			return 0, err
-		}
+		lbrace := p.advance() // consume '{'
+		items := p.parseBlockItems(lbrace)
 		idxStart := uint32(len(p.index))
 		p.index = append(p.index, items...)
-		idx := p.allocNode(Node{
+		return p.allocNode(Node{
 			Kind:       KindBlock,
 			ChildStart: idxStart,
 			ChildEnd:   uint32(len(p.index)),
 		})
-		return idx, nil
 	}
 
 	// Atom + optional scope-chain infix.
 	if !isAtom(p.peek(0)) {
-		return 0, p.errorf("expected value, got %s", p.peek(0))
+		p.addDiag(p.currentOffset(), SeverityError,
+			fmt.Sprintf("expected value, got %s", p.peek(0)))
+		p.synchronize()
+		return invalidIdx
 	}
 	start := uint32(p.tokens[p.pos].Start)
 	end := uint32(p.tokens[p.pos].End)
@@ -413,17 +443,16 @@ func (p *parser) parseValue(minBP int) (uint32, error) {
 			p.advance()
 		}
 	}
-	idx := p.allocNode(Node{Kind: KindScalar, SrcStart: start, SrcEnd: end})
-	return idx, nil
+	return p.allocNode(Node{Kind: KindScalar, SrcStart: start, SrcEnd: end})
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-// Parse parses src and returns a Tree. filename is used only in error messages.
-func Parse(filename string, src []byte) (*Tree, error) {
+// Parse parses src and returns a Tree along with any diagnostics.
+// The tree is always non-nil; a non-empty diagnostics slice means errors were
+// found but parsing continued as far as possible.
+func Parse(filename string, src []byte) (*Tree, []Diagnostic) {
 	p := newParser(filename, src)
-	if _, err := p.parseFile(); err != nil {
-		return nil, err
-	}
-	return &Tree{Nodes: p.nodes, Index: p.index, Src: src}, nil
+	p.parseFile()
+	return &Tree{Nodes: p.nodes, Index: p.index, Src: src}, p.diags
 }

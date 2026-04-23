@@ -26,8 +26,8 @@ func BenchmarkParseFixtures(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for b.Loop() {
-				if _, err := Parse(fixturePath, src); err != nil {
-					b.Fatal(err)
+				if _, diags := Parse(fixturePath, src); len(diags) > 0 {
+					b.Fatalf("unexpected diagnostics: %v", diags)
 				}
 			}
 		})
@@ -44,8 +44,8 @@ func BenchmarkParseLarge(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for b.Loop() {
-		if _, err := Parse("international_organization.txt", src); err != nil {
-			b.Fatal(err)
+		if _, diags := Parse("international_organization.txt", src); len(diags) > 0 {
+			b.Fatalf("unexpected diagnostics: %v", diags)
 		}
 	}
 }
