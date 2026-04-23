@@ -57,7 +57,7 @@ func TestFixtures(t *testing.T) {
 				t.Fatalf("parse error: %v", err)
 			}
 
-			got := renderFile(ast)
+			got := renderFile(ast, src)
 			goldenPath := filepath.Join(td, name+".golden")
 
 			if *update {
@@ -82,37 +82,37 @@ func TestFixtures(t *testing.T) {
 }
 
 // renderFile pretty-prints a parsed File to a string for golden comparison.
-func renderFile(f *File) string {
+func renderFile(f *File, src []byte) string {
 	var b bytes.Buffer
 	for _, item := range f.Items {
-		renderItem(&b, item, 0)
+		renderItem(&b, item, src, 0)
 	}
 	return b.String()
 }
 
-func renderItem(b *bytes.Buffer, item *Item, depth int) {
+func renderItem(b *bytes.Buffer, item *Item, src []byte, depth int) {
 	if item.Field != nil {
-		renderField(b, item.Field, depth)
+		renderField(b, item.Field, src, depth)
 	} else if item.Scalar != nil {
-		fmt.Fprintf(b, "%s%s\n", indent(depth), item.Scalar.Value())
+		fmt.Fprintf(b, "%s%s\n", indent(depth), item.Scalar.Value(src))
 	}
 }
 
-func renderField(b *bytes.Buffer, f *Field, depth int) {
+func renderField(b *bytes.Buffer, f *Field, src []byte, depth int) {
 	pfx := indent(depth)
 	switch v := f.Value.(type) {
 	case *Scalar:
-		fmt.Fprintf(b, "%s%s %s %s\n", pfx, f.Key(), f.Operator, v.Value())
+		fmt.Fprintf(b, "%s%s %s %s\n", pfx, f.Key(src), OperatorString(f.Operator), v.Value(src))
 	case *TaggedBlock:
-		fmt.Fprintf(b, "%s%s %s %s {\n", pfx, f.Key(), f.Operator, v.Tag)
+		fmt.Fprintf(b, "%s%s %s %s {\n", pfx, f.Key(src), OperatorString(f.Operator), string(v.Tag.GetValue(src)))
 		for _, item := range v.Items {
-			renderItem(b, item, depth+1)
+			renderItem(b, item, src, depth+1)
 		}
 		fmt.Fprintf(b, "%s}\n", pfx)
 	case *Block:
-		fmt.Fprintf(b, "%s%s %s {\n", pfx, f.Key(), f.Operator)
+		fmt.Fprintf(b, "%s%s %s {\n", pfx, f.Key(src), OperatorString(f.Operator))
 		for _, item := range v.Items {
-			renderItem(b, item, depth+1)
+			renderItem(b, item, src, depth+1)
 		}
 		fmt.Fprintf(b, "%s}\n", pfx)
 	}
@@ -121,4 +121,3 @@ func renderField(b *bytes.Buffer, f *Field, depth int) {
 func indent(depth int) string {
 	return strings.Repeat("  ", depth)
 }
-

@@ -2,6 +2,8 @@ package v2
 
 import (
 	"testing"
+
+	"pdxl/internal/lexer"
 )
 
 func TestSimpleField(t *testing.T) {
@@ -21,8 +23,8 @@ func TestSimpleField(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected Scalar value, got %T", field.Value)
 	}
-	if field.Key() != "key" || field.Operator != "=" || scalar.Value() != "value" {
-		t.Fatalf("unexpected field: key=%q op=%q val=%q", field.Key(), field.Operator, scalar.Value())
+	if field.Key(src) != "key" || field.Operator != lexer.TagEqual || scalar.Value(src) != "value" {
+		t.Fatalf("unexpected field: key=%q op=%v val=%q", field.Key(src), field.Operator, scalar.Value(src))
 	}
 }
 
@@ -41,7 +43,7 @@ func TestBlockField(t *testing.T) {
 		t.Fatalf("expected Block value, got %T", field.Value)
 	}
 	inner := block.Items[0].Field
-	if inner == nil || inner.Key() != "age" || inner.Operator != ">" {
+	if inner == nil || inner.Key(src) != "age" || inner.Operator != lexer.TagGreaterThan {
 		t.Fatalf("unexpected inner field: %+v", inner)
 	}
 }
@@ -85,8 +87,8 @@ func TestTaggedBlock(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected TaggedBlock, got %T", field.Value)
 	}
-	if tb.Tag != "rgb" {
-		t.Fatalf("expected tag 'rgb', got %q", tb.Tag)
+	if string(tb.Tag.GetValue(src)) != "rgb" {
+		t.Fatalf("expected tag 'rgb', got %q", string(tb.Tag.GetValue(src)))
 	}
 	if len(tb.Items) != 3 {
 		t.Fatalf("expected 3 items, got %d", len(tb.Items))
@@ -120,8 +122,8 @@ func TestBoolean(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected Scalar, got %T", field.Value)
 	}
-	if scalar.Value() != "yes" {
-		t.Fatalf("expected 'yes', got %q", scalar.Value())
+	if scalar.Value(src) != "yes" {
+		t.Fatalf("expected 'yes', got %q", scalar.Value(src))
 	}
 }
 

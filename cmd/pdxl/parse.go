@@ -31,7 +31,7 @@ var parseCmd = &cobra.Command{
 			enc.SetIndent("", "  ")
 			return enc.Encode(ast)
 		}
-		printFile(ast, 0)
+		printFile(ast, data, 0)
 		return nil
 	},
 }
@@ -43,38 +43,38 @@ func init() {
 
 // ── pretty printer ────────────────────────────────────────────────────────────
 
-func printFile(f *parser.File, depth int) {
+func printFile(f *parser.File, src []byte, depth int) {
 	for _, item := range f.Items {
-		printItem(item, depth)
+		printItem(item, src, depth)
 	}
 }
 
-func printItem(item *parser.Item, depth int) {
-	indent := indentStr(depth)
+func printItem(item *parser.Item, src []byte, depth int) {
+	ind := indentStr(depth)
 	if item.Field != nil {
-		printField(item.Field, depth)
+		printField(item.Field, src, depth)
 	} else if item.Scalar != nil {
-		fmt.Printf("%s%s\n", indent, item.Scalar.Value())
+		fmt.Printf("%s%s\n", ind, item.Scalar.Value(src))
 	}
 }
 
-func printField(f *parser.Field, depth int) {
-	indent := indentStr(depth)
+func printField(f *parser.Field, src []byte, depth int) {
+	ind := indentStr(depth)
 	switch v := f.Value.(type) {
 	case *parser.Scalar:
-		fmt.Printf("%s%s %s %s\n", indent, f.Key(), f.Operator, v.Value())
+		fmt.Printf("%s%s %s %s\n", ind, f.Key(src), parser.OperatorString(f.Operator), v.Value(src))
 	case *parser.TaggedBlock:
-		fmt.Printf("%s%s %s %s {\n", indent, f.Key(), f.Operator, v.Tag)
+		fmt.Printf("%s%s %s %s {\n", ind, f.Key(src), parser.OperatorString(f.Operator), string(v.Tag.GetValue(src)))
 		for _, item := range v.Items {
-			printItem(item, depth+1)
+			printItem(item, src, depth+1)
 		}
-		fmt.Printf("%s}\n", indent)
+		fmt.Printf("%s}\n", ind)
 	case *parser.Block:
-		fmt.Printf("%s%s %s {\n", indent, f.Key(), f.Operator)
+		fmt.Printf("%s%s %s {\n", ind, f.Key(src), parser.OperatorString(f.Operator))
 		for _, item := range v.Items {
-			printItem(item, depth+1)
+			printItem(item, src, depth+1)
 		}
-		fmt.Printf("%s}\n", indent)
+		fmt.Printf("%s}\n", ind)
 	}
 }
 
