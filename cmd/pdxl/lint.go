@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 
@@ -18,9 +19,11 @@ var lintCmd = &cobra.Command{
 }
 
 var noCacheLint bool
+var contextLines int
 
 func init() {
 	lintCmd.Flags().BoolVar(&noCacheLint, "no-cache", false, "disable parse cache")
+	lintCmd.Flags().IntVar(&contextLines, "context", 0, "lines of source context to print around each diagnostic (0 = off)")
 	rootCmd.AddCommand(lintCmd)
 }
 
@@ -62,6 +65,9 @@ func runLint(_ *cobra.Command, args []string) error {
 		for _, d := range diags {
 			tok := lexer.Token{Start: d.Offset, End: d.Offset}
 			fmt.Printf("%s: %s\n", tok.FormatPosition(d.Filename, tree.Src), d.Msg)
+			if contextLines > 0 {
+				printContext(tree.Src, d.Offset, contextLines)
+			}
 			if d.Severity == v3.SeverityError {
 				hasErrors = true
 			}
@@ -71,4 +77,38 @@ func runLint(_ *cobra.Command, args []string) error {
 		os.Exit(1)
 	}
 	return nil
+}
+
+// printContext prints up to n lines before and after the line containing offset.
+func printContext(src []byte, offset, n int) {
+	lines := bytes.Split(src, []byte("\n"))
+
+	// find which line the offset falls on (0-based)
+	diagLine := 0
+	pos := 0
+	for i, line := range lines {
+		pos += len(line) + 1 // +1 for the '\n'
+		if pos > offset {
+			diagLine = i
+			break
+		}
+	}
+
+	first := diagLine - n
+	if first < 0 {
+		first = 0
+	}
+	last := diagLine + n
+	if last >= len(lines) {
+		last = len(lines) - 1
+	}
+
+	for i := first; i <= last; i++ {
+		marker := "  "
+		if i == diagLine {
+			marker = "> "
+		}
+		fmt.Printf("  %s%4d | %s\n", marker, i+1, lines[i])
+	}
+	fmt.Println()
 }
