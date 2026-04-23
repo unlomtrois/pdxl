@@ -33,7 +33,7 @@ Nix users: activate the toolchain with `nix-shell` before running make commands.
 pdxl is a toolkit for parsing Paradox Interactive scripting files (PDXScript, used in EU5, CK3, Victoria 3, etc.). The grammar is the same across all games; only semantics differ.
 
 ```
-cmd/pdxl/               — CLI: `lex` and `parse` subcommands
+cmd/pdxl/               — CLI: `lex`, `parse`, and `lint` subcommands
 internal/lexer/         — tokenizer (internal; not public API yet)
 internal/parser/
   v1/                   — participle-based reference parser (benchmarking baseline only)
@@ -63,14 +63,15 @@ Key AST types after the token rewrite:
 
 Grammar resolved with LL(2) lookahead: atom+operator → Field; atom+`{` → TaggedBlock; `{` → Block; else → Scalar. Scope chains (`:` `.` `|`) parsed via Pratt with binding power 80.
 
-### Parser v3 — flat node-pool AST
+### Parser v3 — flat node-pool AST with error recovery
 
 Preferred base for performance-sensitive tools (linter, LSP). ~2× fewer allocations than v2.
 
 All nodes live in a single `Tree.Nodes []Node` slice. Parent→child relationships go through `Tree.Index []uint32` — a node's children are `Tree.Index[node.ChildStart:node.ChildEnd]`, each element being an index into `Tree.Nodes`. This eliminates heap pointers inside nodes.
 
 ```go
-tree, _ := v3.Parse("file.pdx", src)
+tree, diags := v3.Parse("file.pdx", src)
+// tree is always non-nil; diags non-empty means errors were found but parsing continued
 root := tree.Root()                         // tree.Nodes[0], always KindFile
 refs := tree.ChildRefs(root)               // []uint32, no alloc
 for _, idx := range refs {
@@ -81,7 +82,13 @@ for _, idx := range refs {
 
 `Node.Op` (a `lexer.Tag`) holds the operator for `KindField` nodes. `Node.OpString()` maps it back to a source symbol (`"="`, `"?="`, etc.).
 
-`v3.Parse` returns `*Tree`; `v2.ParseBytes` returns `*File`. They are independent — v3 does not use v2 types.
+**Error recovery** uses synchronization: on any unexpected token, the parser records a `Diagnostic{Filename, Offset, Msg, Severity}` and calls `synchronize()`, which skips tokens until reaching a `}`, the start of a plausible new item (atom followed by operator or `{`), or EOF. The tree is always returned — callers get a partial AST even for broken files. Recovery is zero-cost on valid input: `p.diags` stays nil and adds no allocations.
+
+`parseBlockItems` receives the opening `{` token so it can report `"unclosed block"` at the brace's byte offset when EOF is reached before `}`. This is the only diagnostic currently emitted; it is surfaced by `pdxl lint`.
+
+When a block is unclosed, subsequent fields are absorbed into it — the parser cannot distinguish block-level from outer-level items without indentation heuristics.
+
+`v3.Parse` returns `(*Tree, []Diagnostic)`; `v2.ParseBytes` returns `(*File, error)`. They are independent — v3 does not use v2 types.
 
 ### Testutil and golden tests
 
