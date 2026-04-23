@@ -291,3 +291,20 @@ func isAlphaNumeric(c byte) bool {
 func isDigit(c byte) bool {
 	return c >= '0' && c <= '9'
 }
+
+// Tokenize returns all valid tokens from src, skipping TagInvalid and TagEOF.
+func Tokenize(src []byte) []Token {
+	l := Init(src)
+	out := make([]Token, 0, len(src)/8)
+	for {
+		tok := l.Next()
+		if tok == nil {
+			break
+		}
+		if tok.Tag == TagInvalid || tok.Tag == TagEOF {
+			continue
+		}
+		out = append(out, *tok)
+	}
+	return out
+}
