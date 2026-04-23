@@ -22,7 +22,6 @@ package v2
 
 import (
 	"fmt"
-	"strings"
 
 	"pdxl/internal/lexer"
 )
@@ -34,7 +33,7 @@ type Value interface{ isValue() }
 
 // TaggedBlock handles constructs like `rgb { 255 0 0 }`.
 type TaggedBlock struct {
-	Tag   string
+	Tag   lexer.Token
 	Items []*Item
 }
 
@@ -48,14 +47,29 @@ type Block struct {
 func (*Block) isValue() {}
 
 // Scalar is a single atom or compound token chain (scope:path.seg, define:X|Y, -0.25).
-// The value is stored directly as a string slice to avoid re-scanning source.
+// Parts holds lexer tokens pointing into the original source; call Value(src) to materialize.
 type Scalar struct {
-	Parts []string
+	Parts []lexer.Token
 }
 
-// Value returns the scalar as a single concatenated string.
-func (s *Scalar) Value() string {
-	return strings.Join(s.Parts, "")
+// Value materializes the scalar as a concatenated string.
+// src must be the same slice passed to ParseBytes.
+func (s *Scalar) Value(src []byte) string {
+	if len(s.Parts) == 0 {
+		return ""
+	}
+	if len(s.Parts) == 1 {
+		return string(s.Parts[0].GetValue(src))
+	}
+	n := 0
+	for _, t := range s.Parts {
+		n += t.End - t.Start
+	}
+	b := make([]byte, 0, n)
+	for _, t := range s.Parts {
+		b = append(b, t.GetValue(src)...)
+	}
+	return string(b)
 }
 
 func (*Scalar) isValue() {}
@@ -68,19 +82,55 @@ type Item struct {
 
 // Field is a key–operator–value triple.
 type Field struct {
-	KeyParts []string
-	Operator string
+	KeyParts []lexer.Token
+	Operator lexer.Tag
 	Value    Value
 }
 
-// Key returns the field key as a single concatenated string.
-func (f *Field) Key() string {
-	return strings.Join(f.KeyParts, "")
+// Key materializes the field key as a concatenated string.
+// src must be the same slice passed to ParseBytes.
+func (f *Field) Key(src []byte) string {
+	if len(f.KeyParts) == 1 {
+		return string(f.KeyParts[0].GetValue(src))
+	}
+	n := 0
+	for _, t := range f.KeyParts {
+		n += t.End - t.Start
+	}
+	b := make([]byte, 0, n)
+	for _, t := range f.KeyParts {
+		b = append(b, t.GetValue(src)...)
+	}
+	return string(b)
 }
 
 // File is the root of a parsed PDXScript file.
 type File struct {
 	Items []*Item
+}
+
+// OperatorString maps an operator tag back to its source symbol for display.
+func OperatorString(tag lexer.Tag) string {
+	switch tag {
+	case lexer.TagEqual:
+		return "="
+	case lexer.TagEqualEqual:
+		return "=="
+	case lexer.TagNotEqual:
+		return "!="
+	case lexer.TagQuestionEqual:
+		return "?="
+	case lexer.TagGreaterThan:
+		return ">"
+	case lexer.TagGreaterEqual:
+		return ">="
+	case lexer.TagLessThan:
+		return "<"
+	case lexer.TagLessEqual:
+		return "<="
+	default:
+		return tag.String()
+	}
 }
 
 // ── Parser ────────────────────────────────────────────────────────────────────
@@ -102,7 +152,6 @@ func (e *ParseError) Error() string {
 // parser holds the pre-lexed token stream and parser state.
 type parser struct {
 	tokens   []lexer.Token
-	src      []byte
 	filename string
 	pos      int // index into tokens
 }
@@ -121,7 +170,7 @@ func newParser(filename string, src []byte) *parser {
 		}
 		tokens = append(tokens, *tok)
 	}
-	return &parser{tokens: tokens, src: src, filename: filename}
+	return &parser{tokens: tokens, filename: filename}
 }
 
 // peek returns the tag of the token at pos+offset without consuming.
@@ -141,11 +190,6 @@ func (p *parser) advance() lexer.Token {
 	tok := p.tokens[p.pos]
 	p.pos++
 	return tok
-}
-
-// tokenStr returns the source string for a token.
-func (p *parser) tokenStr(t lexer.Token) string {
-	return string(t.GetValue(p.src))
 }
 
 // currentOffset returns the source byte offset for error reporting.
@@ -265,34 +309,32 @@ func (p *parser) parseItem() (*Item, error) {
 	if s, ok := scalar.(*Scalar); ok {
 		return &Item{Scalar: s}, nil
 	}
-	// block-valued bare item (unusual but valid in some mod files)
-	return &Item{Scalar: &Scalar{Parts: []string{"{}"}}}, nil
+	// block-valued bare item (unusual): block contents are dropped; represent as empty scalar
+	return &Item{Scalar: &Scalar{}}, nil
 }
 
 // parseField parses  key op value.
 func (p *parser) parseField() (*Field, error) {
 	// key: one or more tokens connected by : or .
 	keyTok := p.advance()
-	keyParts := []string{p.tokenStr(keyTok)}
+	keyParts := []lexer.Token{keyTok}
 	for p.peek(0) == lexer.TagColon || p.peek(0) == lexer.TagDot {
 		sep := p.advance()
-		keyParts = append(keyParts, p.tokenStr(sep))
 		seg := p.advance()
-		keyParts = append(keyParts, p.tokenStr(seg))
+		keyParts = append(keyParts, sep, seg)
 	}
 
 	if !isOperator(p.peek(0)) {
 		return nil, p.errorf("expected operator, got %s", p.peek(0))
 	}
 	opTok := p.advance()
-	op := p.tokenStr(opTok)
 
 	val, err := p.parseValue(0)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Field{KeyParts: keyParts, Operator: op, Value: val}, nil
+	return &Field{KeyParts: keyParts, Operator: opTok.Tag, Value: val}, nil
 }
 
 // parseBlock parses `{ item* }`.
@@ -324,13 +366,12 @@ func (p *parser) parseValue(minBP int) (Value, error) {
 			return nil, p.errorf("unexpected EOF after '-'")
 		}
 		num := p.advance()
-		parts := []string{p.tokenStr(minus), p.tokenStr(num)}
+		parts := []lexer.Token{minus, num}
 		// consume trailing scope-chain fragments after -0.25e3 etc. (rare but possible)
 		for bindingPower(p.peek(0)) > minBP {
 			sep := p.advance()
-			parts = append(parts, p.tokenStr(sep))
 			seg := p.advance()
-			parts = append(parts, p.tokenStr(seg))
+			parts = append(parts, sep, seg)
 		}
 		return &Scalar{Parts: parts}, nil
 	}
@@ -338,12 +379,11 @@ func (p *parser) parseValue(minBP int) (Value, error) {
 	// prefix: tagged block — identifier followed directly by '{'
 	if p.peek(0) == lexer.TagIdentifier && p.peek(1) == lexer.TagLBrace {
 		tagTok := p.advance()
-		tag := p.tokenStr(tagTok)
 		block, err := p.parseBlock()
 		if err != nil {
 			return nil, err
 		}
-		return &TaggedBlock{Tag: tag, Items: block.Items}, nil
+		return &TaggedBlock{Tag: tagTok, Items: block.Items}, nil
 	}
 
 	// prefix: plain block
@@ -356,17 +396,16 @@ func (p *parser) parseValue(minBP int) (Value, error) {
 		return nil, p.errorf("expected value, got %s", p.peek(0))
 	}
 	tok := p.advance()
-	parts := []string{p.tokenStr(tok)}
+	parts := []lexer.Token{tok}
 
 	// infix loop: extend scope chains (: . |)
 	for bindingPower(p.peek(0)) > minBP {
 		sep := p.advance()
-		parts = append(parts, p.tokenStr(sep))
 		if p.peek(0) == lexer.TagEOF {
 			break
 		}
 		seg := p.advance()
-		parts = append(parts, p.tokenStr(seg))
+		parts = append(parts, sep, seg)
 	}
 
 	return &Scalar{Parts: parts}, nil
