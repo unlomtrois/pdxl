@@ -1,0 +1,9 @@
+game = "ck3"
+
+[cache]
+  enabled = true
+  dir = ".pdxl/cache"
+  lru_cap = 256
+
+[lint]
+  context = 0
