@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -47,9 +48,13 @@ func runLint(_ *cobra.Command, args []string) error {
 
 		if store != nil {
 			tree, diags, _ = store.Get(path, info)
+			if tree != nil {
+				slog.Debug("cache hit", "path", path)
+			}
 		}
 
 		if tree == nil {
+			slog.Debug("cache miss, parsing", "path", path)
 			src, err := os.ReadFile(path)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "%s: %v\n", path, err)

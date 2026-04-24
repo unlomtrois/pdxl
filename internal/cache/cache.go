@@ -145,17 +145,8 @@ func (s *Store) Get(path string, info os.FileInfo) (*v3.Tree, []v3.Diagnostic, e
 		return nil, nil, nil // cold miss
 	}
 
-	if de.ModTime == modTime {
-		tree := reconstructTree(de)
-		s.mu.Lock()
-		if s.lru != nil {
-			s.lru.put(path, memEntry{modTime: modTime, tree: tree, diags: de.Diags})
-		}
-		s.mu.Unlock()
-		return tree, de.Diags, nil
-	}
-
-	// mtime changed — read source and verify hash
+	// Always verify hash: mtime can match even after an in-place edit when
+	// filesystem time resolution is coarse (e.g. 1s on some Linux mounts).
 	src, err := os.ReadFile(path)
 	if err != nil {
 		return nil, nil, nil
@@ -165,11 +156,12 @@ func (s *Store) Get(path string, info os.FileInfo) (*v3.Tree, []v3.Diagnostic, e
 		return nil, nil, nil // content changed; caller must re-parse
 	}
 
-	// same content, different mtime — refresh the stored mtime
-	de.ModTime = modTime
-	if werr := writeDiskEntry(s.dir, path, de); werr != nil {
-		return nil, nil, werr
+	if de.ModTime != modTime {
+		// same content, mtime drifted — refresh stored mtime
+		de.ModTime = modTime
+		_ = writeDiskEntry(s.dir, path, de)
 	}
+
 	tree := reconstructTree(de)
 	s.mu.Lock()
 	if s.lru != nil {
