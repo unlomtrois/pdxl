@@ -1,3 +1,6 @@
+VERSION ?= $(shell git describe --tags --always || echo "dev")
+LDFLAGS  = -ldflags="-X main.version=$(VERSION)"
+
 .PHONY: test lint build install clean bench bench-lexer bench-parser bench-cache
 
 test:
@@ -7,10 +10,10 @@ lint:
 	golangci-lint run ./...
 
 build:
-	go build -o bin/pdxl ./cmd/pdxl
+	go build $(LDFLAGS) -o bin/pdxl ./cmd/pdxl
 
 install:
-	go install ./cmd/pdxl
+	go install $(LDFLAGS) ./cmd/pdxl
 
 clean:
 	rm -rf bin/

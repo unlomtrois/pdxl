@@ -58,7 +58,8 @@ const (
 	colon  // :
 	at     // @
 	pipe   // |
-	dollar // $
+	dollar      // $
+	macro_param // $IDENT$
 
 	percent // %
 
@@ -120,6 +121,8 @@ func (t Tag) String() string {
 		return "pipe"
 	case dollar:
 		return "dollar"
+	case macro_param:
+		return "macro_param"
 	case percent:
 		return "percent"
 	case comment:
@@ -160,6 +163,7 @@ const (
 	TagAt            = at
 	TagPipe          = pipe
 	TagDollar        = dollar
+	TagMacroParam    = macro_param
 	TagPercent       = percent
 	TagInvalid       = invalid
 	TagEOF           = eof

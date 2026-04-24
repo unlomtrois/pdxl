@@ -188,6 +188,21 @@ func TestUTF8IdentifierValues(t *testing.T) {
 	}
 }
 
+func TestMacroParam(t *testing.T) {
+	testTokenize(t, []byte(`$CHILD$`), []Tag{macro_param})
+	testTokenize(t, []byte(`exists = $CHILD$`), []Tag{identifier, equal, macro_param})
+	testTokenize(t, []byte(`$CHILD$ = {`), []Tag{macro_param, equal, l_brace})
+	testTokenize(t, []byte(`$CHILD$.host`), []Tag{macro_param, dot, identifier})
+	testTokenize(t, []byte(`$`), []Tag{dollar})
+	testTokenize(t, []byte(`$$`), []Tag{dollar, dollar})
+
+	src := []byte(`$CHILD$`)
+	tok := Init(src).Next()
+	if got := string(tok.GetValue(src)); got != "$CHILD$" {
+		t.Fatalf("expected $CHILD$, got %q", got)
+	}
+}
+
 func TestUTF8StringLiteral(t *testing.T) {
 	source := []byte(`flag = "Linnéa José"`)
 	testTokenize(t, source, []Tag{identifier, equal, literal_string})
