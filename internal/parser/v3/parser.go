@@ -231,7 +231,7 @@ func (p *parser) synchronize() {
 func isAtom(tag lexer.Tag) bool {
 	switch tag {
 	case lexer.TagIdentifier, lexer.TagLiteralNumber, lexer.TagLiteralString,
-		lexer.TagLiteralBoolean, lexer.TagMinus:
+		lexer.TagLiteralBoolean, lexer.TagMinus, lexer.TagMacroParam:
 		return true
 	}
 	return false

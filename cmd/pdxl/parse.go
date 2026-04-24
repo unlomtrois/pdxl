@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	parser "pdxl/internal/parser/v2"
+	v3 "pdxl/internal/parser/v3"
 )
 
 var parseJSON bool
@@ -22,16 +22,16 @@ var parseCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("reading %s: %w", filename, err)
 		}
-		ast, err := parser.ParseBytes(filename, data)
-		if err != nil {
-			return fmt.Errorf("parse error: %w", err)
+		tree, diags := v3.Parse(filename, data)
+		for _, d := range diags {
+			fmt.Fprintf(os.Stderr, "%s\n", d.String())
 		}
 		if parseJSON {
 			enc := json.NewEncoder(os.Stdout)
 			enc.SetIndent("", "  ")
-			return enc.Encode(ast)
+			return enc.Encode(tree)
 		}
-		printFile(ast, data, 0)
+		printTree(tree, 0)
 		return nil
 	},
 }
@@ -41,43 +41,44 @@ func init() {
 	rootCmd.AddCommand(parseCmd)
 }
 
-// ── pretty printer ────────────────────────────────────────────────────────────
-
-func printFile(f *parser.File, src []byte, depth int) {
-	for _, item := range f.Items {
-		printItem(item, src, depth)
+func printTree(tree *v3.Tree, depth int) {
+	root := tree.Root()
+	for _, idx := range tree.ChildRefs(root) {
+		printNode(tree, tree.Nodes[idx], depth)
 	}
 }
 
-func printItem(item *parser.Item, src []byte, depth int) {
-	ind := indentStr(depth)
-	if item.Field != nil {
-		printField(item.Field, src, depth)
-	} else if item.Scalar != nil {
-		fmt.Printf("%s%s\n", ind, item.Scalar.Value(src))
-	}
-}
-
-func printField(f *parser.Field, src []byte, depth int) {
-	ind := indentStr(depth)
-	switch v := f.Value.(type) {
-	case *parser.Scalar:
-		fmt.Printf("%s%s %s %s\n", ind, f.Key(src), parser.OperatorString(f.Operator), v.Value(src))
-	case *parser.TaggedBlock:
-		fmt.Printf("%s%s %s %s {\n", ind, f.Key(src), parser.OperatorString(f.Operator), string(v.Tag.GetValue(src)))
-		for _, item := range v.Items {
-			printItem(item, src, depth+1)
+func printNode(tree *v3.Tree, n v3.Node, depth int) {
+	ind := strings.Repeat("\t", depth)
+	switch n.Kind {
+	case v3.KindField:
+		children := tree.Children(n)
+		key := children[0].Value(tree.Src)
+		op := n.OpString()
+		val := children[1]
+		switch val.Kind {
+		case v3.KindScalar:
+			fmt.Printf("%s%s %s %s\n", ind, key, op, val.Value(tree.Src))
+		case v3.KindTaggedBlock:
+			fmt.Printf("%s%s %s %s {\n", ind, key, op, val.Value(tree.Src))
+			for _, idx := range tree.ChildRefs(val) {
+				printNode(tree, tree.Nodes[idx], depth+1)
+			}
+			fmt.Printf("%s}\n", ind)
+		case v3.KindBlock:
+			fmt.Printf("%s%s %s {\n", ind, key, op)
+			for _, idx := range tree.ChildRefs(val) {
+				printNode(tree, tree.Nodes[idx], depth+1)
+			}
+			fmt.Printf("%s}\n", ind)
+		}
+	case v3.KindScalar:
+		fmt.Printf("%s%s\n", ind, n.Value(tree.Src))
+	case v3.KindBlock:
+		fmt.Printf("%s{\n", ind)
+		for _, idx := range tree.ChildRefs(n) {
+			printNode(tree, tree.Nodes[idx], depth+1)
 		}
 		fmt.Printf("%s}\n", ind)
-	case *parser.Block:
-		fmt.Printf("%s%s %s {\n", ind, f.Key(src), parser.OperatorString(f.Operator))
-		for _, item := range v.Items {
-			printItem(item, src, depth+1)
-		}
-		fmt.Printf("%s}\n", ind)
 	}
-}
-
-func indentStr(depth int) string {
-	return strings.Repeat("\t", depth)
 }

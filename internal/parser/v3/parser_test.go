@@ -176,6 +176,30 @@ func TestMultipleUnclosedBlocks(t *testing.T) {
 	}
 }
 
+func TestMacroParamAsValue(t *testing.T) {
+	tree := mustParse(t, []byte(`exists = $CHILD$`))
+	val := tree.Children(tree.Children(tree.Root())[0])[1]
+	if val.Value(tree.Src) != "$CHILD$" {
+		t.Fatalf("expected $CHILD$, got %q", val.Value(tree.Src))
+	}
+}
+
+func TestMacroParamAsKey(t *testing.T) {
+	tree := mustParse(t, []byte(`$CHILD$ = { a = b }`))
+	field := tree.Children(tree.Root())[0]
+	if field.Value(tree.Src) != "$CHILD$" {
+		t.Fatalf("expected $CHILD$, got %q", field.Value(tree.Src))
+	}
+}
+
+func TestMacroParamScopeChain(t *testing.T) {
+	tree := mustParse(t, []byte(`$CHILD$.host = scope:player`))
+	field := tree.Children(tree.Root())[0]
+	if field.Value(tree.Src) != "$CHILD$.host" {
+		t.Fatalf("expected $CHILD$.host, got %q", field.Value(tree.Src))
+	}
+}
+
 func TestRecoveryAfterMissingOperator(t *testing.T) {
 	// "key value" has no operator; parser should skip it and continue.
 	src := []byte("bad_line\ngood = ok")

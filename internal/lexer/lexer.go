@@ -76,7 +76,17 @@ func (l *Lexer) Next() *Token {
 		case '|':
 			tag = pipe
 		case '$':
-			tag = dollar
+			nameStart := l.pos
+			for !l.isAtEnd() && isIdentifierChar(rune(l.peek())) {
+				l.advance()
+			}
+			if l.pos > nameStart && !l.isAtEnd() && l.peek() == '$' {
+				l.advance() // consume closing $
+				tag = macro_param
+			} else {
+				l.pos = nameStart // backtrack — bare dollar
+				tag = dollar
+			}
 
 		// special
 		case '%':
