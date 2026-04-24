@@ -8,6 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 make test         # run all tests
 make lint         # run golangci-lint
 make build        # build binary to bin/pdxl
+make install      # install to $GOPATH/bin
 make bench        # run all benchmarks (lexer + all parsers + cache)
 make bench-lexer  # lexer benchmarks only
 make bench-parser # v1/v2/v3 parser benchmarks side-by-side
@@ -34,15 +35,18 @@ Nix users: activate the toolchain with `nix-shell` before running make commands.
 pdxl is a toolkit for parsing Paradox Interactive scripting files (PDXScript, used in EU5, CK3, Victoria 3, etc.). The grammar is the same across all games; only semantics differ.
 
 ```
-cmd/pdxl/               — CLI: `lex`, `parse`, and `lint` subcommands
+cmd/pdxl/               — CLI: lex, parse, lint, init subcommands
 internal/lexer/         — tokenizer (internal; not public API yet)
 internal/parser/
   v1/                   — participle-based reference parser (benchmarking baseline only)
   v2/                   — hand-written recursive descent + Pratt, pointer-tree AST
   v3/                   — same algorithm, flat node-pool AST (fastest; preferred for new tools)
 internal/cache/         — two-level parse cache: in-memory LRU + on-disk gob store
+internal/config/        — TOML config loader (pdxl.toml)
 internal/testutil/      — shared TestdataDir() and DiffLines() used by all test packages
 testdata/               — shared .txt fixture files and .golden expected-output files
+testdata/lint/          — intentionally broken fixtures for lint/recovery tests
+testdata/ck3/           — CK3-specific fixtures (macros, scripted triggers)
 pkg/mod/                — reserved for future public packages
 ```
 
@@ -53,59 +57,48 @@ pkg/mod/                — reserved for future public packages
 - `advance()` uses `utf8.DecodeRune` — multi-byte safe. Invalid UTF-8 is silently treated as an identifier char.
 - `yes`/`no` keyword detection happens in `Next()` after `lexIdentifier()` returns.
 - UTF-8 BOM (`\xEF\xBB\xBF`) is skipped in `Init()`.
-
-### Parser v2 — pointer-tree AST
-
-Used by the CLI (`cmd/pdxl/parse.go`). Ergonomic for visitor/linter code.
-
-Key AST types after the token rewrite:
-- `Field.KeyParts []lexer.Token`, `Field.Operator lexer.Tag` — no string copies; materialize with `field.Key(src)` and `OperatorString(field.Operator)`.
-- `Scalar.Parts []lexer.Token` — materialize with `scalar.Value(src)`.
-- `TaggedBlock.Tag lexer.Token` — materialize with `string(tag.GetValue(src))`.
-
-Grammar resolved with LL(2) lookahead: atom+operator → Field; atom+`{` → TaggedBlock; `{` → Block; else → Scalar. Scope chains (`:` `.` `|`) parsed via Pratt with binding power 80.
+- `$IDENT$` is lexed as `TagMacroParam` (a single atom); bare `$` falls back to `TagDollar`.
+- `lexer.Tokenize(src []byte) []Token` is the public helper used by `v3.newParser`.
 
 ### Parser v3 — flat node-pool AST with error recovery
 
-Preferred base for performance-sensitive tools (linter, LSP). ~2× fewer allocations than v2.
+Preferred base for all new tools (linter, LSP, validator). ~2× fewer allocations than v2. The `parse` command uses v3.
 
 All nodes live in a single `Tree.Nodes []Node` slice. Parent→child relationships go through `Tree.Index []uint32` — a node's children are `Tree.Index[node.ChildStart:node.ChildEnd]`, each element being an index into `Tree.Nodes`. This eliminates heap pointers inside nodes.
 
 ```go
 tree, diags := v3.Parse("file.pdx", src)
 // tree is always non-nil; diags non-empty means errors were found but parsing continued
-root := tree.Root()                         // tree.Nodes[0], always KindFile
-refs := tree.ChildRefs(root)               // []uint32, no alloc
+root := tree.Root()                    // tree.Nodes[0], always KindFile
+refs := tree.ChildRefs(root)          // []uint32, no alloc
 for _, idx := range refs {
     child := tree.Nodes[idx]
-    fmt.Println(child.Value(src))          // materializes string from src[SrcStart:SrcEnd]
+    fmt.Println(child.Value(tree.Src)) // materializes string from src[SrcStart:SrcEnd]
 }
 ```
 
 `Node.Op` (a `lexer.Tag`) holds the operator for `KindField` nodes. `Node.OpString()` maps it back to a source symbol (`"="`, `"?="`, etc.).
 
-**Error recovery** uses synchronization: on any unexpected token, the parser records a `Diagnostic{Filename, Offset, Msg, Severity}` and calls `synchronize()`, which skips tokens until reaching a `}`, the start of a plausible new item (atom followed by operator or `{`), or EOF. The tree is always returned — callers get a partial AST even for broken files. Recovery is zero-cost on valid input: `p.diags` stays nil and adds no allocations.
+**Error recovery** uses synchronization: on any unexpected token, the parser records a `Diagnostic{Filename, Offset, Msg, Severity}` and calls `synchronize()`, which skips tokens until reaching a `}`, the start of a plausible new item (atom followed by operator or `{`), or EOF. Recovery is zero-cost on valid input: `p.diags` stays nil and adds no allocations.
 
-`parseBlockItems` receives the opening `{` token so it can report `"unclosed block"` at the brace's byte offset when EOF is reached before `}`. This is the only diagnostic currently emitted; it is surfaced by `pdxl lint`.
+`parseBlockItems` receives the opening `{` token and reports `"unclosed block (missing '}'; an inner block may have stolen the closing brace)"` when EOF is reached. When a block is unclosed, subsequent fields are absorbed into it — the parser cannot distinguish block-level from outer-level items without indentation heuristics.
 
-When a block is unclosed, subsequent fields are absorbed into it — the parser cannot distinguish block-level from outer-level items without indentation heuristics.
+**Typed definitions** (`scripted_trigger NAME = { ... }`) parse as two sibling nodes under KindFile: a bare KindScalar for the type keyword, then a KindField for the assignment. This is valid syntactically; semantic distinction belongs in a future validator layer.
 
-`v3.Parse` returns `(*Tree, []Diagnostic)`; `v2.ParseBytes` returns `(*File, error)`. They are independent — v3 does not use v2 types.
+### Parser v2 — pointer-tree AST
 
-### Testutil and golden tests
+Used only for benchmarking comparison. Key API:
+- `Field.KeyParts []lexer.Token`, `Field.Operator lexer.Tag` — materialize with `field.Key(src)` and `OperatorString(field.Operator)`.
+- `Scalar.Parts []lexer.Token` — materialize with `scalar.Value(src)`.
 
-`internal/testutil.TestdataDir()` returns the absolute path to the project-level `testdata/` directory using `runtime.Caller()` — safe to call from any sub-package without path hacks.
-
-All parser packages share the same `testdata/*.txt` fixtures. Each has its own `fixture_test.go` that renders the parsed AST to a string and diffs against `testdata/*.golden`. Run with `-update` to regenerate goldens.
+`v3.Parse` returns `(*Tree, []Diagnostic)`; `v2.ParseBytes` returns `(*File, error)`. They are independent.
 
 ### Cache layer (`internal/cache`)
 
-`lexer.Tokenize(src []byte) []Token` extracts tokens from source; `v3.newParser` delegates to it instead of inlining the loop.
-
-`Store` is the two-level cache. `NewStore(dir, lruCap)` creates the disk directory and, when `lruCap > 0`, an in-memory LRU.
+`Store` is the two-level cache. `NewStore(dir, lruCap)` creates the disk directory and an in-memory LRU when `lruCap > 0`. Also writes `.pdxl/.gitignore` on first use.
 
 ```go
-store, _ := cache.NewStore(".pdxl/cache", 256)
+store, _ := cache.NewStore(cfg.Cache.Dir, cfg.Cache.LRUCap)
 info, _ := os.Stat(path)
 tree, diags, _ := store.Get(path, info)   // nil on miss
 if tree == nil {
@@ -114,13 +107,46 @@ if tree == nil {
 }
 ```
 
-**Invalidation:** L1 compares `info.ModTime().UnixNano()`. On mtime mismatch, L2 (disk) is checked. If the disk entry's mtime also doesn't match, the source file is re-read and its SHA-256 is compared against the stored hash — a same-content/different-mtime file updates the stored mtime and returns the cached tree. A changed hash is a full miss.
+**Invalidation:** L1 checks mtime; L2 always verifies SHA-256 (mtime alone is unreliable on coarse-resolution filesystems). A same-content/different-mtime file refreshes the stored mtime. A changed hash is a full miss.
 
 **Disk format:** gob-encoded `diskEntry{ModTime int64, SHA256 [32]byte, SrcGzip []byte, Nodes []v3.Node, Index []uint32, Diags []v3.Diagnostic}`. Entry filename is `sha256(filepath.Clean(path)).bin`. Source is stored gzip-compressed so hot L2 paths skip the original file entirely.
 
 **Performance baseline (i5-11400H):** L1 hit ~23 ns / 0 allocs; L2 disk read ~190 µs; disk write ~620 µs.
 
-`pdxl lint` enables the cache by default at `.pdxl/cache`; pass `--no-cache` to bypass.
+### Config (`internal/config`)
+
+Config file is `pdxl.toml` in the project root (created by `pdxl init`). Missing file is not an error — defaults are used.
+
+```toml
+game = "ck3"
+
+[cache]
+enabled = true
+dir     = ".pdxl/cache"
+lru_cap = 256
+
+[lint]
+context = 0
+```
+
+`config.Load(path)` starts from `Default()` and overlays the file, so partial configs inherit defaults. Override the path with `pdxl --config /path/to/pdxl.toml`.
+
+### CLI subcommands
+
+| Command | Description |
+|---------|-------------|
+| `pdxl init [--game ck3]` | Create `pdxl.toml` with defaults; `--force` to overwrite |
+| `pdxl lint <files> [--context N] [--no-cache]` | Structural diagnostics; `--context` prints N source lines around each |
+| `pdxl parse <file> [--tree\|--json]` | Print AST; `--tree` shows labelled node tree with box-drawing chars |
+| `pdxl lex <file>` | Dump token stream |
+
+All subcommands accept `--verbose` / `-v` (debug logging via slog) and `--config`.
+
+### Testutil and golden tests
+
+`internal/testutil.TestdataDir()` returns the absolute path to the project-level `testdata/` directory using `runtime.Caller()` — safe to call from any sub-package without path hacks.
+
+All parser packages share the same `testdata/*.txt` fixtures. Each has its own `fixture_test.go` that renders the parsed AST to a string and diffs against `testdata/*.golden`. Run with `-update` to regenerate goldens.
 
 ### Token naming
 
