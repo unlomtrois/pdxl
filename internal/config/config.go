@@ -1,13 +1,14 @@
-// Package config loads per-project pdxl configuration from .pdxl/config.toml.
+// Package config loads per-project pdxl configuration from pdxl.toml.
 package config
 
 import (
+	"bytes"
 	"os"
 
 	"github.com/BurntSushi/toml"
 )
 
-const DefaultPath = ".pdxl/config.toml"
+const DefaultPath = "pdxl.toml"
 
 // Config is the top-level configuration structure.
 type Config struct {
@@ -37,6 +38,15 @@ func Default() Config {
 			LRUCap:  256,
 		},
 	}
+}
+
+// Write encodes cfg as TOML and writes it to path.
+func Write(path string, cfg Config) error {
+	var buf bytes.Buffer
+	if err := toml.NewEncoder(&buf).Encode(cfg); err != nil {
+		return err
+	}
+	return os.WriteFile(path, buf.Bytes(), 0o644)
 }
 
 // Load reads the TOML file at path, starting from Default().
