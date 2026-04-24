@@ -11,6 +11,7 @@ import (
 )
 
 var parseJSON bool
+var parseTree bool
 
 var parseCmd = &cobra.Command{
 	Use:   "parse <file>",
@@ -26,29 +27,36 @@ var parseCmd = &cobra.Command{
 		for _, d := range diags {
 			fmt.Fprintf(os.Stderr, "%s\n", d.String())
 		}
-		if parseJSON {
+		switch {
+		case parseJSON:
 			enc := json.NewEncoder(os.Stdout)
 			enc.SetIndent("", "  ")
 			return enc.Encode(tree)
+		case parseTree:
+			printNodeTree(tree)
+		default:
+			printFlat(tree, 0)
 		}
-		printTree(tree, 0)
 		return nil
 	},
 }
 
 func init() {
 	parseCmd.Flags().BoolVar(&parseJSON, "json", false, "output AST as JSON")
+	parseCmd.Flags().BoolVar(&parseTree, "tree", false, "output AST as a labelled node tree")
 	rootCmd.AddCommand(parseCmd)
 }
 
-func printTree(tree *v3.Tree, depth int) {
+// ── flat printer (default) ────────────────────────────────────────────────────
+
+func printFlat(tree *v3.Tree, depth int) {
 	root := tree.Root()
 	for _, idx := range tree.ChildRefs(root) {
-		printNode(tree, tree.Nodes[idx], depth)
+		printFlatNode(tree, tree.Nodes[idx], depth)
 	}
 }
 
-func printNode(tree *v3.Tree, n v3.Node, depth int) {
+func printFlatNode(tree *v3.Tree, n v3.Node, depth int) {
 	ind := strings.Repeat("\t", depth)
 	switch n.Kind {
 	case v3.KindField:
@@ -62,13 +70,13 @@ func printNode(tree *v3.Tree, n v3.Node, depth int) {
 		case v3.KindTaggedBlock:
 			fmt.Printf("%s%s %s %s {\n", ind, key, op, val.Value(tree.Src))
 			for _, idx := range tree.ChildRefs(val) {
-				printNode(tree, tree.Nodes[idx], depth+1)
+				printFlatNode(tree, tree.Nodes[idx], depth+1)
 			}
 			fmt.Printf("%s}\n", ind)
 		case v3.KindBlock:
 			fmt.Printf("%s%s %s {\n", ind, key, op)
 			for _, idx := range tree.ChildRefs(val) {
-				printNode(tree, tree.Nodes[idx], depth+1)
+				printFlatNode(tree, tree.Nodes[idx], depth+1)
 			}
 			fmt.Printf("%s}\n", ind)
 		}
@@ -77,8 +85,56 @@ func printNode(tree *v3.Tree, n v3.Node, depth int) {
 	case v3.KindBlock:
 		fmt.Printf("%s{\n", ind)
 		for _, idx := range tree.ChildRefs(n) {
-			printNode(tree, tree.Nodes[idx], depth+1)
+			printFlatNode(tree, tree.Nodes[idx], depth+1)
 		}
 		fmt.Printf("%s}\n", ind)
+	}
+}
+
+// ── tree printer (--tree) ─────────────────────────────────────────────────────
+
+func printNodeTree(tree *v3.Tree) {
+	root := tree.Root()
+	fmt.Println("Root (KindFile)")
+	refs := tree.ChildRefs(root)
+	for i, idx := range refs {
+		last := i == len(refs)-1
+		printTreeNode(tree, tree.Nodes[idx], "", last)
+	}
+}
+
+func printTreeNode(tree *v3.Tree, n v3.Node, prefix string, last bool) {
+	branch := "├── "
+	childPrefix := prefix + "│   "
+	if last {
+		branch = "└── "
+		childPrefix = prefix + "    "
+	}
+
+	switch n.Kind {
+	case v3.KindScalar:
+		fmt.Printf("%s%sKindScalar  %q\n", prefix, branch, n.Value(tree.Src))
+
+	case v3.KindField:
+		children := tree.Children(n)
+		key := children[0].Value(tree.Src)
+		op := n.OpString()
+		val := children[1]
+		fmt.Printf("%s%sKindField   key=%q  op=%q\n", prefix, branch, key, op)
+		printTreeNode(tree, val, childPrefix, true)
+
+	case v3.KindBlock:
+		fmt.Printf("%s%sKindBlock\n", prefix, branch)
+		refs := tree.ChildRefs(n)
+		for i, idx := range refs {
+			printTreeNode(tree, tree.Nodes[idx], childPrefix, i == len(refs)-1)
+		}
+
+	case v3.KindTaggedBlock:
+		fmt.Printf("%s%sKindTaggedBlock  tag=%q\n", prefix, branch, n.Value(tree.Src))
+		refs := tree.ChildRefs(n)
+		for i, idx := range refs {
+			printTreeNode(tree, tree.Nodes[idx], childPrefix, i == len(refs)-1)
+		}
 	}
 }
