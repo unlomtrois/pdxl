@@ -131,7 +131,7 @@ func TestUnclosedBlock(t *testing.T) {
 	if diags[0].Severity != SeverityError {
 		t.Fatalf("expected error severity")
 	}
-	if diags[0].Msg != "unclosed block" {
+	if diags[0].Msg != "unclosed block (missing '}'; an inner block may have stolen the closing brace)" {
 		t.Fatalf("unexpected message: %q", diags[0].Msg)
 	}
 	// Partial tree: top-level field with a block containing the inner field.
@@ -170,7 +170,7 @@ func TestMultipleUnclosedBlocks(t *testing.T) {
 		t.Fatalf("expected 2 diagnostics, got %d: %v", len(diags), diags)
 	}
 	for _, d := range diags {
-		if d.Msg != "unclosed block" {
+		if d.Msg != "unclosed block (missing '}'; an inner block may have stolen the closing brace)" {
 			t.Fatalf("unexpected message: %q", d.Msg)
 		}
 	}
@@ -199,7 +199,7 @@ func TestContinuesAfterUnclosedBlock(t *testing.T) {
 	if len(diags) != 1 {
 		t.Fatalf("expected 1 diagnostic, got %d: %v", len(diags), diags)
 	}
-	if diags[0].Msg != "unclosed block" {
+	if diags[0].Msg != "unclosed block (missing '}'; an inner block may have stolen the closing brace)" {
 		t.Fatalf("unexpected message: %q", diags[0].Msg)
 	}
 }

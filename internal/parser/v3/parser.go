@@ -358,8 +358,10 @@ func (p *parser) parseBlockItems(lbrace lexer.Token) []uint32 {
 	if p.peek(0) == lexer.TagRBrace {
 		p.advance()
 	} else {
-		// EOF reached without closing brace.
-		p.addDiag(int(lbrace.Start), SeverityError, "unclosed block")
+		// EOF reached without closing brace. Note: an inner unclosed block may
+		// have consumed the closing '}' intended for this block, so the real
+		// mistake may be inside rather than here.
+		p.addDiag(int(lbrace.Start), SeverityError, "unclosed block (missing '}'; an inner block may have stolen the closing brace)")
 	}
 	return items
 }
