@@ -1,0 +1,15 @@
+﻿scripted_trigger allow_naming_on_birth_of_dynasty_child_trigger = {
+	save_temporary_scope_as = naming_dynasty_member
+	exists = $CHILD$
+	is_ai = no
+	#No parent is naming the kid, and it's not your child (at least not officially...)
+	$CHILD$ = {
+		any_parent = {
+			NOR = {
+				allow_naming_on_birth_of_child_trigger = { CHILD = $CHILD$ }
+				this = scope:naming_dynasty_member
+			}
+		}
+	}
+	$CHILD$.host = scope:naming_dynasty_member
+}
