@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"pdxl/internal/config"
 )
 
 var rootCmd = &cobra.Command{
@@ -13,10 +14,11 @@ var rootCmd = &cobra.Command{
 }
 
 var verbose bool
+var cfg config.Config
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose logging")
-	cobra.OnInitialize(initLogging)
+	cobra.OnInitialize(initLogging, initConfig)
 }
 
 func initLogging() {
@@ -25,6 +27,17 @@ func initLogging() {
 		level = slog.LevelDebug
 	}
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})))
+}
+
+func initConfig() {
+	var err error
+	cfg, err = config.Load(config.DefaultPath)
+	if err != nil {
+		slog.Warn("config load error", "path", config.DefaultPath, "err", err)
+	}
+	if cfg.Game != "" {
+		slog.Debug("config loaded", "game", cfg.Game)
+	}
 }
 
 func Execute() {

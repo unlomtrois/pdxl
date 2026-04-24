@@ -28,10 +28,14 @@ func init() {
 	rootCmd.AddCommand(lintCmd)
 }
 
-func runLint(_ *cobra.Command, args []string) error {
+func runLint(cmd *cobra.Command, args []string) error {
+	if !cmd.Flags().Changed("context") {
+		contextLines = cfg.Lint.Context
+	}
+
 	var store *cache.Store
-	if !noCacheLint {
-		store, _ = cache.NewStore(".pdxl/cache", 256)
+	if !noCacheLint && cfg.Cache.Enabled {
+		store, _ = cache.NewStore(cfg.Cache.Dir, cfg.Cache.LRUCap)
 	}
 
 	hasErrors := false
