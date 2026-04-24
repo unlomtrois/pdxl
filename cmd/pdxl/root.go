@@ -14,10 +14,12 @@ var rootCmd = &cobra.Command{
 }
 
 var verbose bool
+var configPath string
 var cfg config.Config
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose logging")
+	rootCmd.PersistentFlags().StringVar(&configPath, "config", "", "path to config file (default: pdxl.toml)")
 	cobra.OnInitialize(initLogging, initConfig)
 }
 
@@ -30,13 +32,17 @@ func initLogging() {
 }
 
 func initConfig() {
+	path := configPath
+	if path == "" {
+		path = config.DefaultPath
+	}
 	var err error
-	cfg, err = config.Load(config.DefaultPath)
+	cfg, err = config.Load(path)
 	if err != nil {
-		slog.Warn("config load error", "path", config.DefaultPath, "err", err)
+		slog.Warn("config load error", "path", path, "err", err)
 	}
 	if cfg.Game != "" {
-		slog.Debug("config loaded", "game", cfg.Game)
+		slog.Debug("config loaded", "game", cfg.Game, "path", path)
 	}
 }
 
