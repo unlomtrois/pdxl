@@ -279,7 +279,8 @@ func isIdentifierChar(r rune) bool {
 		return true
 	}
 	switch r {
-	case '_', '&', '\'':
+	case '_', '&', '\'', '%':
+		// '%' appears in percentage literals (29%) and loc-key names (SUCCESS_%).
 		return true
 	default:
 		return false

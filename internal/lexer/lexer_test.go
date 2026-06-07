@@ -138,6 +138,24 @@ func TestDotStillScopeOperator(t *testing.T) {
 	})
 }
 
+func TestPercentInValue(t *testing.T) {
+	// Percentage literals in position/size lists, e.g. { 28% 52% }.
+	source := []byte(`size = { 28% 52% }`)
+	testTokenize(t, source, []Tag{
+		identifier, equal, l_brace,
+		identifier, identifier,
+		r_brace,
+	})
+}
+
+func TestPercentInIdentifier(t *testing.T) {
+	// '%' can appear in a key name, e.g. the loc key SUCCESS_%.
+	source := []byte(`SUCCESS_% = 90`)
+	testTokenize(t, source, []Tag{
+		identifier, equal, literal_number,
+	})
+}
+
 func TestScriptValues(t *testing.T) {
 	source := []byte(`@my_const = 0.15
 key = @my_const
