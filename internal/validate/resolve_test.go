@@ -13,11 +13,7 @@ func resolveDir(t *testing.T, dir string) []RefDiag {
 	if err := fs.Add(dir, files.FileKindMod); err != nil {
 		t.Fatal(err)
 	}
-	tbl, err := Build(&fs, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	diags, err := Resolve(tbl, &fs, nil)
+	_, diags, err := Analyze(&fs, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

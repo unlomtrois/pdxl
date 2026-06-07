@@ -26,7 +26,7 @@ func buildDir(t *testing.T, dir string) *SymbolTable {
 	if err := fs.Add(dir, files.FileKindMod); err != nil {
 		t.Fatal(err)
 	}
-	tbl, err := Build(&fs, nil)
+	tbl, _, err := Analyze(&fs, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

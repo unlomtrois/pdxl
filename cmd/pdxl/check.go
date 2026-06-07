@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"pdxl/internal/cache"
@@ -45,11 +46,13 @@ func runCheck(_ *cobra.Command, _ []string) error {
 	}
 
 	var store *cache.Store
+	var fc *validate.FactStore
 	if !noCacheCheck && cfg.Cache.Enabled {
 		store, _ = cache.NewStore(cfg.Cache.Dir, cfg.Cache.LRUCap)
+		fc, _ = validate.NewFactStore(filepath.Join(cfg.Cache.Dir, "symbols"))
 	}
 
-	tbl, err := validate.Build(fs, store)
+	tbl, refDiags, err := validate.Analyze(fs, store, fc)
 	if err != nil {
 		return err
 	}
@@ -66,10 +69,6 @@ func runCheck(_ *cobra.Command, _ []string) error {
 		}
 	}
 
-	refDiags, err := validate.Resolve(tbl, fs, store)
-	if err != nil {
-		return err
-	}
 	if len(refDiags) > 0 {
 		fmt.Printf("\n%d unresolved references:\n", len(refDiags))
 		for _, d := range refDiags {

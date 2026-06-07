@@ -3,11 +3,6 @@ package validate
 import (
 	"fmt"
 	"strings"
-
-	"pdxl/internal/cache"
-	"pdxl/internal/files"
-	"pdxl/internal/lexer"
-	v3 "pdxl/internal/parser/v3"
 )
 
 // RefDiag is an unresolved-reference diagnostic.
@@ -18,101 +13,25 @@ type RefDiag struct {
 
 func (d RefDiag) String() string { return d.Loc + ": " + d.Msg }
 
-// Resolve walks every file in fs and reports references (per ck3RefRules) whose
-// scalar value does not resolve to a defined symbol in tbl. Build must have run
-// first to populate tbl.
-func Resolve(tbl *SymbolTable, fs *files.FileSet, store *cache.Store) ([]RefDiag, error) {
+// resolveRefs checks each gathered reference against the completed table and
+// returns a diagnostic for every one that does not resolve.
+func resolveRefs(tbl *SymbolTable, refs []Ref) []RefDiag {
 	var diags []RefDiag
-	walkErr := fs.Walk(func(e files.FileEntry) error {
-		tree, err := parseEntry(e.FullPath, store)
-		if err != nil {
-			return err
-		}
-		onAction := strings.HasPrefix(e.RelPath, OnActionDir)
-		resolveNode(tbl, tree, tree.Root(), e.FullPath, onAction, &diags)
-		return nil
-	})
-	return diags, walkErr
-}
-
-// resolveNode recursively checks references in the subtree rooted at n.
-// onAction enables list/weighted reference rules that apply only in on_action files.
-func resolveNode(tbl *SymbolTable, tree *v3.Tree, n v3.Node, path string, onAction bool, diags *[]RefDiag) {
-	if n.Kind == v3.KindField {
-		children := tree.Children(n)
-		if len(children) == 2 {
-			key := children[0].Value(tree.Src)
-			value := children[1]
-			// Scalar form: key = value.
-			if kind, ok := ck3RefRules[key]; ok && value.Kind == v3.KindScalar {
-				checkRef(tbl, tree, kind, value, path, diags)
-			}
-			// Block form carrying an id: key = { id = value ... }.
-			if kind, ok := ck3BlockIDRefRules[key]; ok && value.Kind == v3.KindBlock {
-				if idNode, ok := directFieldNode(tree, value, "id"); ok && idNode.Kind == v3.KindScalar {
-					checkRef(tbl, tree, kind, idNode, path, diags)
-				}
-			}
-			if onAction && value.Kind == v3.KindBlock {
-				// List form: key = { item item ... } — loose scalar items.
-				if kind, ok := ck3ListRefRules[key]; ok {
-					for _, item := range tree.Children(value) {
-						if item.Kind == v3.KindScalar {
-							checkRef(tbl, tree, kind, item, path, diags)
-						}
-					}
-				}
-				// Weighted form: key = { WEIGHT = id ... }. Only entries with a
-				// numeric key are weight->event mappings; word keys are config
-				// (chance_to_happen, chance_of_no_event). A numeric value (0)
-				// means "no event".
-				if kind, ok := ck3WeightedRefRules[key]; ok {
-					for _, f := range tree.Children(value) {
-						if f.Kind != v3.KindField {
-							continue
-						}
-						kids := tree.Children(f)
-						if len(kids) != 2 || kids[1].Kind != v3.KindScalar {
-							continue
-						}
-						if startsWithDigit(kids[0].Value(tree.Src)) && !startsWithDigit(kids[1].Value(tree.Src)) {
-							checkRef(tbl, tree, kind, kids[1], path, diags)
-						}
-					}
-				}
-			}
+	for _, r := range refs {
+		if _, ok := tbl.Lookup(r.Kind, r.Name); !ok {
+			diags = append(diags, RefDiag{
+				Loc: r.Loc,
+				Msg: fmt.Sprintf("unknown %s %q", r.Kind, r.Name),
+			})
 		}
 	}
-	for _, child := range tree.Children(n) {
-		resolveNode(tbl, tree, child, path, onAction, diags)
-	}
+	return diags
 }
 
 // startsWithDigit reports whether s begins with an ASCII digit (a weight or
 // config number; event IDs start with a namespace letter).
 func startsWithDigit(s string) bool {
 	return s != "" && s[0] >= '0' && s[0] <= '9'
-}
-
-// checkRef resolves a single scalar value node against the symbol table for the
-// given kind, appending a diagnostic when it is unknown.
-func checkRef(tbl *SymbolTable, tree *v3.Tree, kind SymbolKind, value v3.Node, path string, diags *[]RefDiag) {
-	val := strings.Trim(value.Value(tree.Src), `"`) // names may be quoted
-	// A '$' immediately after the value means it is the prefix of a
-	// macro-interpolated identifier (e.g. education_$EDUCATION$_5), which the
-	// lexer splits; only the prefix is captured here.
-	concatMacro := int(value.SrcEnd) < len(tree.Src) && tree.Src[value.SrcEnd] == '$'
-	if concatMacro || skipRefValue(val) {
-		return
-	}
-	if _, found := tbl.Lookup(kind, val); found {
-		return
-	}
-	tok := lexer.Token{Start: int(value.SrcStart), End: int(value.SrcEnd)}
-	*diags = append(*diags, RefDiag{
-		Loc: tok.FormatPosition(path, tree.Src),
-		Msg: fmt.Sprintf("unknown %s %q", kind, val),
-	})
 }
 
 // scopeKeywords are relative-scope references that may hold a trait at runtime;

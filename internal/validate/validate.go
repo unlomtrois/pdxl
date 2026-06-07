@@ -128,23 +128,52 @@ func (t *SymbolTable) Lookup(kind SymbolKind, name string) (Symbol, bool) {
 
 var macroParamRe = regexp.MustCompile(`\$(\w+)\$`)
 
-// Build walks every winning file in fs, parses it (via store when non-nil),
-// and collects definitions into a SymbolTable.
-func Build(fs *files.FileSet, store *cache.Store) (*SymbolTable, error) {
-	tbl := newSymbolTable()
+// Analyze walks every winning file in fs once, building the symbol table and
+// resolving references in memory. Per-file facts come from fc when non-nil
+// (unchanged files skip parsing); on a miss the file is parsed via ast and the
+// facts are cached. Pass nil for either store to disable that cache.
+func Analyze(fs *files.FileSet, ast *cache.Store, fc *FactStore) (*SymbolTable, []RefDiag, error) {
+	var defs, aliases []Symbol
+	var refs []Ref
+
 	walkErr := fs.Walk(func(e files.FileEntry) error {
-		rule, ok := ruleFor(e.RelPath)
-		if !ok {
-			return nil
-		}
-		tree, err := parseEntry(e.FullPath, store)
+		info, err := os.Stat(e.FullPath)
 		if err != nil {
 			return err
 		}
-		harvest(tbl, tree, rule, e.RelPath)
+		var facts FileFacts
+		ok := false
+		if fc != nil {
+			facts, ok = fc.Get(e.FullPath, info)
+		}
+		if !ok {
+			tree, err := parseEntry(e.FullPath, ast)
+			if err != nil {
+				return err
+			}
+			facts = extractFacts(tree, e.RelPath)
+			if fc != nil {
+				_ = fc.Put(e.FullPath, info, tree.Src, facts)
+			}
+		}
+		defs = append(defs, facts.Defs...)
+		aliases = append(aliases, facts.Aliases...)
+		refs = append(refs, facts.Refs...)
 		return nil
 	})
-	return tbl, walkErr
+	if walkErr != nil {
+		return nil, nil, walkErr
+	}
+
+	// Definitions first (duplicate-tracked), then aliases (gap-fill only).
+	tbl := newSymbolTable()
+	for _, d := range defs {
+		tbl.add(d)
+	}
+	for _, a := range aliases {
+		tbl.addAlias(a.Kind, a.Name, a)
+	}
+	return tbl, resolveRefs(tbl, refs), nil
 }
 
 // parseEntry returns the parse tree for path, using the cache when available.
@@ -167,46 +196,6 @@ func parseEntry(path string, store *cache.Store) (*v3.Tree, error) {
 		_ = store.Put(path, info, src, tree, diags)
 	}
 	return tree, nil
-}
-
-// harvest collects definitions from one file's tree into tbl.
-func harvest(tbl *SymbolTable, tree *v3.Tree, rule defRule, relPath string) {
-	root := tree.Root()
-	for _, node := range tree.Children(root) {
-		if node.Kind != v3.KindField {
-			continue
-		}
-		children := tree.Children(node)
-		if len(children) != 2 {
-			continue
-		}
-		key, value := children[0], children[1]
-		// A definition has a block body; this skips metadata like `namespace = x`.
-		if value.Kind != v3.KindBlock && value.Kind != v3.KindTaggedBlock {
-			continue
-		}
-		seen := make(map[string]struct{})
-		collectParams(tree, value, seen)
-		sym := Symbol{
-			Name:   key.Value(tree.Src),
-			Kind:   rule.kind,
-			File:   relPath,
-			Offset: int(node.SrcStart),
-			Params: sortedKeys(seen),
-		}
-		tbl.add(sym)
-
-		// CK3 traits can belong to a group (`group = X`) or be group-equivalent
-		// (`group_equivalence = X`); both names are valid trait references.
-		// Register them as aliases (they repeat across member traits).
-		if rule.kind == KindTrait {
-			for _, gk := range []string{"group", "group_equivalence"} {
-				if g := directFieldValue(tree, value, gk); g != "" {
-					tbl.addAlias(KindTrait, g, sym)
-				}
-			}
-		}
-	}
 }
 
 // directFieldValue returns the scalar value of a direct-child `key = value`
