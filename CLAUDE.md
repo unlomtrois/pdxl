@@ -35,12 +35,14 @@ Nix users: activate the toolchain with `nix-shell` before running make commands.
 pdxl is a toolkit for parsing Paradox Interactive scripting files (PDXScript, used in EU5, CK3, Victoria 3, etc.). The grammar is the same across all games; only semantics differ.
 
 ```
-cmd/pdxl/               — CLI: lex, parse, lint, init subcommands
+cmd/pdxl/               — CLI: lex, parse, lint, init, index, check, cache subcommands
 internal/lexer/         — tokenizer (internal; not public API yet)
 internal/parser/
   v1/                   — participle-based reference parser (benchmarking baseline only)
   v2/                   — hand-written recursive descent + Pratt, pointer-tree AST
   v3/                   — same algorithm, flat node-pool AST (fastest; preferred for new tools)
+internal/files/         — directory scanning + mod-overlay resolution (FileSet)
+internal/validate/      — cross-file semantic analysis: SymbolTable + reference resolution
 internal/cache/         — two-level parse cache: in-memory LRU + on-disk gob store
 internal/config/        — TOML config loader (pdxl.toml)
 internal/testutil/      — shared TestdataDir() and DiffLines() used by all test packages
@@ -113,12 +115,28 @@ if tree == nil {
 
 **Performance baseline (i5-11400H):** L1 hit ~23 ns / 0 allocs; L2 disk read ~190 µs; disk write ~620 µs.
 
+### Files (`internal/files`)
+
+`FileSet` scans game and mod directories with Paradox mod-overlay semantics: add roots in load order (vanilla first, mod last); later additions shadow earlier ones for the same relative path. `RelPath` keys are normalised lowercase forward-slash. Supports `replace_path` prefixes (`SetReplacePaths`), non-script `.txt` exclusion (`SetIgnore`, driven by the `[scan]` config), and `.mod` file parsing with Windows/Proton path resolution (`ParseMod`, `ResolveWindowsPath`). `Walk` iterates winning entries in insertion order.
+
+### Validate (`internal/validate`)
+
+Cross-file semantic layer on top of v3 trees + `FileSet`. `Analyze(fs, astStore, *FactStore)` does a **single walk** that extracts per-file `FileFacts` (definitions, trait-group aliases, references), merges them into a `SymbolTable`, then resolves references **in memory** — returning the table plus `[]RefDiag`.
+
+- **Definitions** are harvested by directory via a hand-written CK3 registry (`schema_ck3.go`): top-level `NAME = { … }` fields in `common/scripted_triggers/`, `common/traits/`, `events/`, etc. `$PARAM$` macro-parameter names are recorded per symbol.
+- **References** are resolved by key via `ck3RefRules` (scalar, e.g. `add_trait`), `ck3BlockIDRefRules` (block `id`, e.g. `trigger_event = { id = … }`), and on_action-only `ck3ListRefRules` / `ck3WeightedRefRules` (event/on_action lists). CK3 nuances handled: trait `group`/`group_equivalence` aliases, quoted names, scope keywords and macro-interpolated values are skipped (can't resolve without scope tracking).
+- **FactStore** (`factcache.go`) caches `FileFacts` per file under `<cacheDir>/symbols/`, SHA-invalidated like the AST cache. Unchanged files skip parsing entirely; warm `pdxl check` is sub-second on the full CK3 corpus. Same content-keyed caveat as the AST cache — after changing validate/lexer logic, use `--no-cache` or `cache clear`.
+
+Not yet implemented (future phases): full macro expansion, scope tracking, broader schema coverage.
+
 ### Config (`internal/config`)
 
 Config file is `pdxl.toml` in the project root (created by `pdxl init`). Missing file is not an error — defaults are used.
 
 ```toml
-game = "ck3"
+game      = "ck3"
+game_path = ""   # vanilla game dir; default for `index`/`check` --game
+mod_path  = ""   # mod dir or .mod file; default for --mod
 
 [cache]
 enabled = true
@@ -127,6 +145,10 @@ lru_cap = 256
 
 [lint]
 context = 0
+
+[scan]                                  # non-script .txt skipped by directory scans
+ignore_dirs  = ["licenses"]
+ignore_files = ["credits.txt", "checksum_manifest.txt", "guids.txt", "license.txt", "ofl.txt"]
 ```
 
 `config.Load(path)` starts from `Default()` and overlays the file, so partial configs inherit defaults. Override the path with `pdxl --config /path/to/pdxl.toml`.
@@ -139,6 +161,9 @@ context = 0
 | `pdxl lint <files> [--context N] [--no-cache]` | Structural diagnostics; `--context` prints N source lines around each |
 | `pdxl parse <file> [--tree\|--json]` | Print AST; `--tree` shows labelled node tree with box-drawing chars |
 | `pdxl lex <file>` | Dump token stream |
+| `pdxl index [--game DIR] [--mod DIR\|.mod] [--proton-prefix DIR] [--dry]` | Scan game+mod, parse all winning files, report file/diagnostic counts (progress bar) |
+| `pdxl check [--game DIR] [--mod DIR\|.mod] [--proton-prefix DIR] [--no-cache]` | Index definitions + resolve references; prints per-kind counts, duplicates, unresolved refs; exits non-zero on unresolved |
+| `pdxl cache size [--detailed]` / `pdxl cache clear` | Report (ast vs symbols) or delete cached entries |
 
 All subcommands accept `--verbose` / `-v` (debug logging via slog) and `--config`.
 
