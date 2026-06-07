@@ -112,6 +112,33 @@ diff = a - b`)
 	})
 }
 
+func TestDotFloats(t *testing.T) {
+	// CK3 color/position lists use leading- and trailing-dot floats.
+	source := []byte(`color = { .7 0.05 1. }`)
+	testTokenize(t, source, []Tag{
+		identifier, equal, l_brace,
+		literal_number, literal_number, literal_number,
+		r_brace,
+	})
+}
+
+func TestDateLiteralNotSplitByDotFloat(t *testing.T) {
+	// A '.' after a digit stays a separator: the date 1099.1.1 must not turn
+	// its trailing ".1" into a separate leading-dot float.
+	source := []byte(`creation_date = 1099.1.1`)
+	testTokenize(t, source, []Tag{
+		identifier, equal, literal_number, dot, literal_number,
+	})
+}
+
+func TestDotStillScopeOperator(t *testing.T) {
+	// A '.' between identifiers remains a scope operator, not a number.
+	source := []byte(`x = title:k_france.capital`)
+	testTokenize(t, source, []Tag{
+		identifier, equal, identifier, colon, identifier, dot, identifier,
+	})
+}
+
 func TestScriptValues(t *testing.T) {
 	source := []byte(`@my_const = 0.15
 key = @my_const

@@ -68,7 +68,16 @@ func (l *Lexer) Next() *Token {
 
 		// scope operators
 		case '.':
-			tag = dot
+			// A leading-dot float, e.g. ".7" — but only at value start. A '.'
+			// following a digit stays a separator (e.g. the date "1099.1.1").
+			if isDigit(byte(l.peek())) && (startPos == 0 || !isDigit(l.source[startPos-1])) {
+				for isDigit(byte(l.peek())) {
+					l.advance()
+				}
+				tag = literal_number
+			} else {
+				tag = dot
+			}
 		case ':':
 			tag = colon
 		case '@':
@@ -200,10 +209,17 @@ func (l *Lexer) lexNumber() Tag {
 		l.advance()
 	}
 
-	if l.peek() == '.' && isDigit(byte(l.peekNext())) {
-		l.advance() // consume '.'
-		for isDigit(byte(l.peek())) {
-			l.advance()
+	if l.peek() == '.' {
+		next := l.peekNext()
+		if isDigit(byte(next)) {
+			l.advance() // consume '.'
+			for isDigit(byte(l.peek())) {
+				l.advance()
+			}
+		} else if !isIdentifierStart(next) {
+			// trailing-dot float, e.g. "1." — but keep "N.identifier" as a
+			// scope chain (number, dot, identifier).
+			l.advance() // consume '.'
 		}
 	}
 
