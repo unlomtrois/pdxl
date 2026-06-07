@@ -23,6 +23,11 @@ var lspCmd = &cobra.Command{
 
 func init() {
 	lspCmd.Flags().StringVar(&lspGame, "game", "", "path to vanilla game directory (default: game_path from config)")
+	// LSP clients append a transport flag (e.g. vscode-languageclient sends
+	// --stdio for TransportKind.stdio). We always use stdio, so accept and
+	// ignore it rather than erroring on an unknown flag.
+	lspCmd.Flags().Bool("stdio", false, "use stdio transport (accepted for LSP clients; always on)")
+	_ = lspCmd.Flags().MarkHidden("stdio")
 	rootCmd.AddCommand(lspCmd)
 }
 
