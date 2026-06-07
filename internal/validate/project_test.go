@@ -69,6 +69,46 @@ func TestProjectIncrementalUpdate(t *testing.T) {
 	}
 }
 
+func TestProjectUpdateSource(t *testing.T) {
+	dir := t.TempDir()
+	traitPath := filepath.Join(dir, "common/traits/00_t.txt")
+	writeFile(t, dir, "common/traits/00_t.txt", "brave = { }\n")
+	writeFile(t, dir, "common/scripted_effects/00_e.txt", "e = { add_trait = brave }\n")
+
+	p := newProjectDir(t, dir)
+	if len(p.Diags()) != 0 {
+		t.Fatalf("baseline: expected 0 diags, got %v", p.Diags())
+	}
+
+	// In-memory edit (disk unchanged): the trait is renamed in the buffer.
+	if err := p.UpdateSource(traitPath, []byte("bold = { }\n")); err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Diags()) != 1 {
+		t.Fatalf("after in-memory edit: expected 1 diag, got %v", p.Diags())
+	}
+	// Disk still has brave; a disk-based Update reverts the buffer view.
+	if err := p.Update(traitPath); err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Diags()) != 0 {
+		t.Fatalf("after disk reload: expected 0 diags, got %v", p.Diags())
+	}
+}
+
+func TestRefDiagCarriesOffsets(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "common/scripted_effects/a.txt", "e = { add_trait = nope }\n")
+	p := newProjectDir(t, dir)
+	d := p.Diags()
+	if len(d) != 1 {
+		t.Fatalf("expected 1 diag, got %v", d)
+	}
+	if d[0].File == "" || d[0].End <= d[0].Start {
+		t.Errorf("expected structured offsets, got File=%q Start=%d End=%d", d[0].File, d[0].Start, d[0].End)
+	}
+}
+
 func TestProjectFileDiags(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "common/scripted_effects/a.txt", "e = { add_trait = missing_a }\n")

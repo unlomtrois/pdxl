@@ -8,11 +8,15 @@ import (
 )
 
 // Ref is a reference to check against the symbol table. Name has any quotes
-// stripped and Loc is the precomputed "file:line:col" of the value.
+// stripped. File/Start/End give the on-disk path and byte range of the value
+// (for editors); Loc is the precomputed "file:line:col" form for the CLI.
 type Ref struct {
-	Kind SymbolKind
-	Name string
-	Loc  string
+	Kind  SymbolKind
+	Name  string
+	File  string
+	Start int
+	End   int
+	Loc   string
 }
 
 // FileFacts is everything one file contributes to analysis: the definitions it
@@ -149,5 +153,12 @@ func appendRef(tree *v3.Tree, kind SymbolKind, value v3.Node, path string, refs 
 		return
 	}
 	tok := lexer.Token{Start: int(value.SrcStart), End: int(value.SrcEnd)}
-	*refs = append(*refs, Ref{Kind: kind, Name: val, Loc: tok.FormatPosition(path, tree.Src)})
+	*refs = append(*refs, Ref{
+		Kind:  kind,
+		Name:  val,
+		File:  path,
+		Start: int(value.SrcStart),
+		End:   int(value.SrcEnd),
+		Loc:   tok.FormatPosition(path, tree.Src),
+	})
 }

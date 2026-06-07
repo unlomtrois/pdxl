@@ -5,10 +5,15 @@ import (
 	"strings"
 )
 
-// RefDiag is an unresolved-reference diagnostic.
+// RefDiag is an unresolved-reference diagnostic. File/Start/End give the on-disk
+// path and byte range of the offending value (for editor ranges); Loc is the
+// precomputed "file:line:col" form used by the CLI.
 type RefDiag struct {
-	Loc string // "file:line:col"
-	Msg string
+	File  string
+	Start int
+	End   int
+	Loc   string
+	Msg   string
 }
 
 func (d RefDiag) String() string { return d.Loc + ": " + d.Msg }
@@ -20,8 +25,11 @@ func resolveRefs(tbl *SymbolTable, refs []Ref) []RefDiag {
 	for _, r := range refs {
 		if _, ok := tbl.Lookup(r.Kind, r.Name); !ok {
 			diags = append(diags, RefDiag{
-				Loc: r.Loc,
-				Msg: fmt.Sprintf("unknown %s %q", r.Kind, r.Name),
+				File:  r.File,
+				Start: r.Start,
+				End:   r.End,
+				Loc:   r.Loc,
+				Msg:   fmt.Sprintf("unknown %s %q", r.Kind, r.Name),
 			})
 		}
 	}

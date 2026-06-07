@@ -8,6 +8,7 @@ import (
 
 	"pdxl/internal/cache"
 	"pdxl/internal/files"
+	v3 "pdxl/internal/parser/v3"
 )
 
 // Project holds a whole-project symbol table in memory and supports cheap
@@ -60,6 +61,21 @@ func (p *Project) Update(fullPath string) error {
 			_ = p.fc.Put(key.full, info, tree.Src, p.facts[key.rel])
 		}
 	}
+	p.rebuild()
+	return nil
+}
+
+// UpdateSource re-analyzes a tracked file from the given in-memory source
+// (e.g. an unsaved editor buffer) instead of reading disk, then rebuilds the
+// table and diagnostics in memory. No other file is re-read, and the on-disk
+// caches are left untouched (the buffer may differ from disk).
+func (p *Project) UpdateSource(fullPath string, src []byte) error {
+	key, ok := p.keyFor(fullPath)
+	if !ok {
+		return fmt.Errorf("%s is not part of the project", fullPath)
+	}
+	tree, _ := v3.Parse(key.full, src)
+	p.facts[key.rel] = extractFacts(tree, key.rel, key.full)
 	p.rebuild()
 	return nil
 }
