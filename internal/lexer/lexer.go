@@ -267,7 +267,9 @@ func (l *Lexer) skipWhitespace() {
 
 // isIdentifierStart reports whether a rune can begin an identifier
 func isIdentifierStart(r rune) bool {
-	return r > 127 || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '_'
+	// '/' starts unquoted path atoms (e.g. event:/SFX/...); division only
+	// occurs inside '@[ ... ]' inline math, which is lexed as one atom.
+	return r > 127 || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '_' || r == '/'
 }
 
 // isIdentifierChar reports whether a rune can be part of an identifier
@@ -279,8 +281,9 @@ func isIdentifierChar(r rune) bool {
 		return true
 	}
 	switch r {
-	case '_', '&', '\'', '%':
-		// '%' appears in percentage literals (29%) and loc-key names (SUCCESS_%).
+	case '_', '&', '\'', '%', '/':
+		// '%' appears in percentage literals (29%) and loc-key names (SUCCESS_%);
+		// '/' in unquoted paths (gfx/court_scene, event:/SFX/...).
 		return true
 	default:
 		return false

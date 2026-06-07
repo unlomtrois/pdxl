@@ -120,6 +120,15 @@ func TestScopeChainValue(t *testing.T) {
 	}
 }
 
+func TestSlashPathValue(t *testing.T) {
+	tree := mustParse(t, []byte(`reference = event:/SFX/Events/Themes/generic`))
+	field := tree.Children(tree.Root())[0]
+	val := tree.Children(field)[1]
+	if val.Value(tree.Src) != "event:/SFX/Events/Themes/generic" {
+		t.Fatalf("expected full path value, got %q", val.Value(tree.Src))
+	}
+}
+
 func TestScriptValueDefinition(t *testing.T) {
 	tree := mustParse(t, []byte(`@my_const = 0.15`))
 	field := tree.Children(tree.Root())[0]

@@ -156,6 +156,22 @@ func TestPercentInIdentifier(t *testing.T) {
 	})
 }
 
+func TestSlashPathValue(t *testing.T) {
+	// FMOD audio resource paths used as values, e.g. event:/SFX/Events/...
+	source := []byte(`reference = event:/SFX/Events/Themes/generic`)
+	testTokenize(t, source, []Tag{
+		identifier, equal, identifier, colon, identifier,
+	})
+}
+
+func TestUnquotedSlashPath(t *testing.T) {
+	// Unquoted file paths, e.g. gfx/court_scene/scene_settings.
+	source := []byte(`name = gfx/court_scene/scene_settings`)
+	testTokenize(t, source, []Tag{
+		identifier, equal, identifier,
+	})
+}
+
 func TestScriptValues(t *testing.T) {
 	source := []byte(`@my_const = 0.15
 key = @my_const
