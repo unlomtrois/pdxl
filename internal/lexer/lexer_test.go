@@ -148,6 +148,16 @@ func TestDateLiteral(t *testing.T) {
 	})
 }
 
+func TestDotAfterIdentifierIsScopeChain(t *testing.T) {
+	// Event IDs / scope chains: the '.' after an identifier is a separator,
+	// even when followed by digits (e.g. accolade.0001, flag.0). It must NOT
+	// be lexed as a leading-dot float.
+	source := []byte(`test.0001 = { }`)
+	testTokenize(t, source, []Tag{
+		identifier, dot, literal_number, equal, l_brace, r_brace,
+	})
+}
+
 func TestDotStillScopeOperator(t *testing.T) {
 	// A '.' between identifiers remains a scope operator, not a number.
 	source := []byte(`x = title:k_france.capital`)

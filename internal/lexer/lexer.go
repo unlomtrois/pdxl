@@ -69,8 +69,10 @@ func (l *Lexer) Next() *Token {
 		// scope operators
 		case '.':
 			// A leading-dot float, e.g. ".7" — but only at value start. A '.'
-			// following a digit stays a separator (e.g. the date "1099.1.1").
-			if isDigit(byte(l.peek())) && (startPos == 0 || !isDigit(l.source[startPos-1])) {
+			// following an identifier char (incl. digits) stays a separator, so
+			// dates ("1099.1.1") and event IDs / scope chains ("accolade.0001",
+			// "flag.0") are not mis-lexed as floats.
+			if isDigit(byte(l.peek())) && (startPos == 0 || !isIdentifierChar(rune(l.source[startPos-1]))) {
 				for isDigit(byte(l.peek())) {
 					l.advance()
 				}
