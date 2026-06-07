@@ -4,6 +4,7 @@
 package validate
 
 import (
+	"log/slog"
 	"os"
 	"regexp"
 	"sort"
@@ -135,18 +136,22 @@ var macroParamRe = regexp.MustCompile(`\$(\w+)\$`)
 func Analyze(fs *files.FileSet, ast *cache.Store, fc *FactStore) (*SymbolTable, []RefDiag, error) {
 	var defs, aliases []Symbol
 	var refs []Ref
+	var nFiles, nHits int
 
 	walkErr := fs.Walk(func(e files.FileEntry) error {
 		info, err := os.Stat(e.FullPath)
 		if err != nil {
 			return err
 		}
+		nFiles++
 		var facts FileFacts
 		ok := false
 		if fc != nil {
 			facts, ok = fc.Get(e.FullPath, info)
 		}
-		if !ok {
+		if ok {
+			nHits++
+		} else {
 			tree, err := parseEntry(e.FullPath, ast)
 			if err != nil {
 				return err
@@ -164,6 +169,9 @@ func Analyze(fs *files.FileSet, ast *cache.Store, fc *FactStore) (*SymbolTable, 
 	if walkErr != nil {
 		return nil, nil, walkErr
 	}
+	slog.Debug("validate: gathered facts",
+		"files", nFiles, "fact_hits", nHits, "fact_misses", nFiles-nHits,
+		"defs", len(defs), "aliases", len(aliases), "refs", len(refs))
 
 	// Definitions first (duplicate-tracked), then aliases (gap-fill only).
 	tbl := newSymbolTable()
@@ -173,7 +181,10 @@ func Analyze(fs *files.FileSet, ast *cache.Store, fc *FactStore) (*SymbolTable, 
 	for _, a := range aliases {
 		tbl.addAlias(a.Kind, a.Name, a)
 	}
-	return tbl, resolveRefs(tbl, refs), nil
+	diags := resolveRefs(tbl, refs)
+	slog.Debug("validate: resolved references",
+		"symbols", tbl.Total(), "duplicates", len(tbl.Duplicates), "unresolved", len(diags))
+	return tbl, diags, nil
 }
 
 // parseEntry returns the parse tree for path, using the cache when available.

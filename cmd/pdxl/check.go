@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"pdxl/internal/cache"
@@ -47,22 +49,29 @@ func runCheck(_ *cobra.Command, args []string) error {
 		modArg = cfg.ModPath
 	}
 
+	slog.Debug("check: building project", "game", gameDir, "mod", modArg)
 	fs, err := buildProjectFileSet(gameDir, modArg, checkProtonPrefix)
 	if err != nil {
 		return err
 	}
+	st := fs.Stats()
+	slog.Debug("check: scanned project", "vanilla", st.Vanilla, "mod", st.Mod, "total", st.Total)
 
 	var store *cache.Store
 	var fc *validate.FactStore
 	if !noCacheCheck && cfg.Cache.Enabled {
 		store, _ = cache.NewStore(cfg.Cache.Dir, cfg.Cache.LRUCap)
 		fc, _ = validate.NewFactStore(filepath.Join(cfg.Cache.Dir, "symbols"))
+	} else {
+		slog.Debug("check: cache disabled")
 	}
 
+	start := time.Now()
 	tbl, refDiags, err := validate.Analyze(fs, store, fc)
 	if err != nil {
 		return err
 	}
+	slog.Debug("check: analysis complete", "duration", time.Since(start).Round(time.Millisecond))
 
 	if len(args) == 1 {
 		return reportFile(fs, refDiags, args[0])
@@ -109,6 +118,7 @@ func reportFile(fs *files.FileSet, refDiags []validate.RefDiag, target string) e
 			n++
 		}
 	}
+	slog.Debug("check: filtered to file", "file", fullPath, "unresolved", n, "project_unresolved", len(refDiags))
 	if n > 0 {
 		os.Exit(1)
 	}
