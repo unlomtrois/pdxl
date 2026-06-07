@@ -5,7 +5,9 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
+	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
 	"pdxl/internal/cache"
 	"pdxl/internal/files"
@@ -100,19 +102,29 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	return parseAll(&fs)
+	return parseAll(&fs, st.Total)
 }
 
 // parseAll parses every winning entry in the FileSet and reports how many
-// files contained diagnostics, plus the total diagnostic count.
-func parseAll(fs *files.FileSet) error {
+// files contained diagnostics, plus the total diagnostic count. total is the
+// number of winning entries, used to size the progress bar.
+func parseAll(fs *files.FileSet, total int) error {
 	var store *cache.Store
 	if cfg.Cache.Enabled {
 		store, _ = cache.NewStore(cfg.Cache.Dir, cfg.Cache.LRUCap)
 	}
 
+	bar := progressbar.NewOptions(total,
+		progressbar.OptionSetDescription("parsing"),
+		progressbar.OptionSetWriter(os.Stderr),
+		progressbar.OptionShowCount(),
+		progressbar.OptionThrottle(65*time.Millisecond),
+		progressbar.OptionClearOnFinish(),
+	)
+
 	var parsed, filesWithErrors, totalDiags int
 	walkErr := fs.Walk(func(e files.FileEntry) error {
+		_ = bar.Add(1)
 		path := e.FullPath
 		info, err := os.Stat(path)
 		if err != nil {
@@ -148,6 +160,7 @@ func parseAll(fs *files.FileSet) error {
 	if walkErr != nil {
 		return walkErr
 	}
+	_ = bar.Finish()
 
 	fmt.Printf("parsed   %5d files  (%d with errors, %d diagnostics total)\n",
 		parsed, filesWithErrors, totalDiags)
