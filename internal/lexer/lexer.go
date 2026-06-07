@@ -72,7 +72,27 @@ func (l *Lexer) Next() *Token {
 		case ':':
 			tag = colon
 		case '@':
-			tag = at
+			// @name is a read-once script value reference/definition;
+			// @[ expr ] is inline math. Both are single value atoms.
+			// A bare '@' with neither form falls back to at.
+			switch {
+			case isIdentifierChar(l.peek()):
+				for isIdentifierChar(l.peek()) {
+					l.advance()
+				}
+				tag = script_value
+			case l.peek() == '[':
+				l.advance() // consume '['
+				for !l.isAtEnd() && l.peek() != ']' {
+					l.advance()
+				}
+				if !l.isAtEnd() {
+					l.advance() // consume ']'
+				}
+				tag = script_math
+			default:
+				tag = at
+			}
 		case '|':
 			tag = pipe
 		case '$':

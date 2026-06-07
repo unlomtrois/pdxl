@@ -85,7 +85,21 @@ key2 = @some_var`)
 		// key1 = title:k_france.capital
 		identifier, equal, identifier, colon, identifier, dot, identifier,
 		// key2 = @some_var
-		identifier, equal, at, identifier,
+		identifier, equal, script_value,
+	})
+}
+
+func TestScriptValues(t *testing.T) {
+	source := []byte(`@my_const = 0.15
+key = @my_const
+neg = @[my_const * -1]`)
+	testTokenize(t, source, []Tag{
+		// @my_const = 0.15
+		script_value, equal, literal_number,
+		// key = @my_const
+		identifier, equal, script_value,
+		// neg = @[my_const * -1]
+		identifier, equal, script_math,
 	})
 }
 

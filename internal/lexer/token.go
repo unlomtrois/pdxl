@@ -58,8 +58,10 @@ const (
 	colon  // :
 	at     // @
 	pipe   // |
-	dollar      // $
-	macro_param // $IDENT$
+	dollar       // $
+	macro_param  // $IDENT$
+	script_value // @name (read-once script value reference/definition)
+	script_math  // @[ expr ] (inline math)
 
 	percent // %
 
@@ -123,6 +125,10 @@ func (t Tag) String() string {
 		return "dollar"
 	case macro_param:
 		return "macro_param"
+	case script_value:
+		return "script_value"
+	case script_math:
+		return "script_math"
 	case percent:
 		return "percent"
 	case comment:
@@ -164,6 +170,8 @@ const (
 	TagPipe          = pipe
 	TagDollar        = dollar
 	TagMacroParam    = macro_param
+	TagScriptValue   = script_value
+	TagScriptMath    = script_math
 	TagPercent       = percent
 	TagInvalid       = invalid
 	TagEOF           = eof
