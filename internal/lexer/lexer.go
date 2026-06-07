@@ -157,7 +157,20 @@ func (l *Lexer) Next() *Token {
 		case '+':
 			tag = plus
 		case '-':
-			tag = minus
+			// A leading '-' on a date forms a negative (BC) date literal, e.g.
+			// -221.1.1. Otherwise it stays a minus (negative number /
+			// subtraction); lexNumber distinguishes a date from a plain number.
+			if isDigit(byte(l.peek())) {
+				save := l.pos
+				if l.lexNumber() == literal_date {
+					tag = literal_date
+				} else {
+					l.pos = save // not a date — re-lex the number after the minus
+					tag = minus
+				}
+			} else {
+				tag = minus
+			}
 		case '*':
 			tag = multiply
 		case '/':

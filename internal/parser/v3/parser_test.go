@@ -120,6 +120,18 @@ func TestScopeChainValue(t *testing.T) {
 	}
 }
 
+func TestNegativeDateKey(t *testing.T) {
+	// History files key blocks by date, including negative (BC) dates.
+	tree := mustParse(t, []byte(`-221.1.1 = { holder = 100 }`))
+	field := tree.Children(tree.Root())[0]
+	if field.Kind != KindField {
+		t.Fatalf("expected KindField")
+	}
+	if field.Value(tree.Src) != "-221.1.1" {
+		t.Fatalf("expected key '-221.1.1', got %q", field.Value(tree.Src))
+	}
+}
+
 func TestSlashPathValue(t *testing.T) {
 	tree := mustParse(t, []byte(`reference = event:/SFX/Events/Themes/generic`))
 	field := tree.Children(tree.Root())[0]

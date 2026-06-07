@@ -112,6 +112,24 @@ diff = a - b`)
 	})
 }
 
+func TestNegativeDate(t *testing.T) {
+	// Negative (BC) dates are a single literal_date token and can be a key.
+	source := []byte(`-221.1.1 = { x = 1 }`)
+	testTokenize(t, source, []Tag{
+		literal_date, equal, l_brace,
+		identifier, equal, literal_number,
+		r_brace,
+	})
+}
+
+func TestNegativeNumberNotADate(t *testing.T) {
+	// A leading '-' on a plain number stays minus + number, not a date.
+	source := []byte(`x = -0.25`)
+	testTokenize(t, source, []Tag{
+		identifier, equal, minus, literal_number,
+	})
+}
+
 func TestDotFloats(t *testing.T) {
 	// CK3 color/position lists use leading- and trailing-dot floats.
 	source := []byte(`color = { .7 0.05 1. }`)
