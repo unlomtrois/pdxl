@@ -74,29 +74,9 @@ func buildProjectFileSet(gameDir, modArg, protonPrefix string) (*files.FileSet, 
 	}
 
 	// Resolve mod: .mod file or plain directory.
-	var modDir string
-	var mod files.Mod
-	if modArg != "" {
-		info, err := os.Stat(modArg)
-		if err != nil {
-			return nil, fmt.Errorf("mod: %w", err)
-		}
-		if !info.IsDir() && strings.HasSuffix(strings.ToLower(modArg), ".mod") {
-			mod, err = files.ParseMod(modArg)
-			if err != nil {
-				return nil, fmt.Errorf("parsing .mod file: %w", err)
-			}
-			if files.IsWindowsAbsolute(mod.Path) {
-				if protonPrefix == "" {
-					return nil, fmt.Errorf("mod path %q is a Windows absolute path — provide --proton-prefix or use --mod <dir>", mod.Path)
-				}
-				modDir = files.ResolveWindowsPath(mod.Path, protonPrefix)
-			} else {
-				modDir = mod.Path
-			}
-		} else {
-			modDir = modArg
-		}
+	modDir, mod, err := resolveMod(modArg, protonPrefix)
+	if err != nil {
+		return nil, err
 	}
 
 	fs := &files.FileSet{}
@@ -115,6 +95,33 @@ func buildProjectFileSet(gameDir, modArg, protonPrefix string) (*files.FileSet, 
 		}
 	}
 	return fs, nil
+}
+
+// resolveMod turns a --mod argument (a .mod file or a plain directory) into the
+// mod's directory and parsed metadata. An empty modArg yields ("", zero, nil).
+func resolveMod(modArg, protonPrefix string) (string, files.Mod, error) {
+	if modArg == "" {
+		return "", files.Mod{}, nil
+	}
+	info, err := os.Stat(modArg)
+	if err != nil {
+		return "", files.Mod{}, fmt.Errorf("mod: %w", err)
+	}
+	if info.IsDir() || !strings.HasSuffix(strings.ToLower(modArg), ".mod") {
+		return modArg, files.Mod{}, nil // plain directory
+	}
+
+	mod, err := files.ParseMod(modArg)
+	if err != nil {
+		return "", files.Mod{}, fmt.Errorf("parsing .mod file: %w", err)
+	}
+	if !files.IsWindowsAbsolute(mod.Path) {
+		return mod.Path, mod, nil
+	}
+	if protonPrefix == "" {
+		return "", files.Mod{}, fmt.Errorf("mod path %q is a Windows absolute path — provide --proton-prefix or use --mod <dir>", mod.Path)
+	}
+	return files.ResolveWindowsPath(mod.Path, protonPrefix), mod, nil
 }
 
 // parseAll parses every winning entry in the FileSet and reports how many
