@@ -151,7 +151,7 @@ func Analyze(fs *files.FileSet, ast *cache.Store, fc *FactStore) (*SymbolTable, 
 			if err != nil {
 				return err
 			}
-			facts = extractFacts(tree, e.RelPath)
+			facts = extractFacts(tree, e.RelPath, e.FullPath)
 			if fc != nil {
 				_ = fc.Put(e.FullPath, info, tree.Src, facts)
 			}

@@ -4,17 +4,24 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"pdxl/internal/cache"
+	"pdxl/internal/files"
 	"pdxl/internal/validate"
 )
 
 var checkCmd = &cobra.Command{
-	Use:   "check",
-	Short: "Index project definitions (scripted triggers, traits, events, ...)",
-	Args:  cobra.NoArgs,
-	RunE:  runCheck,
+	Use:   "check [file]",
+	Short: "Index project definitions and resolve references across game+mod",
+	Long: "Index project definitions (scripted triggers, traits, events, ...) and " +
+		"resolve cross-file references.\n\n" +
+		"With no argument, reports counts, duplicates, and all unresolved references.\n" +
+		"With a file argument, reports only that file's unresolved references, " +
+		"resolved against the whole-project symbol table.",
+	Args: cobra.MaximumNArgs(1),
+	RunE: runCheck,
 }
 
 var checkGame string
@@ -30,7 +37,7 @@ func init() {
 	rootCmd.AddCommand(checkCmd)
 }
 
-func runCheck(_ *cobra.Command, _ []string) error {
+func runCheck(_ *cobra.Command, args []string) error {
 	gameDir := checkGame
 	if gameDir == "" {
 		gameDir = cfg.GamePath
@@ -57,6 +64,14 @@ func runCheck(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
+	if len(args) == 1 {
+		return reportFile(fs, refDiags, args[0])
+	}
+	return reportProject(tbl, refDiags)
+}
+
+// reportProject prints whole-project counts, duplicates, and unresolved refs.
+func reportProject(tbl *validate.SymbolTable, refDiags []validate.RefDiag) error {
 	for _, kind := range validate.Kinds {
 		fmt.Printf("%-18s %6d\n", kind, tbl.Count(kind))
 	}
@@ -77,4 +92,43 @@ func runCheck(_ *cobra.Command, _ []string) error {
 		os.Exit(1)
 	}
 	return nil
+}
+
+// reportFile prints only target's unresolved references, resolved against the
+// whole-project table. target is matched to its project file by absolute path.
+func reportFile(fs *files.FileSet, refDiags []validate.RefDiag, target string) error {
+	fullPath, ok := projectPathOf(fs, target)
+	if !ok {
+		return fmt.Errorf("%s is not part of the scanned game/mod project", target)
+	}
+	prefix := fullPath + ":"
+	n := 0
+	for _, d := range refDiags {
+		if strings.HasPrefix(d.Loc, prefix) {
+			fmt.Printf("%s\n", d)
+			n++
+		}
+	}
+	if n > 0 {
+		os.Exit(1)
+	}
+	return nil
+}
+
+// projectPathOf finds the FileSet entry matching target (by absolute path) and
+// returns the FullPath used in diagnostics.
+func projectPathOf(fs *files.FileSet, target string) (string, bool) {
+	abs, err := filepath.Abs(target)
+	if err != nil {
+		return "", false
+	}
+	abs = filepath.Clean(abs)
+	var found string
+	_ = fs.Walk(func(e files.FileEntry) error {
+		if ep, err := filepath.Abs(e.FullPath); err == nil && filepath.Clean(ep) == abs {
+			found = e.FullPath
+		}
+		return nil
+	})
+	return found, found != ""
 }

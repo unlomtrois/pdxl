@@ -26,8 +26,9 @@ type FileFacts struct {
 
 // extractFacts walks a parsed file once, collecting its definitions, trait-group
 // aliases, and references. relPath is the FileSet key (drives the def rule and
-// the on_action gating).
-func extractFacts(tree *v3.Tree, relPath string) FileFacts {
+// the on_action gating). fullPath is the on-disk path used in reference Loc
+// strings, so diagnostics point at a clickable file.
+func extractFacts(tree *v3.Tree, relPath, fullPath string) FileFacts {
 	var f FileFacts
 
 	if rule, ok := ruleFor(relPath); ok {
@@ -37,7 +38,7 @@ func extractFacts(tree *v3.Tree, relPath string) FileFacts {
 	}
 
 	onAction := strings.HasPrefix(relPath, OnActionDir)
-	extractRefs(tree, tree.Root(), relPath, onAction, &f.Refs)
+	extractRefs(tree, tree.Root(), fullPath, onAction, &f.Refs)
 	return f
 }
 
