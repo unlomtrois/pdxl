@@ -5,6 +5,8 @@ linters:
     - revive
     - nestif
   settings:
+    nestif:
+      min-complexity: 4
     errcheck:
       exclude-functions:
         - (*os.File).Close
