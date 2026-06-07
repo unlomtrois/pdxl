@@ -18,11 +18,13 @@ var checkCmd = &cobra.Command{
 var checkGame string
 var checkMod string
 var checkProtonPrefix string
+var noCacheCheck bool
 
 func init() {
 	checkCmd.Flags().StringVar(&checkGame, "game", "", "path to vanilla game directory (default: game_path from config)")
 	checkCmd.Flags().StringVar(&checkMod, "mod", "", "path to mod directory or .mod file (default: mod_path from config)")
 	checkCmd.Flags().StringVar(&checkProtonPrefix, "proton-prefix", "", "Proton/Wine prefix to resolve Windows paths")
+	checkCmd.Flags().BoolVar(&noCacheCheck, "no-cache", false, "disable parse cache")
 	rootCmd.AddCommand(checkCmd)
 }
 
@@ -42,7 +44,7 @@ func runCheck(_ *cobra.Command, _ []string) error {
 	}
 
 	var store *cache.Store
-	if cfg.Cache.Enabled {
+	if !noCacheCheck && cfg.Cache.Enabled {
 		store, _ = cache.NewStore(cfg.Cache.Dir, cfg.Cache.LRUCap)
 	}
 
