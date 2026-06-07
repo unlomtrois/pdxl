@@ -120,6 +120,34 @@ func TestScopeChainValue(t *testing.T) {
 	}
 }
 
+func TestComparatorAsValue(t *testing.T) {
+	// scripted_trigger call sites pass a bare comparator as a macro argument,
+	// e.g. OPERATOR = <=. The comparator becomes the value.
+	for _, cmp := range []string{"<=", ">=", "==", "!=", "<", ">"} {
+		src := []byte("OPERATOR = " + cmp)
+		tree, diags := Parse("test", src)
+		if len(diags) > 0 {
+			t.Fatalf("%q: unexpected diagnostics: %v", cmp, diags)
+		}
+		field := tree.Children(tree.Root())[0]
+		if field.Kind != KindField {
+			t.Fatalf("%q: expected KindField", cmp)
+		}
+		val := tree.Children(field)[1]
+		if val.Value(tree.Src) != cmp {
+			t.Fatalf("expected value %q, got %q", cmp, val.Value(tree.Src))
+		}
+	}
+}
+
+func TestDoubleComparatorStillErrors(t *testing.T) {
+	// A non-'=' first comparator is a real error, not a value.
+	_, diags := Parse("test", []byte(`x >= <=`))
+	if len(diags) == 0 {
+		t.Fatal("expected a diagnostic for double comparator")
+	}
+}
+
 func TestNegativeDateKey(t *testing.T) {
 	// History files key blocks by date, including negative (BC) dates.
 	tree := mustParse(t, []byte(`-221.1.1 = { holder = 100 }`))

@@ -328,9 +328,18 @@ func (p *parser) parseField() uint32 {
 
 	keyIdx := p.allocNode(Node{Kind: KindScalar, SrcStart: keyStart, SrcEnd: keyEnd})
 
-	valIdx := p.parseValue(0)
-	if valIdx == invalidIdx {
-		return invalidIdx
+	// scripted_trigger/effect call sites pass a bare comparator as a macro
+	// argument, e.g. `OPERATOR = <=`. After a single '=', accept a comparator
+	// token as the value. (A non-'=' first operator stays a real error.)
+	var valIdx uint32
+	if opTok.Tag == lexer.TagEqual && isOperator(p.peek(0)) {
+		cmpTok := p.advance()
+		valIdx = p.allocNode(Node{Kind: KindScalar, SrcStart: uint32(cmpTok.Start), SrcEnd: uint32(cmpTok.End)})
+	} else {
+		valIdx = p.parseValue(0)
+		if valIdx == invalidIdx {
+			return invalidIdx
+		}
 	}
 
 	idxStart := uint32(len(p.index))
