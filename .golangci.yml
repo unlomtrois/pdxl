@@ -3,6 +3,7 @@ version: "2"
 linters:
   enable:
     - revive
+    - nestif
   settings:
     errcheck:
       exclude-functions:
