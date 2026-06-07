@@ -44,50 +44,9 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 		modArg = cfg.ModPath
 	}
 
-	if gameDir == "" && modArg == "" {
-		return fmt.Errorf("provide --game and/or --mod (or set game_path/mod_path in pdxl.toml)")
-	}
-
-	// Resolve mod: .mod file or plain directory.
-	var modDir string
-	var mod files.Mod
-	if modArg != "" {
-		info, err := os.Stat(modArg)
-		if err != nil {
-			return fmt.Errorf("mod: %w", err)
-		}
-		if !info.IsDir() && strings.HasSuffix(strings.ToLower(modArg), ".mod") {
-			mod, err = files.ParseMod(modArg)
-			if err != nil {
-				return fmt.Errorf("parsing .mod file: %w", err)
-			}
-			if files.IsWindowsAbsolute(mod.Path) {
-				if indexProtonPrefix == "" {
-					return fmt.Errorf("mod path %q is a Windows absolute path — provide --proton-prefix or use --mod <dir>", mod.Path)
-				}
-				modDir = files.ResolveWindowsPath(mod.Path, indexProtonPrefix)
-			} else {
-				modDir = mod.Path
-			}
-		} else {
-			modDir = modArg
-		}
-	}
-
-	var fs files.FileSet
-	fs.SetIgnore(cfg.Scan.IgnoreDirs, cfg.Scan.IgnoreFiles)
-	if len(mod.ReplacePaths) > 0 {
-		fs.SetReplacePaths(mod.ReplacePaths)
-	}
-	if gameDir != "" {
-		if err := fs.Add(gameDir, files.FileKindVanilla); err != nil {
-			return fmt.Errorf("scanning game dir: %w", err)
-		}
-	}
-	if modDir != "" {
-		if err := fs.Add(modDir, files.FileKindMod); err != nil {
-			return fmt.Errorf("scanning mod dir: %w", err)
-		}
+	fs, err := buildProjectFileSet(gameDir, modArg, indexProtonPrefix)
+	if err != nil {
+		return err
 	}
 
 	st := fs.Stats()
@@ -103,7 +62,59 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	return parseAll(&fs, st.Total)
+	return parseAll(fs, st.Total)
+}
+
+// buildProjectFileSet resolves a game directory and a mod (.mod file or plain
+// directory), applies overlay/ignore rules, and scans both into a FileSet.
+// gameDir and modArg may be empty; at least one must be set.
+func buildProjectFileSet(gameDir, modArg, protonPrefix string) (*files.FileSet, error) {
+	if gameDir == "" && modArg == "" {
+		return nil, fmt.Errorf("provide --game and/or --mod (or set game_path/mod_path in pdxl.toml)")
+	}
+
+	// Resolve mod: .mod file or plain directory.
+	var modDir string
+	var mod files.Mod
+	if modArg != "" {
+		info, err := os.Stat(modArg)
+		if err != nil {
+			return nil, fmt.Errorf("mod: %w", err)
+		}
+		if !info.IsDir() && strings.HasSuffix(strings.ToLower(modArg), ".mod") {
+			mod, err = files.ParseMod(modArg)
+			if err != nil {
+				return nil, fmt.Errorf("parsing .mod file: %w", err)
+			}
+			if files.IsWindowsAbsolute(mod.Path) {
+				if protonPrefix == "" {
+					return nil, fmt.Errorf("mod path %q is a Windows absolute path — provide --proton-prefix or use --mod <dir>", mod.Path)
+				}
+				modDir = files.ResolveWindowsPath(mod.Path, protonPrefix)
+			} else {
+				modDir = mod.Path
+			}
+		} else {
+			modDir = modArg
+		}
+	}
+
+	fs := &files.FileSet{}
+	fs.SetIgnore(cfg.Scan.IgnoreDirs, cfg.Scan.IgnoreFiles)
+	if len(mod.ReplacePaths) > 0 {
+		fs.SetReplacePaths(mod.ReplacePaths)
+	}
+	if gameDir != "" {
+		if err := fs.Add(gameDir, files.FileKindVanilla); err != nil {
+			return nil, fmt.Errorf("scanning game dir: %w", err)
+		}
+	}
+	if modDir != "" {
+		if err := fs.Add(modDir, files.FileKindMod); err != nil {
+			return nil, fmt.Errorf("scanning mod dir: %w", err)
+		}
+	}
+	return fs, nil
 }
 
 // parseAll parses every winning entry in the FileSet and reports how many
