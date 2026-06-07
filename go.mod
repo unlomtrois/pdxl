@@ -5,6 +5,7 @@ go 1.25
 require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/alecthomas/participle/v2 v2.1.4
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/schollz/progressbar/v3 v3.19.0
 	github.com/spf13/cobra v1.10.2
 	github.com/tliron/commonlog v0.2.8
