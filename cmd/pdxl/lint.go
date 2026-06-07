@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"pdxl/internal/cache"
+	"pdxl/internal/files"
 	"pdxl/internal/lexer"
 	v3 "pdxl/internal/parser/v3"
 )
@@ -38,8 +39,33 @@ func runLint(cmd *cobra.Command, args []string) error {
 		store, _ = cache.NewStore(cfg.Cache.Dir, cfg.Cache.LRUCap)
 	}
 
+	// Expand directory arguments into individual .txt file paths.
+	var resolved []string
 	hasErrors := false
-	for _, path := range args {
+	for _, arg := range args {
+		info, err := os.Stat(arg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", arg, err)
+			hasErrors = true
+			continue
+		}
+		if info.IsDir() {
+			var fs files.FileSet
+			if err := fs.Add(arg, files.FileKindMod); err != nil {
+				fmt.Fprintf(os.Stderr, "%s: %v\n", arg, err)
+				hasErrors = true
+				continue
+			}
+			fs.Walk(func(e files.FileEntry) error {
+				resolved = append(resolved, e.FullPath)
+				return nil
+			})
+		} else {
+			resolved = append(resolved, arg)
+		}
+	}
+
+	for _, path := range resolved {
 		info, err := os.Stat(path)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%s: %v\n", path, err)

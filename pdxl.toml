@@ -1,4 +1,6 @@
 game = "ck3"
+game_path = ""
+mod_path = ""
 
 [cache]
   enabled = true

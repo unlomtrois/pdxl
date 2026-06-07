@@ -12,9 +12,11 @@ const DefaultPath = "pdxl.toml"
 
 // Config is the top-level configuration structure.
 type Config struct {
-	Game  string      `toml:"game"`
-	Cache CacheConfig `toml:"cache"`
-	Lint  LintConfig  `toml:"lint"`
+	Game     string      `toml:"game"`
+	GamePath string      `toml:"game_path"`
+	ModPath  string      `toml:"mod_path"`
+	Cache    CacheConfig `toml:"cache"`
+	Lint     LintConfig  `toml:"lint"`
 }
 
 // CacheConfig controls the two-level parse cache.
