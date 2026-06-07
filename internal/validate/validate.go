@@ -212,16 +212,25 @@ func harvest(tbl *SymbolTable, tree *v3.Tree, rule defRule, relPath string) {
 // directFieldValue returns the scalar value of a direct-child `key = value`
 // field in block, or "" if absent or non-scalar.
 func directFieldValue(tree *v3.Tree, block v3.Node, key string) string {
+	if n, ok := directFieldNode(tree, block, key); ok && n.Kind == v3.KindScalar {
+		return n.Value(tree.Src)
+	}
+	return ""
+}
+
+// directFieldNode returns the value node of a direct-child `key = value` field
+// in block, or (zero, false) if absent.
+func directFieldNode(tree *v3.Tree, block v3.Node, key string) (v3.Node, bool) {
 	for _, child := range tree.Children(block) {
 		if child.Kind != v3.KindField {
 			continue
 		}
 		kids := tree.Children(child)
-		if len(kids) == 2 && kids[0].Value(tree.Src) == key && kids[1].Kind == v3.KindScalar {
-			return kids[1].Value(tree.Src)
+		if len(kids) == 2 && kids[0].Value(tree.Src) == key {
+			return kids[1], true
 		}
 	}
-	return ""
+	return v3.Node{}, false
 }
 
 // collectParams walks the subtree rooted at n, recording every $PARAM$ name

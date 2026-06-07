@@ -41,20 +41,14 @@ func resolveNode(tbl *SymbolTable, tree *v3.Tree, n v3.Node, path string, diags 
 		if len(children) == 2 {
 			key := children[0].Value(tree.Src)
 			value := children[1]
+			// Scalar form: key = value.
 			if kind, ok := ck3RefRules[key]; ok && value.Kind == v3.KindScalar {
-				val := strings.Trim(value.Value(tree.Src), `"`) // names may be quoted
-				// A '$' immediately after the value means it is the prefix of a
-				// macro-interpolated identifier (e.g. education_$EDUCATION$_5),
-				// which the lexer splits; only the prefix is captured here.
-				concatMacro := int(value.SrcEnd) < len(tree.Src) && tree.Src[value.SrcEnd] == '$'
-				if !concatMacro && !skipRefValue(val) {
-					if _, found := tbl.Lookup(kind, val); !found {
-						tok := lexer.Token{Start: int(value.SrcStart), End: int(value.SrcEnd)}
-						*diags = append(*diags, RefDiag{
-							Loc: tok.FormatPosition(path, tree.Src),
-							Msg: fmt.Sprintf("unknown %s %q", kind, val),
-						})
-					}
+				checkRef(tbl, tree, kind, value, path, diags)
+			}
+			// Block form carrying an id: key = { id = value ... }.
+			if kind, ok := ck3BlockIDRefRules[key]; ok && value.Kind == v3.KindBlock {
+				if idNode, ok := directFieldNode(tree, value, "id"); ok && idNode.Kind == v3.KindScalar {
+					checkRef(tbl, tree, kind, idNode, path, diags)
 				}
 			}
 		}
@@ -62,6 +56,27 @@ func resolveNode(tbl *SymbolTable, tree *v3.Tree, n v3.Node, path string, diags 
 	for _, child := range tree.Children(n) {
 		resolveNode(tbl, tree, child, path, diags)
 	}
+}
+
+// checkRef resolves a single scalar value node against the symbol table for the
+// given kind, appending a diagnostic when it is unknown.
+func checkRef(tbl *SymbolTable, tree *v3.Tree, kind SymbolKind, value v3.Node, path string, diags *[]RefDiag) {
+	val := strings.Trim(value.Value(tree.Src), `"`) // names may be quoted
+	// A '$' immediately after the value means it is the prefix of a
+	// macro-interpolated identifier (e.g. education_$EDUCATION$_5), which the
+	// lexer splits; only the prefix is captured here.
+	concatMacro := int(value.SrcEnd) < len(tree.Src) && tree.Src[value.SrcEnd] == '$'
+	if concatMacro || skipRefValue(val) {
+		return
+	}
+	if _, found := tbl.Lookup(kind, val); found {
+		return
+	}
+	tok := lexer.Token{Start: int(value.SrcStart), End: int(value.SrcEnd)}
+	*diags = append(*diags, RefDiag{
+		Loc: tok.FormatPosition(path, tree.Src),
+		Msg: fmt.Sprintf("unknown %s %q", kind, val),
+	})
 }
 
 // scopeKeywords are relative-scope references that may hold a trait at runtime;

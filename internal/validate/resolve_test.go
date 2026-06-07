@@ -71,6 +71,31 @@ func TestResolveTraitGroupsAndQuotes(t *testing.T) {
 	}
 }
 
+func TestResolveEventReferences(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "events/test_events.txt",
+		"namespace = test\ntest.0001 = { type = character_event }\n")
+	writeFile(t, dir, "common/scripted_effects/00_e.txt",
+		"fire = {\n"+
+			"\ttrigger_event = test.0001\n"+ // scalar, defined
+			"\ttrigger_event = test.9999\n"+ // scalar, undefined
+			"\ttrigger_event = { id = test.0001 days = 5 }\n"+ // block, defined
+			"\ttrigger_event = { id = test.8888 }\n"+ // block, undefined
+			"}\n")
+
+	diags := resolveDir(t, dir)
+
+	if len(diags) != 2 {
+		t.Fatalf("expected 2 diagnostics, got %d: %v", len(diags), diags)
+	}
+	joined := diags[0].Msg + " " + diags[1].Msg
+	for _, want := range []string{"test.9999", "test.8888", "event"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("expected diagnostics to mention %q, got %q", want, joined)
+		}
+	}
+}
+
 func TestResolveDefinedTraitOK(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "common/traits/00_traits.txt", "brave = { }\ncraven = { }\n")

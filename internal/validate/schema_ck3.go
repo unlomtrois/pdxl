@@ -26,9 +26,16 @@ var ck3DefRules = []defRule{
 // ck3RefRules maps a value-position key to the kind of symbol its scalar value
 // must resolve to. Hand-written and CK3-only for now; grows incrementally.
 var ck3RefRules = map[string]SymbolKind{
-	"add_trait":    KindTrait,
-	"remove_trait": KindTrait,
-	"has_trait":    KindTrait,
+	"add_trait":     KindTrait,
+	"remove_trait":  KindTrait,
+	"has_trait":     KindTrait,
+	"trigger_event": KindEvent, // scalar form: trigger_event = ns.id
+}
+
+// ck3BlockIDRefRules maps a key whose block value carries an `id = X` reference
+// to the kind X must resolve to, e.g. trigger_event = { id = ns.id days = 5 }.
+var ck3BlockIDRefRules = map[string]SymbolKind{
+	"trigger_event": KindEvent,
 }
 
 // ruleFor returns the def rule whose prefix matches relPath, if any.
