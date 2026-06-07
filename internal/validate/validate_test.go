@@ -76,6 +76,22 @@ func TestBuildCollectsCharacters(t *testing.T) {
 	}
 }
 
+func TestBuildCollectsDottedCharacterIDs(t *testing.T) {
+	// Character IDs can be <word>.<number>, e.g. bohemia.1.
+	dir := t.TempDir()
+	writeFile(t, dir, "history/characters/custom.txt",
+		"bohemia.1 = { name = \"Foo\" }\n")
+
+	tbl := buildDir(t, dir)
+
+	if got := tbl.Count(KindCharacter); got != 1 {
+		t.Errorf("character count: got %d, want 1", got)
+	}
+	if _, ok := tbl.Lookup(KindCharacter, "bohemia.1"); !ok {
+		t.Error("expected character bohemia.1 to be indexed")
+	}
+}
+
 func TestBuildCapturesMacroParams(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "common/scripted_triggers/00_t.txt",
