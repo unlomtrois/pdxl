@@ -116,28 +116,37 @@ func NewStore(dir string, lruCap int) (*Store, error) {
 	return s, nil
 }
 
+// getL1 looks up the in-memory LRU. It returns hit=true only for a fresh entry
+// (matching modTime); a stale entry is evicted and reported as a miss so the
+// caller falls through to L2.
+func (s *Store) getL1(path string, modTime int64) (*v3.Tree, []v3.Diagnostic, bool) {
+	s.mu.RLock()
+	if s.lru == nil {
+		s.mu.RUnlock()
+		return nil, nil, false
+	}
+	e, ok := s.lru.get(path)
+	s.mu.RUnlock()
+	if !ok {
+		return nil, nil, false
+	}
+	if e.modTime == modTime {
+		return e.tree, e.diags, true
+	}
+	// stale L1 entry; evict and fall through to L2
+	s.mu.Lock()
+	s.lru.delete(path)
+	s.mu.Unlock()
+	return nil, nil, false
+}
+
 // Get returns the cached tree for path, or (nil, nil, nil) on miss/stale.
 // info must be the result of os.Stat(path) — caller already has it.
 func (s *Store) Get(path string, info os.FileInfo) (*v3.Tree, []v3.Diagnostic, error) {
 	modTime := info.ModTime().UnixNano()
 
-	s.mu.RLock()
-	if s.lru != nil {
-		if e, ok := s.lru.get(path); ok {
-			s.mu.RUnlock()
-			if e.modTime == modTime {
-				return e.tree, e.diags, nil
-			}
-			// stale L1 entry; evict under write lock below
-			s.mu.Lock()
-			s.lru.delete(path)
-			s.mu.Unlock()
-			// fall through to L2
-		} else {
-			s.mu.RUnlock()
-		}
-	} else {
-		s.mu.RUnlock()
+	if tree, diags, hit := s.getL1(path, modTime); hit {
+		return tree, diags, nil
 	}
 
 	de, err := readDiskEntry(s.dir, path)
