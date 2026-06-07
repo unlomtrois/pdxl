@@ -9,3 +9,7 @@ mod_path = ""
 
 [lint]
   context = 0
+
+[scan]
+  ignore_dirs = ["licenses"]
+  ignore_files = ["credits.txt", "checksum_manifest.txt", "guids.txt", "license.txt", "ofl.txt"]

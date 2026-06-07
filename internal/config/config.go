@@ -17,6 +17,13 @@ type Config struct {
 	ModPath  string      `toml:"mod_path"`
 	Cache    CacheConfig `toml:"cache"`
 	Lint     LintConfig  `toml:"lint"`
+	Scan     ScanConfig  `toml:"scan"`
+}
+
+// ScanConfig controls which .txt files directory scans skip as non-script.
+type ScanConfig struct {
+	IgnoreDirs  []string `toml:"ignore_dirs"`  // directory base names to skip entirely
+	IgnoreFiles []string `toml:"ignore_files"` // file base names to skip (case-insensitive)
 }
 
 // CacheConfig controls the two-level parse cache.
@@ -38,6 +45,17 @@ func Default() Config {
 			Enabled: true,
 			Dir:     ".pdxl/cache",
 			LRUCap:  256,
+		},
+		Scan: ScanConfig{
+			// Non-script .txt files shipped alongside game/mod data.
+			IgnoreDirs: []string{"licenses"},
+			IgnoreFiles: []string{
+				"credits.txt",
+				"checksum_manifest.txt",
+				"guids.txt",
+				"license.txt",
+				"ofl.txt",
+			},
 		},
 	}
 }

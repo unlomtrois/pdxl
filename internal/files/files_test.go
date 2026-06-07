@@ -41,6 +41,36 @@ func TestAddAndResolve(t *testing.T) {
 	}
 }
 
+func TestSetIgnore(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "common/traits/noble.txt", "")
+	writeFile(t, dir, "licenses/software/zlib.txt", "")
+	writeFile(t, dir, "credits.txt", "")
+	writeFile(t, dir, "fonts/Open_Sans/LICENSE.txt", "") // case-insensitive
+
+	var s FileSet
+	s.SetIgnore([]string{"licenses"}, []string{"credits.txt", "license.txt"})
+	if err := s.Add(dir, FileKindVanilla); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, ok := s.Resolve("common/traits/noble.txt"); !ok {
+		t.Error("expected script file to be kept")
+	}
+	for _, rel := range []string{
+		"licenses/software/zlib.txt",
+		"credits.txt",
+		"fonts/Open_Sans/LICENSE.txt",
+	} {
+		if _, ok := s.Resolve(rel); ok {
+			t.Errorf("expected %q to be ignored", rel)
+		}
+	}
+	if got := s.Stats().Total; got != 1 {
+		t.Errorf("total: got %d, want 1", got)
+	}
+}
+
 func TestOverlayShadowing(t *testing.T) {
 	vanilla := t.TempDir()
 	mod := t.TempDir()

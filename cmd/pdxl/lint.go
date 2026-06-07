@@ -51,6 +51,7 @@ func runLint(cmd *cobra.Command, args []string) error {
 		}
 		if info.IsDir() {
 			var fs files.FileSet
+			fs.SetIgnore(cfg.Scan.IgnoreDirs, cfg.Scan.IgnoreFiles)
 			if err := fs.Add(arg, files.FileKindMod); err != nil {
 				fmt.Fprintf(os.Stderr, "%s: %v\n", arg, err)
 				hasErrors = true

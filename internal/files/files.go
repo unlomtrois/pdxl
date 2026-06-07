@@ -43,9 +43,25 @@ type Stats struct {
 // The zero value is ready to use.
 type FileSet struct {
 	entries      []FileEntry
-	byPath       map[string]int // RelPath → index of last-added (winning) entry
-	replacePaths []string       // normalised prefixes that fully replace vanilla
-	replaced     int            // count of vanilla/DLC files dropped by replace_path
+	byPath       map[string]int      // RelPath → index of last-added (winning) entry
+	replacePaths []string            // normalised prefixes that fully replace vanilla
+	replaced     int                 // count of vanilla/DLC files dropped by replace_path
+	ignoreDirs   map[string]struct{} // directory base names skipped during Add
+	ignoreFiles  map[string]struct{} // file base names skipped during Add (lowercased)
+}
+
+// SetIgnore registers directory and file base names to skip during Add, used to
+// exclude non-script .txt files (license texts, manifests, etc.). Comparison is
+// case-insensitive. Call before adding any roots.
+func (s *FileSet) SetIgnore(dirs, files []string) {
+	s.ignoreDirs = make(map[string]struct{}, len(dirs))
+	for _, d := range dirs {
+		s.ignoreDirs[strings.ToLower(d)] = struct{}{}
+	}
+	s.ignoreFiles = make(map[string]struct{}, len(files))
+	for _, f := range files {
+		s.ignoreFiles[strings.ToLower(f)] = struct{}{}
+	}
 }
 
 // SetReplacePaths registers directory prefixes that are fully replaced by the
@@ -72,9 +88,15 @@ func (s *FileSet) Add(root string, kind FileKind) error {
 			if strings.HasPrefix(d.Name(), ".") {
 				return filepath.SkipDir
 			}
+			if _, ok := s.ignoreDirs[strings.ToLower(d.Name())]; ok {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		if !strings.EqualFold(filepath.Ext(d.Name()), ".txt") {
+			return nil
+		}
+		if _, ok := s.ignoreFiles[strings.ToLower(d.Name())]; ok {
 			return nil
 		}
 		rel, err := filepath.Rel(root, path)

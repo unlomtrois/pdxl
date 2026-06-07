@@ -75,6 +75,7 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 	}
 
 	var fs files.FileSet
+	fs.SetIgnore(cfg.Scan.IgnoreDirs, cfg.Scan.IgnoreFiles)
 	if len(mod.ReplacePaths) > 0 {
 		fs.SetReplacePaths(mod.ReplacePaths)
 	}
