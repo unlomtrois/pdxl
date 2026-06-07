@@ -103,11 +103,11 @@ func TestWalkAllWinners(t *testing.T) {
 	writeFile(t, mod, "c.txt", "")
 
 	var s FileSet
-	s.Add(vanilla, FileKindVanilla)
-	s.Add(mod, FileKindMod)
+	_ = s.Add(vanilla, FileKindVanilla)
+	_ = s.Add(mod, FileKindMod)
 
 	var paths []string
-	s.Walk(func(e FileEntry) error {
+	_ = s.Walk(func(e FileEntry) error {
 		paths = append(paths, e.RelPath)
 		return nil
 	})
@@ -136,10 +136,10 @@ func TestSkipDotDirs(t *testing.T) {
 	writeFile(t, dir, "real.txt", "")
 
 	var s FileSet
-	s.Add(dir, FileKindMod)
+	_ = s.Add(dir, FileKindMod)
 
 	var paths []string
-	s.Walk(func(e FileEntry) error { paths = append(paths, e.RelPath); return nil })
+	_ = s.Walk(func(e FileEntry) error { paths = append(paths, e.RelPath); return nil })
 
 	if len(paths) != 1 || paths[0] != "real.txt" {
 		t.Errorf("expected [real.txt], got %v", paths)
@@ -157,8 +157,8 @@ func TestReplacePathDropsVanilla(t *testing.T) {
 
 	var s FileSet
 	s.SetReplacePaths([]string{"common/landed_titles"})
-	s.Add(vanilla, FileKindVanilla)
-	s.Add(mod, FileKindMod)
+	_ = s.Add(vanilla, FileKindVanilla)
+	_ = s.Add(mod, FileKindMod)
 
 	// vanilla file in replaced dir must be absent
 	if _, ok := s.Resolve("common/landed_titles/base.txt"); ok {
@@ -241,10 +241,10 @@ func TestNonTxtSkipped(t *testing.T) {
 	writeFile(t, dir, "events.txt", "")
 
 	var s FileSet
-	s.Add(dir, FileKindMod)
+	_ = s.Add(dir, FileKindMod)
 
 	var paths []string
-	s.Walk(func(e FileEntry) error { paths = append(paths, e.RelPath); return nil })
+	_ = s.Walk(func(e FileEntry) error { paths = append(paths, e.RelPath); return nil })
 
 	if len(paths) != 1 || paths[0] != "events.txt" {
 		t.Errorf("expected [events.txt], got %v", paths)

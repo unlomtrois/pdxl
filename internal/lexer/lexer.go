@@ -28,7 +28,10 @@ func Init(source []byte) *Lexer {
 	}
 }
 
-// Next returns the next token from the source
+// Next returns the next token from the source.
+//
+//nolint:revive // cognitive-complexity: a flat per-character dispatch switch;
+// splitting it would obscure the token rules rather than clarify them.
 func (l *Lexer) Next() *Token {
 	l.skipWhitespace()
 	if l.isAtEnd() {

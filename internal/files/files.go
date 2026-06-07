@@ -85,10 +85,7 @@ func (s *FileSet) Add(root string, kind FileKind) error {
 			return err
 		}
 		if d.IsDir() {
-			if strings.HasPrefix(d.Name(), ".") {
-				return filepath.SkipDir
-			}
-			if _, ok := s.ignoreDirs[strings.ToLower(d.Name())]; ok {
+			if s.skipDir(d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -103,29 +100,38 @@ func (s *FileSet) Add(root string, kind FileKind) error {
 		if err != nil {
 			return err
 		}
-		relKey := strings.ToLower(filepath.ToSlash(rel))
-		if kind == FileKindVanilla || kind == FileKindDLC {
-			if s.isReplaced(relKey) {
-				s.replaced++
-				return nil
-			}
-		}
-		entry := FileEntry{
-			RelPath:  relKey,
-			FullPath: path,
-			Kind:     kind,
-		}
-		if s.byPath == nil {
-			s.byPath = make(map[string]int)
-		}
-		if idx, ok := s.byPath[relKey]; ok {
-			s.entries[idx] = entry
-		} else {
-			s.byPath[relKey] = len(s.entries)
-			s.entries = append(s.entries, entry)
-		}
+		s.register(strings.ToLower(filepath.ToSlash(rel)), path, kind)
 		return nil
 	})
+}
+
+// skipDir reports whether a directory (by base name) should not be descended:
+// dot-directories and configured ignore_dirs.
+func (s *FileSet) skipDir(name string) bool {
+	if strings.HasPrefix(name, ".") {
+		return true
+	}
+	_, ignored := s.ignoreDirs[strings.ToLower(name)]
+	return ignored
+}
+
+// register adds (or overlays) a winning entry for relKey, applying replace_path
+// dropping for vanilla/DLC files.
+func (s *FileSet) register(relKey, fullPath string, kind FileKind) {
+	if (kind == FileKindVanilla || kind == FileKindDLC) && s.isReplaced(relKey) {
+		s.replaced++
+		return
+	}
+	entry := FileEntry{RelPath: relKey, FullPath: fullPath, Kind: kind}
+	if s.byPath == nil {
+		s.byPath = make(map[string]int)
+	}
+	if idx, ok := s.byPath[relKey]; ok {
+		s.entries[idx] = entry
+	} else {
+		s.byPath[relKey] = len(s.entries)
+		s.entries = append(s.entries, entry)
+	}
 }
 
 // Resolve returns the winning FileEntry for relPath (normalised to lowercase
