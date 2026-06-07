@@ -2,11 +2,14 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"pdxl/internal/cache"
 	"pdxl/internal/files"
+	v3 "pdxl/internal/parser/v3"
 )
 
 var indexCmd = &cobra.Command{
@@ -93,5 +96,60 @@ func runIndex(cmd *cobra.Command, _ []string) error {
 	}
 	fmt.Println()
 
+	if indexDry {
+		return nil
+	}
+
+	return parseAll(&fs)
+}
+
+// parseAll parses every winning entry in the FileSet and reports how many
+// files contained diagnostics, plus the total diagnostic count.
+func parseAll(fs *files.FileSet) error {
+	var store *cache.Store
+	if cfg.Cache.Enabled {
+		store, _ = cache.NewStore(cfg.Cache.Dir, cfg.Cache.LRUCap)
+	}
+
+	var parsed, filesWithErrors, totalDiags int
+	walkErr := fs.Walk(func(e files.FileEntry) error {
+		path := e.FullPath
+		info, err := os.Stat(path)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", path, err)
+			return nil
+		}
+
+		var tree *v3.Tree
+		var diags []v3.Diagnostic
+		if store != nil {
+			tree, diags, _ = store.Get(path, info)
+		}
+		if tree == nil {
+			src, err := os.ReadFile(path)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%s: %v\n", path, err)
+				return nil
+			}
+			tree, diags = v3.Parse(path, src)
+			if store != nil {
+				_ = store.Put(path, info, src, tree, diags)
+			}
+		}
+
+		parsed++
+		if len(diags) > 0 {
+			filesWithErrors++
+			totalDiags += len(diags)
+			slog.Debug("diagnostics", "path", path, "count", len(diags))
+		}
+		return nil
+	})
+	if walkErr != nil {
+		return walkErr
+	}
+
+	fmt.Printf("parsed   %5d files  (%d with errors, %d diagnostics total)\n",
+		parsed, filesWithErrors, totalDiags)
 	return nil
 }
