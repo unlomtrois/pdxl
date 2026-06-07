@@ -23,6 +23,14 @@ var ck3DefRules = []defRule{
 	{"history/characters/", KindCharacter},
 }
 
+// ck3RefRules maps a value-position key to the kind of symbol its scalar value
+// must resolve to. Hand-written and CK3-only for now; grows incrementally.
+var ck3RefRules = map[string]SymbolKind{
+	"add_trait":    KindTrait,
+	"remove_trait": KindTrait,
+	"has_trait":    KindTrait,
+}
+
 // ruleFor returns the def rule whose prefix matches relPath, if any.
 // relPath is the normalised (lowercase, forward-slash) FileSet key.
 func ruleFor(relPath string) (defRule, bool) {

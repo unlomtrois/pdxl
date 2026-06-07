@@ -94,6 +94,20 @@ func (t *SymbolTable) add(s Symbol) {
 	m[s.Name] = s
 }
 
+// addAlias registers an additional resolvable name for a kind without
+// duplicate tracking. Used for names that legitimately repeat across many
+// definitions, e.g. CK3 trait groups (`group = education_martial`).
+func (t *SymbolTable) addAlias(kind SymbolKind, name string, sym Symbol) {
+	m := t.byKind[kind]
+	if m == nil {
+		m = make(map[string]Symbol)
+		t.byKind[kind] = m
+	}
+	if _, ok := m[name]; !ok {
+		m[name] = sym
+	}
+}
+
 // Count returns the number of symbols of the given kind.
 func (t *SymbolTable) Count(kind SymbolKind) int { return len(t.byKind[kind]) }
 
@@ -173,14 +187,41 @@ func harvest(tbl *SymbolTable, tree *v3.Tree, rule defRule, relPath string) {
 		}
 		seen := make(map[string]struct{})
 		collectParams(tree, value, seen)
-		tbl.add(Symbol{
+		sym := Symbol{
 			Name:   key.Value(tree.Src),
 			Kind:   rule.kind,
 			File:   relPath,
 			Offset: int(node.SrcStart),
 			Params: sortedKeys(seen),
-		})
+		}
+		tbl.add(sym)
+
+		// CK3 traits can belong to a group (`group = X`) or be group-equivalent
+		// (`group_equivalence = X`); both names are valid trait references.
+		// Register them as aliases (they repeat across member traits).
+		if rule.kind == KindTrait {
+			for _, gk := range []string{"group", "group_equivalence"} {
+				if g := directFieldValue(tree, value, gk); g != "" {
+					tbl.addAlias(KindTrait, g, sym)
+				}
+			}
+		}
 	}
+}
+
+// directFieldValue returns the scalar value of a direct-child `key = value`
+// field in block, or "" if absent or non-scalar.
+func directFieldValue(tree *v3.Tree, block v3.Node, key string) string {
+	for _, child := range tree.Children(block) {
+		if child.Kind != v3.KindField {
+			continue
+		}
+		kids := tree.Children(child)
+		if len(kids) == 2 && kids[0].Value(tree.Src) == key && kids[1].Kind == v3.KindScalar {
+			return kids[1].Value(tree.Src)
+		}
+	}
+	return ""
 }
 
 // collectParams walks the subtree rooted at n, recording every $PARAM$ name

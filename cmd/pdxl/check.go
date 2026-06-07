@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 	"pdxl/internal/cache"
@@ -63,6 +64,18 @@ func runCheck(_ *cobra.Command, _ []string) error {
 		for _, d := range tbl.Duplicates {
 			fmt.Printf("  %s %q redefined in %s (first in %s)\n", d.Kind, d.Name, d.File, d.First.File)
 		}
+	}
+
+	refDiags, err := validate.Resolve(tbl, fs, store)
+	if err != nil {
+		return err
+	}
+	if len(refDiags) > 0 {
+		fmt.Printf("\n%d unresolved references:\n", len(refDiags))
+		for _, d := range refDiags {
+			fmt.Printf("  %s\n", d)
+		}
+		os.Exit(1)
 	}
 	return nil
 }
