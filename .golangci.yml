@@ -15,3 +15,5 @@ linters:
       rules:
         - name: var-naming
           disabled: true
+        - name: cognitive-complexity
+          arguments: [15]
