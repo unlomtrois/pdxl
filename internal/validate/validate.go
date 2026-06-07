@@ -134,20 +134,34 @@ var macroParamRe = regexp.MustCompile(`\$(\w+)\$`)
 // (unchanged files skip parsing); on a miss the file is parsed via ast and the
 // facts are cached. Pass nil for either store to disable that cache.
 func Analyze(fs *files.FileSet, ast *cache.Store, fc *FactStore) (*SymbolTable, []RefDiag, error) {
-	var defs, aliases []Symbol
-	var refs []Ref
-	var nFiles, nHits int
+	order, facts, err := gatherFacts(fs, ast, fc)
+	if err != nil {
+		return nil, nil, err
+	}
+	tbl, diags := mergeAndResolve(order, facts)
+	return tbl, diags, nil
+}
+
+// fileKey identifies a project file by both its FileSet RelPath (drives the def
+// rule and stable duplicate ordering) and its on-disk FullPath.
+type fileKey struct{ rel, full string }
+
+// gatherFacts walks fs once and returns the per-file facts keyed by RelPath,
+// plus the walk order. Facts come from fc when non-nil (unchanged files skip
+// parsing); on a miss the file is parsed via ast and the facts are cached.
+func gatherFacts(fs *files.FileSet, ast *cache.Store, fc *FactStore) ([]fileKey, map[string]FileFacts, error) {
+	order := make([]fileKey, 0)
+	facts := make(map[string]FileFacts)
+	var nHits int
 
 	walkErr := fs.Walk(func(e files.FileEntry) error {
 		info, err := os.Stat(e.FullPath)
 		if err != nil {
 			return err
 		}
-		nFiles++
-		var facts FileFacts
-		ok := false
+		f, ok := FileFacts{}, false
 		if fc != nil {
-			facts, ok = fc.Get(e.FullPath, info)
+			f, ok = fc.Get(e.FullPath, info)
 		}
 		if ok {
 			nHits++
@@ -156,35 +170,45 @@ func Analyze(fs *files.FileSet, ast *cache.Store, fc *FactStore) (*SymbolTable, 
 			if err != nil {
 				return err
 			}
-			facts = extractFacts(tree, e.RelPath, e.FullPath)
+			f = extractFacts(tree, e.RelPath, e.FullPath)
 			if fc != nil {
-				_ = fc.Put(e.FullPath, info, tree.Src, facts)
+				_ = fc.Put(e.FullPath, info, tree.Src, f)
 			}
 		}
-		defs = append(defs, facts.Defs...)
-		aliases = append(aliases, facts.Aliases...)
-		refs = append(refs, facts.Refs...)
+		order = append(order, fileKey{rel: e.RelPath, full: e.FullPath})
+		facts[e.RelPath] = f
 		return nil
 	})
 	if walkErr != nil {
 		return nil, nil, walkErr
 	}
 	slog.Debug("validate: gathered facts",
-		"files", nFiles, "fact_hits", nHits, "fact_misses", nFiles-nHits,
-		"defs", len(defs), "aliases", len(aliases), "refs", len(refs))
+		"files", len(order), "fact_hits", nHits, "fact_misses", len(order)-nHits)
+	return order, facts, nil
+}
 
-	// Definitions first (duplicate-tracked), then aliases (gap-fill only).
+// mergeAndResolve builds the symbol table from the gathered facts (in walk
+// order, so duplicate "first" is stable) and resolves all references. Pure
+// in-memory; no disk I/O.
+func mergeAndResolve(order []fileKey, facts map[string]FileFacts) (*SymbolTable, []RefDiag) {
 	tbl := newSymbolTable()
-	for _, d := range defs {
-		tbl.add(d)
+	var refs []Ref
+	// Definitions first (duplicate-tracked), then aliases (gap-fill only).
+	for _, k := range order {
+		for _, d := range facts[k.rel].Defs {
+			tbl.add(d)
+		}
+		refs = append(refs, facts[k.rel].Refs...)
 	}
-	for _, a := range aliases {
-		tbl.addAlias(a.Kind, a.Name, a)
+	for _, k := range order {
+		for _, a := range facts[k.rel].Aliases {
+			tbl.addAlias(a.Kind, a.Name, a)
+		}
 	}
 	diags := resolveRefs(tbl, refs)
 	slog.Debug("validate: resolved references",
 		"symbols", tbl.Total(), "duplicates", len(tbl.Duplicates), "unresolved", len(diags))
-	return tbl, diags, nil
+	return tbl, diags
 }
 
 // parseEntry returns the parse tree for path, using the cache when available.
