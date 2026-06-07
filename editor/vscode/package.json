@@ -1,0 +1,59 @@
+{
+  "name": "pdxl",
+  "displayName": "pdxl — PDXScript",
+  "description": "Live diagnostics for Paradox script (CK3, …) via the pdxl language server.",
+  "version": "0.1.0",
+  "publisher": "unlomtrois",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/unlomtrois/pdxl"
+  },
+  "engines": {
+    "vscode": "^1.84.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters"
+  ],
+  "activationEvents": [
+    "workspaceContains:**/*.mod",
+    "workspaceContains:**/descriptor.mod",
+    "workspaceContains:pdxl.toml"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "pdxl",
+      "properties": {
+        "pdxl.serverPath": {
+          "type": "string",
+          "default": "pdxl",
+          "description": "Path to the pdxl executable (on PATH by default)."
+        },
+        "pdxl.gamePath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the vanilla game directory (e.g. .../Crusader Kings III/game). Used to resolve references against base-game definitions."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "package": "node esbuild.js --production",
+    "check-types": "tsc --noEmit",
+    "vsix": "npx --yes @vscode/vsce package"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.0",
+    "@types/vscode": "^1.84.0",
+    "esbuild": "^0.21.5",
+    "typescript": "^5.4.0"
+  }
+}
