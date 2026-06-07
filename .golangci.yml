@@ -17,3 +17,8 @@ linters:
           disabled: true
         - name: cognitive-complexity
           arguments: [20]
+  exclusions:
+    rules:
+      # Table-driven golden tests are naturally branchy; complexity there is noise.
+      - path: _test\.go
+        text: cognitive-complexity

@@ -39,7 +39,22 @@ func runLint(cmd *cobra.Command, args []string) error {
 		store, _ = cache.NewStore(cfg.Cache.Dir, cfg.Cache.LRUCap)
 	}
 
-	// Expand directory arguments into individual .txt file paths.
+	resolved, hasErrors := resolveLintPaths(args)
+	for _, path := range resolved {
+		if lintOne(path, store) {
+			hasErrors = true
+		}
+	}
+	if hasErrors {
+		os.Exit(1)
+	}
+	return nil
+}
+
+// resolveLintPaths expands each argument into .txt file paths (directories are
+// scanned with overlay/ignore rules). The bool reports whether any argument
+// could not be read.
+func resolveLintPaths(args []string) ([]string, bool) {
 	var resolved []string
 	hasErrors := false
 	for _, arg := range args {
@@ -49,70 +64,67 @@ func runLint(cmd *cobra.Command, args []string) error {
 			hasErrors = true
 			continue
 		}
-		if info.IsDir() {
-			var fs files.FileSet
-			fs.SetIgnore(cfg.Scan.IgnoreDirs, cfg.Scan.IgnoreFiles)
-			if err := fs.Add(arg, files.FileKindMod); err != nil {
-				fmt.Fprintf(os.Stderr, "%s: %v\n", arg, err)
-				hasErrors = true
-				continue
-			}
-			fs.Walk(func(e files.FileEntry) error {
-				resolved = append(resolved, e.FullPath)
-				return nil
-			})
-		} else {
+		if !info.IsDir() {
 			resolved = append(resolved, arg)
+			continue
 		}
-	}
-
-	for _, path := range resolved {
-		info, err := os.Stat(path)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s: %v\n", path, err)
+		var fs files.FileSet
+		fs.SetIgnore(cfg.Scan.IgnoreDirs, cfg.Scan.IgnoreFiles)
+		if err := fs.Add(arg, files.FileKindMod); err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", arg, err)
 			hasErrors = true
 			continue
 		}
+		_ = fs.Walk(func(e files.FileEntry) error {
+			resolved = append(resolved, e.FullPath)
+			return nil
+		})
+	}
+	return resolved, hasErrors
+}
 
-		var tree *v3.Tree
-		var diags []v3.Diagnostic
+// lintOne parses path (via store when non-nil) and prints its diagnostics.
+// It returns true if the file could not be read or contained an error.
+func lintOne(path string, store *cache.Store) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s: %v\n", path, err)
+		return true
+	}
 
+	var tree *v3.Tree
+	var diags []v3.Diagnostic
+	if store != nil {
+		tree, diags, _ = store.Get(path, info)
+		if tree != nil {
+			slog.Debug("cache hit", "path", path)
+		}
+	}
+	if tree == nil {
+		slog.Debug("cache miss, parsing", "path", path)
+		src, err := os.ReadFile(path)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", path, err)
+			return true
+		}
+		tree, diags = v3.Parse(path, src)
 		if store != nil {
-			tree, diags, _ = store.Get(path, info)
-			if tree != nil {
-				slog.Debug("cache hit", "path", path)
-			}
-		}
-
-		if tree == nil {
-			slog.Debug("cache miss, parsing", "path", path)
-			src, err := os.ReadFile(path)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "%s: %v\n", path, err)
-				hasErrors = true
-				continue
-			}
-			tree, diags = v3.Parse(path, src)
-			if store != nil {
-				_ = store.Put(path, info, src, tree, diags)
-			}
-		}
-
-		for _, d := range diags {
-			tok := lexer.Token{Start: d.Offset, End: d.Offset}
-			fmt.Printf("%s: %s\n", tok.FormatPosition(d.Filename, tree.Src), d.Msg)
-			if contextLines > 0 {
-				printContext(tree.Src, d.Offset, contextLines)
-			}
-			if d.Severity == v3.SeverityError {
-				hasErrors = true
-			}
+			_ = store.Put(path, info, src, tree, diags)
 		}
 	}
-	if hasErrors {
-		os.Exit(1)
+
+	hasError := false
+	for _, d := range diags {
+		tok := lexer.Token{Start: d.Offset, End: d.Offset}
+		fmt.Printf("%s: %s\n", tok.FormatPosition(d.Filename, tree.Src), d.Msg)
+		if contextLines > 0 {
+			printContext(tree.Src, d.Offset, contextLines)
+		}
+		if d.Severity == v3.SeverityError {
+			hasError = true
+		}
 	}
-	return nil
+	return hasError
 }
 
 // printContext prints up to n lines before and after the line containing offset.
