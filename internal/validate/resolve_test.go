@@ -96,6 +96,48 @@ func TestResolveEventReferences(t *testing.T) {
 	}
 }
 
+func TestResolveOnActionLists(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "events/test_events.txt",
+		"namespace = test\ntest.0001 = { }\n")
+	writeFile(t, dir, "common/on_action/00_oa.txt",
+		"real_oa = { }\n"+
+			"my_oa = {\n"+
+			"\tevents = { test.0001 test.9999 }\n"+ // loose: 1 undefined
+			"\tfirst_valid = { test.0001 }\n"+ // loose: ok
+			"\trandom_events = { 100 = test.0001  50 = test.8888  chance_to_happen = 10  0 = 0 }\n"+ // weighted: 1 undefined
+			"\ton_actions = { real_oa missing_oa }\n"+ // loose on_action: 1 undefined
+			"}\n")
+
+	diags := resolveDir(t, dir)
+
+	if len(diags) != 3 {
+		t.Fatalf("expected 3 diagnostics, got %d: %v", len(diags), diags)
+	}
+	joined := ""
+	for _, d := range diags {
+		joined += d.Msg + "\n"
+	}
+	for _, want := range []string{"test.9999", "test.8888", "missing_oa"} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("expected diagnostics to mention %q, got:\n%s", want, joined)
+		}
+	}
+}
+
+func TestResolveListRulesOnlyInOnActionFiles(t *testing.T) {
+	dir := t.TempDir()
+	// `events = { ... }` outside common/on_action/ must not be resolved.
+	writeFile(t, dir, "common/scripted_effects/00_e.txt",
+		"e = { events = { totally.9999 } }\n")
+
+	diags := resolveDir(t, dir)
+
+	if len(diags) != 0 {
+		t.Fatalf("expected no diagnostics outside on_action files, got %d: %v", len(diags), diags)
+	}
+}
+
 func TestResolveDefinedTraitOK(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "common/traits/00_traits.txt", "brave = { }\ncraven = { }\n")

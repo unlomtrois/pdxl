@@ -38,6 +38,26 @@ var ck3BlockIDRefRules = map[string]SymbolKind{
 	"trigger_event": KindEvent,
 }
 
+// ck3ListRefRules maps a key whose block holds loose value items that each
+// resolve to a kind, e.g. on_action `events = { ns.id ... }`. Applied only in
+// on_action files (these keys are ambiguous elsewhere).
+var ck3ListRefRules = map[string]SymbolKind{
+	"events":      KindEvent,
+	"first_valid": KindEvent,
+	"on_actions":  KindOnAction,
+}
+
+// ck3WeightedRefRules maps a key whose block holds WEIGHT = id fields (the value
+// is the reference), e.g. on_action `random_events = { 50 = ns.id ... }`.
+// Numeric values (weights, config like chance_to_happen) are skipped. Applied
+// only in on_action files.
+var ck3WeightedRefRules = map[string]SymbolKind{
+	"random_events": KindEvent,
+}
+
+// OnActionDir is the file prefix under which list/weighted reference rules apply.
+const OnActionDir = "common/on_action/"
+
 // ruleFor returns the def rule whose prefix matches relPath, if any.
 // relPath is the normalised (lowercase, forward-slash) FileSet key.
 func ruleFor(relPath string) (defRule, bool) {

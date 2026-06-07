@@ -28,14 +28,16 @@ func Resolve(tbl *SymbolTable, fs *files.FileSet, store *cache.Store) ([]RefDiag
 		if err != nil {
 			return err
 		}
-		resolveNode(tbl, tree, tree.Root(), e.FullPath, &diags)
+		onAction := strings.HasPrefix(e.RelPath, OnActionDir)
+		resolveNode(tbl, tree, tree.Root(), e.FullPath, onAction, &diags)
 		return nil
 	})
 	return diags, walkErr
 }
 
 // resolveNode recursively checks references in the subtree rooted at n.
-func resolveNode(tbl *SymbolTable, tree *v3.Tree, n v3.Node, path string, diags *[]RefDiag) {
+// onAction enables list/weighted reference rules that apply only in on_action files.
+func resolveNode(tbl *SymbolTable, tree *v3.Tree, n v3.Node, path string, onAction bool, diags *[]RefDiag) {
 	if n.Kind == v3.KindField {
 		children := tree.Children(n)
 		if len(children) == 2 {
@@ -51,11 +53,45 @@ func resolveNode(tbl *SymbolTable, tree *v3.Tree, n v3.Node, path string, diags 
 					checkRef(tbl, tree, kind, idNode, path, diags)
 				}
 			}
+			if onAction && value.Kind == v3.KindBlock {
+				// List form: key = { item item ... } — loose scalar items.
+				if kind, ok := ck3ListRefRules[key]; ok {
+					for _, item := range tree.Children(value) {
+						if item.Kind == v3.KindScalar {
+							checkRef(tbl, tree, kind, item, path, diags)
+						}
+					}
+				}
+				// Weighted form: key = { WEIGHT = id ... }. Only entries with a
+				// numeric key are weight->event mappings; word keys are config
+				// (chance_to_happen, chance_of_no_event). A numeric value (0)
+				// means "no event".
+				if kind, ok := ck3WeightedRefRules[key]; ok {
+					for _, f := range tree.Children(value) {
+						if f.Kind != v3.KindField {
+							continue
+						}
+						kids := tree.Children(f)
+						if len(kids) != 2 || kids[1].Kind != v3.KindScalar {
+							continue
+						}
+						if startsWithDigit(kids[0].Value(tree.Src)) && !startsWithDigit(kids[1].Value(tree.Src)) {
+							checkRef(tbl, tree, kind, kids[1], path, diags)
+						}
+					}
+				}
+			}
 		}
 	}
 	for _, child := range tree.Children(n) {
-		resolveNode(tbl, tree, child, path, diags)
+		resolveNode(tbl, tree, child, path, onAction, diags)
 	}
+}
+
+// startsWithDigit reports whether s begins with an ASCII digit (a weight or
+// config number; event IDs start with a namespace letter).
+func startsWithDigit(s string) bool {
+	return s != "" && s[0] >= '0' && s[0] <= '9'
 }
 
 // checkRef resolves a single scalar value node against the symbol table for the
