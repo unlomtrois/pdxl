@@ -216,7 +216,7 @@ func (p *parser) errorf(format string, args ...any) *ParseError {
 func isAtom(tag lexer.Tag) bool {
 	switch tag {
 	case lexer.TagIdentifier, lexer.TagLiteralNumber, lexer.TagLiteralString,
-		lexer.TagLiteralBoolean, lexer.TagMinus:
+		lexer.TagLiteralBoolean, lexer.TagLiteralDate, lexer.TagMinus:
 		return true
 	}
 	return false

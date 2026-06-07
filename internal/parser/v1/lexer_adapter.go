@@ -31,6 +31,7 @@ func (pdxlDefinition) Symbols() map[string]participleLexer.TokenType {
 		"Number":        tokenType(pdxlLexer.TagLiteralNumber),
 		"String":        tokenType(pdxlLexer.TagLiteralString),
 		"Boolean":       tokenType(pdxlLexer.TagLiteralBoolean),
+		"Date":          tokenType(pdxlLexer.TagLiteralDate),
 		"LBrace":        tokenType(pdxlLexer.TagLBrace),
 		"RBrace":        tokenType(pdxlLexer.TagRBrace),
 		"LBracket":      tokenType(pdxlLexer.TagLBracket),

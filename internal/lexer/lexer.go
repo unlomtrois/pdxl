@@ -209,18 +209,24 @@ func (l *Lexer) lexNumber() Tag {
 		l.advance()
 	}
 
-	if l.peek() == '.' {
-		next := l.peekNext()
-		if isDigit(byte(next)) {
-			l.advance() // consume '.'
-			for isDigit(byte(l.peek())) {
-				l.advance()
-			}
-		} else if !isIdentifierStart(next) {
-			// trailing-dot float, e.g. "1." — but keep "N.identifier" as a
-			// scope chain (number, dot, identifier).
-			l.advance() // consume '.'
+	// Consume one or more ".digits" groups. One group is a decimal (1099.1);
+	// two or more make a date literal (1099.1.1).
+	dots := 0
+	for l.peek() == '.' && isDigit(byte(l.peekNext())) {
+		l.advance() // consume '.'
+		for isDigit(byte(l.peek())) {
+			l.advance()
 		}
+		dots++
+	}
+	if dots >= 2 {
+		return literal_date
+	}
+
+	if dots == 0 && l.peek() == '.' && !isIdentifierStart(l.peekNext()) {
+		// trailing-dot float, e.g. "1." — but keep "N.identifier" as a
+		// scope chain (number, dot, identifier).
+		l.advance() // consume '.'
 	}
 
 	return literal_number

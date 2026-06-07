@@ -57,7 +57,7 @@ func (*Block) value() {}
 // Parts accumulates all constituent tokens; Value() joins them back.
 type Scalar struct {
 	Pos   participleLexer.Position
-	Parts []string `parser:"( @Minus )? @(Identifier | Number | Boolean | String) ( @(Colon | Dot | Pipe) @(Identifier | Number) )*"`
+	Parts []string `parser:"( @Minus )? @(Identifier | Number | Boolean | String | Date) ( @(Colon | Dot | Pipe) @(Identifier | Number) )*"`
 }
 
 // Value returns the scalar as a single concatenated string.

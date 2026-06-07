@@ -122,12 +122,11 @@ func TestDotFloats(t *testing.T) {
 	})
 }
 
-func TestDateLiteralNotSplitByDotFloat(t *testing.T) {
-	// A '.' after a digit stays a separator: the date 1099.1.1 must not turn
-	// its trailing ".1" into a separate leading-dot float.
+func TestDateLiteral(t *testing.T) {
+	// Y.M.D dates are a single token, not number-dot-number.
 	source := []byte(`creation_date = 1099.1.1`)
 	testTokenize(t, source, []Tag{
-		identifier, equal, literal_number, dot, literal_number,
+		identifier, equal, literal_date,
 	})
 }
 

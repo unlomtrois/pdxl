@@ -26,6 +26,7 @@ const (
 	literal_number  // 108
 	literal_string  // "something.dds"
 	literal_boolean // yes / no
+	literal_date    // 1099.1.1
 
 	// Delimiters
 	l_brace   // {
@@ -81,6 +82,8 @@ func (t Tag) String() string {
 		return "literal_string"
 	case literal_boolean:
 		return "literal_boolean"
+	case literal_date:
+		return "literal_date"
 	case l_brace:
 		return "l_brace"
 	case r_brace:
@@ -148,6 +151,7 @@ const (
 	TagLiteralNumber = literal_number
 	TagLiteralString = literal_string
 	TagLiteralBoolean = literal_boolean
+	TagLiteralDate   = literal_date
 	TagLBrace        = l_brace
 	TagRBrace        = r_brace
 	TagLBracket      = l_bracket
