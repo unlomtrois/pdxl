@@ -5,6 +5,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -28,10 +30,18 @@ var cacheClearCmd = &cobra.Command{
 	RunE:  runCacheClear,
 }
 
+var cacheSizeDetailed bool
+
 func init() {
+	cacheSizeCmd.Flags().BoolVar(&cacheSizeDetailed, "detailed", false, "break down by sub-cache (ast vs symbols)")
 	cacheCmd.AddCommand(cacheSizeCmd)
 	cacheCmd.AddCommand(cacheClearCmd)
 	rootCmd.AddCommand(cacheCmd)
+}
+
+type cacheGroup struct {
+	entries int
+	size    int64
 }
 
 func runCacheSize(_ *cobra.Command, _ []string) error {
@@ -39,6 +49,7 @@ func runCacheSize(_ *cobra.Command, _ []string) error {
 
 	var entries int
 	var total int64
+	groups := map[string]*cacheGroup{}
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -52,6 +63,16 @@ func runCacheSize(_ *cobra.Command, _ []string) error {
 		}
 		entries++
 		total += info.Size()
+		if cacheSizeDetailed {
+			name := groupOf(dir, path)
+			g := groups[name]
+			if g == nil {
+				g = &cacheGroup{}
+				groups[name] = g
+			}
+			g.entries++
+			g.size += info.Size()
+		}
 		return nil
 	})
 	if os.IsNotExist(err) {
@@ -63,9 +84,34 @@ func runCacheSize(_ *cobra.Command, _ []string) error {
 	}
 
 	fmt.Printf("%s\n", dir)
+	if cacheSizeDetailed {
+		names := make([]string, 0, len(groups))
+		for n := range groups {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		for _, n := range names {
+			g := groups[n]
+			fmt.Printf("  %-10s %6d entries  %s\n", n, g.entries, humanBytes(g.size))
+		}
+	}
 	fmt.Printf("entries  %d\n", entries)
 	fmt.Printf("size     %s\n", humanBytes(total))
 	return nil
+}
+
+// groupOf labels a cache entry by its first path segment under dir: entries
+// directly in dir are the AST cache ("ast"); a subdirectory (e.g. "symbols")
+// names its own sub-cache.
+func groupOf(dir, path string) string {
+	rel, err := filepath.Rel(dir, path)
+	if err != nil {
+		return "ast"
+	}
+	if i := strings.IndexRune(rel, filepath.Separator); i >= 0 {
+		return rel[:i]
+	}
+	return "ast"
 }
 
 func runCacheClear(_ *cobra.Command, _ []string) error {
