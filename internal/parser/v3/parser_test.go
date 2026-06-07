@@ -120,6 +120,49 @@ func TestScopeChainValue(t *testing.T) {
 	}
 }
 
+func TestScriptValueDefinition(t *testing.T) {
+	tree := mustParse(t, []byte(`@my_const = 0.15`))
+	field := tree.Children(tree.Root())[0]
+	if field.Kind != KindField {
+		t.Fatalf("expected KindField")
+	}
+	if field.Value(tree.Src) != "@my_const" {
+		t.Fatalf("expected key '@my_const', got %q", field.Value(tree.Src))
+	}
+}
+
+func TestScriptValueReference(t *testing.T) {
+	tree := mustParse(t, []byte(`key = @my_const`))
+	field := tree.Children(tree.Root())[0]
+	val := tree.Children(field)[1]
+	if val.Value(tree.Src) != "@my_const" {
+		t.Fatalf("expected value '@my_const', got %q", val.Value(tree.Src))
+	}
+}
+
+func TestInlineMathValue(t *testing.T) {
+	tree := mustParse(t, []byte(`key = @[ my_const * -1 ]`))
+	field := tree.Children(tree.Root())[0]
+	val := tree.Children(field)[1]
+	if val.Value(tree.Src) != "@[ my_const * -1 ]" {
+		t.Fatalf("expected inline-math value, got %q", val.Value(tree.Src))
+	}
+}
+
+// Inline math as a field key is structurally accepted (script_math is an atom,
+// and atoms may serve as keys). It is NOT semantically valid CK3 — rejecting it
+// belongs to a future validator layer, not the structural parser.
+func TestInlineMathAsKeyIsStructurallyValid(t *testing.T) {
+	tree := mustParse(t, []byte(`@[a * 2] = value`))
+	field := tree.Children(tree.Root())[0]
+	if field.Kind != KindField {
+		t.Fatalf("expected KindField")
+	}
+	if field.Value(tree.Src) != "@[a * 2]" {
+		t.Fatalf("expected key '@[a * 2]', got %q", field.Value(tree.Src))
+	}
+}
+
 // ── Recovery tests ────────────────────────────────────────────────────────────
 
 func TestUnclosedBlock(t *testing.T) {
