@@ -177,8 +177,19 @@ func (l *Lexer) Next() *Token {
 
 // lexIdentifier scans an identifier
 func (l *Lexer) lexIdentifier() Tag {
-	for !l.isAtEnd() && isIdentifierChar(l.peek()) {
-		l.advance()
+	for !l.isAtEnd() {
+		if isIdentifierChar(l.peek()) {
+			l.advance()
+			continue
+		}
+		// A hyphen is part of the identifier only when flanked by identifier
+		// chars (e.g. title keys like c_anti-atlas). A leading or spaced '-'
+		// remains a minus (negative number / subtraction).
+		if l.peek() == '-' && isIdentifierChar(l.peekNext()) {
+			l.advance() // consume '-'
+			continue
+		}
+		break
 	}
 	return identifier
 }

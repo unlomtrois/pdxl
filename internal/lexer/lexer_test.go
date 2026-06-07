@@ -89,6 +89,29 @@ key2 = @some_var`)
 	})
 }
 
+func TestHyphenatedIdentifier(t *testing.T) {
+	// CK3 title keys contain hyphens, e.g. c_anti-atlas.
+	source := []byte(`c_anti-atlas = { x = 1 }`)
+	testTokenize(t, source, []Tag{
+		identifier, equal, l_brace,
+		identifier, equal, literal_number,
+		r_brace,
+	})
+}
+
+func TestHyphenNotAbsorbedAsMinus(t *testing.T) {
+	// A leading '-' before a value is still a minus (negative number),
+	// and a spaced '-' is still subtraction — not part of an identifier.
+	source := []byte(`key = -1
+diff = a - b`)
+	testTokenize(t, source, []Tag{
+		// key = -1
+		identifier, equal, minus, literal_number,
+		// diff = a - b
+		identifier, equal, identifier, minus, identifier,
+	})
+}
+
 func TestScriptValues(t *testing.T) {
 	source := []byte(`@my_const = 0.15
 key = @my_const
