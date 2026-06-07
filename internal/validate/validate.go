@@ -23,6 +23,7 @@ const (
 	KindEvent
 	KindDecision
 	KindOnAction
+	KindCharacter
 )
 
 // String returns the kind name used in reports.
@@ -40,6 +41,8 @@ func (k SymbolKind) String() string {
 		return "decision"
 	case KindOnAction:
 		return "on_action"
+	case KindCharacter:
+		return "character"
 	default:
 		return "unknown"
 	}
@@ -48,7 +51,7 @@ func (k SymbolKind) String() string {
 // Kinds lists every SymbolKind in a stable order, for iteration in reports.
 var Kinds = []SymbolKind{
 	KindScriptedTrigger, KindScriptedEffect, KindTrait,
-	KindEvent, KindDecision, KindOnAction,
+	KindEvent, KindDecision, KindOnAction, KindCharacter,
 }
 
 // Symbol is a single definition found in the project.

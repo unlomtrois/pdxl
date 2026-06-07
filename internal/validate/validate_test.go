@@ -61,6 +61,21 @@ func TestBuildCollectsDefinitions(t *testing.T) {
 	}
 }
 
+func TestBuildCollectsCharacters(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "history/characters/afar.txt",
+		"145665 = { name = \"Foo\" }\n145666 = { name = \"Bar\" }\n")
+
+	tbl := buildDir(t, dir)
+
+	if got := tbl.Count(KindCharacter); got != 2 {
+		t.Errorf("character count: got %d, want 2", got)
+	}
+	if _, ok := tbl.Lookup(KindCharacter, "145665"); !ok {
+		t.Error("expected character 145665 to be indexed")
+	}
+}
+
 func TestBuildCapturesMacroParams(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "common/scripted_triggers/00_t.txt",

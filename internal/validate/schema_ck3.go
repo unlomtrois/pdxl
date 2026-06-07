@@ -20,6 +20,7 @@ var ck3DefRules = []defRule{
 	{"common/decisions/", KindDecision},
 	{"common/on_action/", KindOnAction},
 	{"events/", KindEvent},
+	{"history/characters/", KindCharacter},
 }
 
 // ruleFor returns the def rule whose prefix matches relPath, if any.
