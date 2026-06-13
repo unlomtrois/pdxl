@@ -8,7 +8,9 @@
 package lsp
 
 import (
+	"fmt"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -41,9 +43,10 @@ type Server struct {
 	initMod  string // mod dir from initialize
 
 	mu     sync.Mutex
+	notify glsp.NotifyFunc       // set from initialized; used when re-publishing async
 	proj   *validate.Project
-	docs   map[string][]byte       // document URI -> current text
-	timers map[string]*time.Timer  // debounce timer per URI
+	docs   map[string][]byte     // document URI -> current text
+	timers map[string]*time.Timer // debounce timer per URI
 }
 
 // NewServer creates a server with the given options.
@@ -57,18 +60,22 @@ func NewServer(opts Options) *Server {
 
 // Run serves the LSP over stdio until the connection closes.
 func (s *Server) Run() error {
+	slog.Info("lsp: server starting")
 	handler := protocol.Handler{
-		Initialize:            s.initialize,
-		Initialized:           s.initialized,
-		Shutdown:              func(*glsp.Context) error { return nil },
-		SetTrace:              func(*glsp.Context, *protocol.SetTraceParams) error { return nil },
-		TextDocumentDidOpen:   s.didOpen,
-		TextDocumentDidChange: s.didChange,
-		TextDocumentDidSave:   s.didSave,
-		TextDocumentDidClose:  s.didClose,
+		Initialize:             s.initialize,
+		Initialized:            s.initialized,
+		Shutdown:               func(*glsp.Context) error { return nil },
+		SetTrace:               func(*glsp.Context, *protocol.SetTraceParams) error { return nil },
+		TextDocumentDidOpen:    s.didOpen,
+		TextDocumentDidChange:  s.didChange,
+		TextDocumentDidSave:    s.didSave,
+		TextDocumentDidClose:   s.didClose,
+		TextDocumentDefinition: s.definition,
 	}
 	srv := glspserv.NewServer(&handler, "pdxl", false)
-	return srv.RunStdio()
+	err := srv.RunStdio()
+	slog.Info("lsp: server stopped")
+	return err
 }
 
 func (s *Server) initialize(_ *glsp.Context, params *protocol.InitializeParams) (any, error) {
@@ -86,6 +93,20 @@ func (s *Server) initialize(_ *glsp.Context, params *protocol.InitializeParams) 
 		modDir = uriToPath(*params.RootURI)
 	}
 
+	clientName, clientVersion := "", ""
+	if params.ClientInfo != nil {
+		clientName = params.ClientInfo.Name
+		if params.ClientInfo.Version != nil {
+			clientVersion = *params.ClientInfo.Version
+		}
+	}
+	slog.Info("lsp: initialize",
+		"game", game,
+		"mod", modDir,
+		"clientName", clientName,
+		"clientVersion", clientVersion,
+	)
+
 	// Store for the async build in initialized; we must respond to initialize
 	// quickly per the LSP spec (~10s timeout on some clients).
 	s.initGame = game
@@ -94,24 +115,53 @@ func (s *Server) initialize(_ *glsp.Context, params *protocol.InitializeParams) 
 	syncFull := protocol.TextDocumentSyncKindFull
 	name := "pdxl"
 	return protocol.InitializeResult{
-		Capabilities: protocol.ServerCapabilities{TextDocumentSync: syncFull},
-		ServerInfo:   &protocol.InitializeResultServerInfo{Name: name},
+		Capabilities: protocol.ServerCapabilities{
+			TextDocumentSync:   syncFull,
+			DefinitionProvider: true,
+		},
+		ServerInfo: &protocol.InitializeResultServerInfo{Name: name},
 	}, nil
 }
 
 // initialized is called by the client after a successful initialize
 // handshake. Builds the project asynchronously (not in initialize) so the
-// client doesn't time out on large game corpora.
-func (s *Server) initialized(_ *glsp.Context, _ *protocol.InitializedParams) error {
+// client doesn't time out on large game corpora. After the build completes,
+// re-publishes diagnostics for any documents that were opened while the
+// project was building.
+func (s *Server) initialized(ctx *glsp.Context, _ *protocol.InitializedParams) error {
+	s.mu.Lock()
+	s.notify = ctx.Notify
+	s.mu.Unlock()
+
 	go func() {
 		slog.Info("lsp: building project", "game", s.initGame, "mod", s.initMod)
 		if err := s.buildProject(s.initGame, s.initMod); err != nil {
 			slog.Error("lsp: failed to build project", "err", err)
 			return
 		}
+
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		slog.Info("lsp: project ready", "symbols", s.proj.Table().Total(), "diagnostics", len(s.proj.Diags()))
+		slog.Info("lsp: project ready",
+			"symbols", s.proj.Table().Total(),
+			"diagnostics", len(s.proj.Diags()),
+			"openDocs", len(s.docs),
+		)
+
+		// Re-analyze and publish diagnostics for documents opened while the
+		// project was still building (didOpen would have skipped them).
+		for uri, text := range s.docs {
+			if err := s.proj.UpdateSource(uriToPath(uri), text); err != nil {
+				slog.Warn("lsp: post-build UpdateSource failed", "uri", uri, "err", err)
+				continue
+			}
+		}
+		if len(s.docs) > 0 {
+			slog.Debug("lsp: re-publishing after build", "openDocs", len(s.docs))
+			for uri, text := range s.docs {
+				s.publishDiagnostics(s.notify, uri, text)
+			}
+		}
 	}()
 	return nil
 }
@@ -146,12 +196,12 @@ func (s *Server) buildProject(game, modDir string) error {
 	s.mu.Lock()
 	s.proj = proj
 	s.mu.Unlock()
-	slog.Info("lsp: project ready", "symbols", proj.Table().Total(), "diagnostics", len(proj.Diags()))
 	return nil
 }
 
 func (s *Server) didOpen(ctx *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
 	uri := params.TextDocument.URI
+	slog.Debug("lsp: didOpen", "uri", uri)
 	s.mu.Lock()
 	s.docs[uri] = []byte(params.TextDocument.Text)
 	s.mu.Unlock()
@@ -183,6 +233,7 @@ func (s *Server) didSave(ctx *glsp.Context, params *protocol.DidSaveTextDocument
 
 func (s *Server) didClose(ctx *glsp.Context, params *protocol.DidCloseTextDocumentParams) error {
 	uri := params.TextDocument.URI
+	slog.Debug("lsp: didClose", "uri", uri)
 	s.mu.Lock()
 	delete(s.docs, uri)
 	if t := s.timers[uri]; t != nil {
@@ -201,22 +252,30 @@ func (s *Server) didClose(ctx *glsp.Context, params *protocol.DidCloseTextDocume
 // republishes diagnostics for every open document (an edit to a definition can
 // change references in other open files).
 func (s *Server) analyzeAndPublish(notify glsp.NotifyFunc, changedURI string) {
+	slog.Debug("lsp: analyzing", "uri", changedURI)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.proj == nil {
+		slog.Debug("lsp: skipping analysis, project not ready", "uri", changedURI)
 		return
 	}
 	if text, ok := s.docs[changedURI]; ok {
-		_ = s.proj.UpdateSource(uriToPath(changedURI), text)
+		if err := s.proj.UpdateSource(uriToPath(changedURI), text); err != nil {
+			slog.Warn("lsp: UpdateSource failed", "uri", changedURI, "err", err)
+		}
 	}
+	totalDiags := 0
 	for uri, text := range s.docs {
-		s.publish(notify, uri, text)
+		diags := s.publishDiagnostics(notify, uri, text)
+		totalDiags += diags
 	}
+	slog.Debug("lsp: analysis complete", "changed", changedURI, "openDocs", len(s.docs), "diagsPublished", totalDiags)
 }
 
-// publish sends diagnostics for one open document, converting validator byte
-// ranges to UTF-16 LSP ranges using that document's text.
-func (s *Server) publish(notify glsp.NotifyFunc, uri string, text []byte) {
+// publishDiagnostics sends diagnostics for one open document, converting
+// validator byte ranges to UTF-16 LSP ranges using that document's text.
+// Returns the number of diagnostics published.
+func (s *Server) publishDiagnostics(notify glsp.NotifyFunc, uri string, text []byte) int {
 	path := uriToPath(uri)
 	severity := protocol.DiagnosticSeverityError
 	source := "pdxl"
@@ -235,6 +294,7 @@ func (s *Server) publish(notify glsp.NotifyFunc, uri string, text []byte) {
 	notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
 		URI: uri, Diagnostics: diags,
 	})
+	return len(diags)
 }
 
 // wholeText extracts the full document text from a Full-sync change event.
@@ -249,4 +309,105 @@ func wholeText(changes []any) (string, bool) {
 		return c.Text, true
 	}
 	return "", false
+}
+
+// definition handles textDocument/definition requests. It finds the reference
+// at the cursor position, looks up its definition in the symbol table, and
+// returns the definition location.
+func (s *Server) definition(_ *glsp.Context, params *protocol.DefinitionParams) (any, error) {
+	path := uriToPath(params.TextDocument.URI)
+	slog.Debug("lsp: definition request", "uri", params.TextDocument.URI,
+		"line", params.Position.Line, "char", params.Position.Character)
+
+	s.mu.Lock()
+	if s.proj == nil {
+		s.mu.Unlock()
+		slog.Debug("lsp: definition skipped, project not ready")
+		return nil, nil
+	}
+	facts, ok := s.proj.FactsAt(path)
+	s.mu.Unlock()
+	if !ok {
+		slog.Debug("lsp: definition, file not in project", "path", path)
+		return nil, nil
+	}
+
+	// Get the source text (prefer in-memory buffer).
+	src, err := s.readFile(path)
+	if err != nil {
+		slog.Warn("lsp: definition, failed to read source", "path", path, "err", err)
+		return nil, nil
+	}
+
+	off := positionToOffset(src, params.Position)
+
+	// Find the reference that spans the cursor position.
+	var ref *validate.Ref
+	for i := range facts.Refs {
+		r := &facts.Refs[i]
+		if r.Start <= off && off < r.End {
+			ref = r
+			break
+		}
+	}
+	if ref == nil {
+		slog.Debug("lsp: definition, no reference at position",
+			"path", path, "offset", off)
+		return nil, nil
+	}
+
+	slog.Debug("lsp: definition, found reference",
+		"kind", ref.Kind.String(), "name", ref.Name,
+		"range", fmt.Sprintf("%d-%d", ref.Start, ref.End))
+
+	// Look up the definition.
+	s.mu.Lock()
+	sym, found := s.proj.Table().Lookup(ref.Kind, ref.Name)
+	s.mu.Unlock()
+	if !found {
+		slog.Debug("lsp: definition, unresolved",
+			"kind", ref.Kind.String(), "name", ref.Name)
+		return nil, nil
+	}
+
+	// Resolve the definition's relative path to a full path.
+	defFull, ok := s.proj.RelToFull(sym.File)
+	if !ok {
+		slog.Warn("lsp: definition, failed to resolve rel path",
+			"relPath", sym.File)
+		return nil, nil
+	}
+
+	// Read the definition file to convert byte offsets to LSP positions.
+	defSrc, err := s.readFile(defFull)
+	if err != nil {
+		slog.Warn("lsp: definition, failed to read definition file",
+			"path", defFull, "err", err)
+		return nil, nil
+	}
+
+	slog.Debug("lsp: definition, resolved",
+		"name", sym.Name, "kind", sym.Kind.String(),
+		"file", sym.File, "offset", sym.Offset)
+
+	return protocol.Location{
+		URI: pathToURI(defFull),
+		Range: protocol.Range{
+			Start: offsetToPosition(defSrc, sym.Offset),
+			End:   offsetToPosition(defSrc, sym.EndOffset),
+		},
+	}, nil
+}
+
+// readFile returns the content of the file at path, preferring the in-memory
+// editor buffer when available, falling back to disk.
+func (s *Server) readFile(path string) ([]byte, error) {
+	uri := pathToURI(path)
+	s.mu.Lock()
+	if text, ok := s.docs[uri]; ok {
+		s.mu.Unlock()
+		return text, nil
+	}
+	s.mu.Unlock()
+	return os.ReadFile(path)
 }

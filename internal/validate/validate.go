@@ -57,11 +57,12 @@ var Kinds = []SymbolKind{
 
 // Symbol is a single definition found in the project.
 type Symbol struct {
-	Name   string
-	Kind   SymbolKind
-	File   string   // FileSet RelPath where it was defined
-	Offset int      // byte offset of the definition (for diagnostics)
-	Params []string // sorted, deduped $PARAM$ names found in the body (macros)
+	Name      string
+	Kind      SymbolKind
+	File      string   // FileSet RelPath where it was defined
+	Offset    int      // byte offset of the definition field node
+	EndOffset int      // byte offset just past the definition name (SrcEnd of the key scalar)
+	Params    []string // sorted, deduped $PARAM$ names found in the body (macros)
 }
 
 // Duplicate records a redefinition of an already-defined symbol.

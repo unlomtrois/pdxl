@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { workspace } from "vscode";
 import {
   LanguageClient,
   LanguageClientOptions,
@@ -14,22 +15,8 @@ function log(msg: string): void {
   output?.appendLine(`[${new Date().toISOString()}] ${msg}`);
 }
 
-// PDXScript lives in generic .txt files, so we attach by directory rather than
-// claiming the .txt language globally.
-const documentSelector = [
-  "common",
-  "events",
-  "history",
-  "gfx",
-  "gui",
-  "localization",
-].map((dir) => ({
-  scheme: "file",
-  pattern: `**/${dir}/**/*.txt`,
-}));
-
 export function activate(context: vscode.ExtensionContext): void {
-  output = vscode.window.createOutputChannel("pdxl", { log: true });
+  output = vscode.window.createOutputChannel("pdxl (client)", { log: true });
   context.subscriptions.push(output);
 
   log("pdxl extension activating...");
@@ -40,18 +27,24 @@ export function activate(context: vscode.ExtensionContext): void {
 
   log(`serverPath: ${serverPath}`);
   log(`gamePath: ${gamePath || "(not set)"}`);
-  log(`documentSelector patterns: ${documentSelector.map((s) => s.pattern).join(", ")}`);
 
   const serverOptions: ServerOptions = {
     run: { command: serverPath, args: ["lsp"], transport: TransportKind.stdio },
-    debug: { command: serverPath, args: ["lsp"], transport: TransportKind.stdio },
+    debug: {
+      command: serverPath,
+      args: ["lsp"],
+      transport: TransportKind.stdio,
+    },
   };
 
   const clientOptions: LanguageClientOptions = {
-    documentSelector,
+    documentSelector: [{ scheme: "file", pattern: "**/*.txt" }],
     initializationOptions: { gamePath },
-    // Surface server stderr (slog) in the "pdxl" output channel.
-    outputChannelName: "pdxl",
+    synchronize: {
+      fileEvents: workspace.createFileSystemWatcher("**/*.txt"),
+    },
+    // Surface server stderr (slog) in the "pdxl (server)" output channel.
+    outputChannelName: "pdxl (server)",
   };
 
   client = new LanguageClient(

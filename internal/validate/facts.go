@@ -64,18 +64,19 @@ func harvestDef(tree *v3.Tree, node v3.Node, rule defRule, relPath string, f *Fi
 	seen := make(map[string]struct{})
 	collectParams(tree, value, seen)
 	f.Defs = append(f.Defs, Symbol{
-		Name:   key.Value(tree.Src),
-		Kind:   rule.kind,
-		File:   relPath,
-		Offset: int(node.SrcStart),
-		Params: sortedKeys(seen),
+		Name:      key.Value(tree.Src),
+		Kind:      rule.kind,
+		File:      relPath,
+		Offset:    int(node.SrcStart),
+		EndOffset: int(key.SrcEnd),
+		Params:    sortedKeys(seen),
 	})
 
 	// CK3 traits expose group / group_equivalence names as valid refs.
 	if rule.kind == KindTrait {
 		for _, gk := range []string{"group", "group_equivalence"} {
 			if g := directFieldValue(tree, value, gk); g != "" {
-				f.Aliases = append(f.Aliases, Symbol{Name: g, Kind: KindTrait, File: relPath, Offset: int(node.SrcStart)})
+				f.Aliases = append(f.Aliases, Symbol{Name: g, Kind: KindTrait, File: relPath, Offset: int(node.SrcStart), EndOffset: int(node.SrcStart)})
 			}
 		}
 	}

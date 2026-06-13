@@ -102,6 +102,27 @@ func (p *Project) FileDiags(fullPath string) []RefDiag {
 	return out
 }
 
+// FactsAt returns the facts for a tracked file, or false if fullPath is not part
+// of the project.
+func (p *Project) FactsAt(fullPath string) (FileFacts, bool) {
+	key, ok := p.keyFor(fullPath)
+	if !ok {
+		return FileFacts{}, false
+	}
+	return p.facts[key.rel], true
+}
+
+// RelToFull resolves a FileSet RelPath back to an on-disk full path, or false if
+// no tracked file matches.
+func (p *Project) RelToFull(relPath string) (string, bool) {
+	for _, k := range p.order {
+		if k.rel == relPath {
+			return k.full, true
+		}
+	}
+	return "", false
+}
+
 // keyFor finds the tracked fileKey whose on-disk path matches fullPath
 // (compared as cleaned absolute paths).
 func (p *Project) keyFor(fullPath string) (fileKey, bool) {
