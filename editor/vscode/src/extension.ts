@@ -1,5 +1,4 @@
 import * as vscode from "vscode";
-import { workspace } from "vscode";
 import {
   LanguageClient,
   LanguageClientOptions,
@@ -40,9 +39,6 @@ export function activate(context: vscode.ExtensionContext): void {
   const clientOptions: LanguageClientOptions = {
     documentSelector: [{ scheme: "file", pattern: "**/*.txt" }],
     initializationOptions: { gamePath },
-    synchronize: {
-      fileEvents: workspace.createFileSystemWatcher("**/*.txt"),
-    },
     // Surface server stderr (slog) in the "pdxl (server)" output channel.
     outputChannelName: "pdxl (server)",
   };
