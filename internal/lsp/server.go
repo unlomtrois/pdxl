@@ -37,6 +37,9 @@ type Options struct {
 type Server struct {
 	opts Options
 
+	initGame string // game path from initialize (for deferred build)
+	initMod  string // mod dir from initialize
+
 	mu     sync.Mutex
 	proj   *validate.Project
 	docs   map[string][]byte       // document URI -> current text
@@ -56,7 +59,7 @@ func NewServer(opts Options) *Server {
 func (s *Server) Run() error {
 	handler := protocol.Handler{
 		Initialize:            s.initialize,
-		Initialized:           func(*glsp.Context, *protocol.InitializedParams) error { return nil },
+		Initialized:           s.initialized,
 		Shutdown:              func(*glsp.Context) error { return nil },
 		SetTrace:              func(*glsp.Context, *protocol.SetTraceParams) error { return nil },
 		TextDocumentDidOpen:   s.didOpen,
@@ -83,10 +86,10 @@ func (s *Server) initialize(_ *glsp.Context, params *protocol.InitializeParams) 
 		modDir = uriToPath(*params.RootURI)
 	}
 
-	slog.Info("lsp: initializing", "game", game, "mod", modDir)
-	if err := s.buildProject(game, modDir); err != nil {
-		slog.Error("lsp: failed to build project", "err", err)
-	}
+	// Store for the async build in initialized; we must respond to initialize
+	// quickly per the LSP spec (~10s timeout on some clients).
+	s.initGame = game
+	s.initMod = modDir
 
 	syncFull := protocol.TextDocumentSyncKindFull
 	name := "pdxl"
@@ -94,6 +97,23 @@ func (s *Server) initialize(_ *glsp.Context, params *protocol.InitializeParams) 
 		Capabilities: protocol.ServerCapabilities{TextDocumentSync: syncFull},
 		ServerInfo:   &protocol.InitializeResultServerInfo{Name: name},
 	}, nil
+}
+
+// initialized is called by the client after a successful initialize
+// handshake. Builds the project asynchronously (not in initialize) so the
+// client doesn't time out on large game corpora.
+func (s *Server) initialized(_ *glsp.Context, _ *protocol.InitializedParams) error {
+	go func() {
+		slog.Info("lsp: building project", "game", s.initGame, "mod", s.initMod)
+		if err := s.buildProject(s.initGame, s.initMod); err != nil {
+			slog.Error("lsp: failed to build project", "err", err)
+			return
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		slog.Info("lsp: project ready", "symbols", s.proj.Table().Total(), "diagnostics", len(s.proj.Diags()))
+	}()
+	return nil
 }
 
 // buildProject scans game (vanilla) + modDir (mod) and builds the in-memory
