@@ -23,15 +23,19 @@ export function activate(context: vscode.ExtensionContext): void {
   const config = vscode.workspace.getConfiguration("pdxl");
   const serverPath = config.get<string>("serverPath", "pdxl");
   const gamePath = config.get<string>("gamePath", "");
+  const logLevel = config.get<string>("logLevel", "info");
 
   log(`serverPath: ${serverPath}`);
   log(`gamePath: ${gamePath || "(not set)"}`);
+  log(`logLevel: ${logLevel}`);
+
+  const serverArgs = ["lsp", "--log-level", logLevel];
 
   const serverOptions: ServerOptions = {
-    run: { command: serverPath, args: ["lsp"], transport: TransportKind.stdio },
+    run: { command: serverPath, args: serverArgs, transport: TransportKind.stdio },
     debug: {
       command: serverPath,
-      args: ["lsp"],
+      args: serverArgs,
       transport: TransportKind.stdio,
     },
   };

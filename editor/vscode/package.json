@@ -35,6 +35,12 @@
           "type": "string",
           "default": "",
           "description": "Path to the vanilla game directory (e.g. .../Crusader Kings III/game). Used to resolve references against base-game definitions."
+        },
+        "pdxl.logLevel": {
+          "type": "string",
+          "default": "info",
+          "enum": ["debug", "info", "warn", "error"],
+          "description": "Log level for the pdxl language server."
         }
       }
     }
