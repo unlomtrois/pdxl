@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,19 +43,21 @@ type Server struct {
 	initGame string // game path from initialize (for deferred build)
 	initMod  string // mod dir from initialize
 
-	mu     sync.Mutex
-	notify glsp.NotifyFunc       // set from initialized; used when re-publishing async
-	proj   *validate.Project
-	docs   map[string][]byte     // document URI -> current text
-	timers map[string]*time.Timer // debounce timer per URI
+	mu        sync.Mutex
+	notify    glsp.NotifyFunc        // set from initialized; used when re-publishing async
+	proj      *validate.Project
+	docs      map[string][]byte      // document URI -> current text
+	timers    map[string]*time.Timer // debounce timer per URI
+	published map[string]struct{}    // full paths that currently have diagnostics shown
 }
 
 // NewServer creates a server with the given options.
 func NewServer(opts Options) *Server {
 	return &Server{
-		opts:   opts,
-		docs:   make(map[string][]byte),
-		timers: make(map[string]*time.Timer),
+		opts:      opts,
+		docs:      make(map[string][]byte),
+		timers:    make(map[string]*time.Timer),
+		published: make(map[string]struct{}),
 	}
 }
 
@@ -148,20 +151,16 @@ func (s *Server) initialized(ctx *glsp.Context, _ *protocol.InitializedParams) e
 			"openDocs", len(s.docs),
 		)
 
-		// Re-analyze and publish diagnostics for documents opened while the
-		// project was still building (didOpen would have skipped them).
+		// Re-analyze any documents opened while the project was still building
+		// (didOpen would have skipped them) so their buffers override disk.
 		for uri, text := range s.docs {
 			if err := s.proj.UpdateSource(uriToPath(uri), text); err != nil {
 				slog.Warn("lsp: post-build UpdateSource failed", "uri", uri, "err", err)
 				continue
 			}
 		}
-		if len(s.docs) > 0 {
-			slog.Debug("lsp: re-publishing after build", "openDocs", len(s.docs))
-			for uri, text := range s.docs {
-				s.publishDiagnostics(s.notify, uri, text)
-			}
-		}
+		// Publish diagnostics for every mod file, opened or not.
+		s.publishProjectDiagnostics(s.notify)
 	}()
 	return nil
 }
@@ -235,22 +234,26 @@ func (s *Server) didClose(ctx *glsp.Context, params *protocol.DidCloseTextDocume
 	uri := params.TextDocument.URI
 	slog.Debug("lsp: didClose", "uri", uri)
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	delete(s.docs, uri)
 	if t := s.timers[uri]; t != nil {
 		t.Stop()
 		delete(s.timers, uri)
 	}
-	s.mu.Unlock()
-	// Clear diagnostics for the closed document.
-	ctx.Notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
-		URI: uri, Diagnostics: []protocol.Diagnostic{},
-	})
+	// Re-analyze from disk: the closed buffer may have differed from disk, so the
+	// file reverts to its on-disk diagnostics rather than being force-cleared.
+	if s.proj != nil {
+		if err := s.proj.Update(uriToPath(uri)); err != nil {
+			slog.Debug("lsp: didClose Update failed", "uri", uri, "err", err)
+		}
+	}
+	s.publishProjectDiagnostics(ctx.Notify)
 	return nil
 }
 
 // analyzeAndPublish re-analyzes the changed document from its buffer and then
-// republishes diagnostics for every open document (an edit to a definition can
-// change references in other open files).
+// republishes diagnostics for every mod file (an edit to a definition can change
+// references in other files, opened or not).
 func (s *Server) analyzeAndPublish(notify glsp.NotifyFunc, changedURI string) {
 	slog.Debug("lsp: analyzing", "uri", changedURI)
 	s.mu.Lock()
@@ -264,23 +267,81 @@ func (s *Server) analyzeAndPublish(notify glsp.NotifyFunc, changedURI string) {
 			slog.Warn("lsp: UpdateSource failed", "uri", changedURI, "err", err)
 		}
 	}
-	totalDiags := 0
-	for uri, text := range s.docs {
-		diags := s.publishDiagnostics(notify, uri, text)
-		totalDiags += diags
-	}
-	slog.Debug("lsp: analysis complete", "changed", changedURI, "openDocs", len(s.docs), "diagsPublished", totalDiags)
+	s.publishProjectDiagnostics(notify)
+	slog.Debug("lsp: analysis complete", "changed", changedURI, "openDocs", len(s.docs))
 }
 
-// publishDiagnostics sends diagnostics for one open document, converting
-// validator byte ranges to UTF-16 LSP ranges using that document's text.
-// Returns the number of diagnostics published.
-func (s *Server) publishDiagnostics(notify glsp.NotifyFunc, uri string, text []byte) int {
-	path := uriToPath(uri)
+// publishProjectDiagnostics publishes unresolved-reference diagnostics for every
+// mod file that has them, clears files that no longer do, and tracks the current
+// set in s.published. Vanilla files are analyzed but never flagged. Must be called
+// with s.mu held.
+func (s *Server) publishProjectDiagnostics(notify glsp.NotifyFunc) {
+	if s.proj == nil {
+		return
+	}
+	// Group diagnostics by file, keeping only mod files.
+	byFile := make(map[string][]validate.RefDiag)
+	for _, d := range s.proj.Diags() {
+		if !s.underModRoot(d.File) {
+			continue
+		}
+		byFile[d.File] = append(byFile[d.File], d)
+	}
+
+	totalDiags := 0
+	for file, fileDiags := range byFile {
+		text, err := s.readFileLocked(file)
+		if err != nil {
+			slog.Warn("lsp: failed to read file for diagnostics", "path", file, "err", err)
+			continue
+		}
+		diags := toLSPDiagnostics(fileDiags, text)
+		notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
+			URI: pathToURI(file), Diagnostics: diags,
+		})
+		totalDiags += len(diags)
+	}
+
+	// Clear files that had diagnostics last cycle but no longer do.
+	for file := range s.published {
+		if _, ok := byFile[file]; ok {
+			continue
+		}
+		notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
+			URI: pathToURI(file), Diagnostics: []protocol.Diagnostic{},
+		})
+	}
+
+	// Record the new set of files with diagnostics.
+	next := make(map[string]struct{}, len(byFile))
+	for file := range byFile {
+		next[file] = struct{}{}
+	}
+	s.published = next
+	slog.Debug("lsp: published project diagnostics", "files", len(byFile), "diags", totalDiags)
+}
+
+// underModRoot reports whether fullPath lives under the mod root. An empty mod
+// root (no workspace / tests) treats every file as in-scope.
+func (s *Server) underModRoot(fullPath string) bool {
+	if s.initMod == "" {
+		return true
+	}
+	root := filepath.Clean(s.initMod)
+	p := filepath.Clean(fullPath)
+	if p == root {
+		return true
+	}
+	return strings.HasPrefix(p, root+string(filepath.Separator))
+}
+
+// toLSPDiagnostics converts validator byte ranges to UTF-16 LSP diagnostics
+// using the file's text.
+func toLSPDiagnostics(refDiags []validate.RefDiag, text []byte) []protocol.Diagnostic {
 	severity := protocol.DiagnosticSeverityError
 	source := "pdxl"
 	var diags []protocol.Diagnostic
-	for _, d := range s.proj.FileDiags(path) {
+	for _, d := range refDiags {
 		diags = append(diags, protocol.Diagnostic{
 			Range: protocol.Range{
 				Start: offsetToPosition(text, d.Start),
@@ -291,10 +352,7 @@ func (s *Server) publishDiagnostics(notify glsp.NotifyFunc, uri string, text []b
 			Message:  d.Msg,
 		})
 	}
-	notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
-		URI: uri, Diagnostics: diags,
-	})
-	return len(diags)
+	return diags
 }
 
 // wholeText extracts the full document text from a Full-sync change event.
@@ -352,7 +410,7 @@ func (s *Server) definition(_ *glsp.Context, params *protocol.DefinitionParams) 
 	}
 	if ref == nil {
 		slog.Debug("lsp: definition, no reference at position",
-			"path", path, "offset", off)
+			"path", path, "offset", off, "totalRefs", len(facts.Refs))
 		return nil, nil
 	}
 
@@ -402,12 +460,20 @@ func (s *Server) definition(_ *glsp.Context, params *protocol.DefinitionParams) 
 // readFile returns the content of the file at path, preferring the in-memory
 // editor buffer when available, falling back to disk.
 func (s *Server) readFile(path string) ([]byte, error) {
-	uri := pathToURI(path)
 	s.mu.Lock()
-	if text, ok := s.docs[uri]; ok {
-		s.mu.Unlock()
+	text, ok := s.docs[pathToURI(path)]
+	s.mu.Unlock()
+	if ok {
 		return text, nil
 	}
-	s.mu.Unlock()
+	return os.ReadFile(path)
+}
+
+// readFileLocked is readFile for callers that already hold s.mu (the mutex is
+// not reentrant).
+func (s *Server) readFileLocked(path string) ([]byte, error) {
+	if text, ok := s.docs[pathToURI(path)]; ok {
+		return text, nil
+	}
 	return os.ReadFile(path)
 }

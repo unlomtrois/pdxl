@@ -91,6 +91,61 @@ func TestServerDiagnosticsLifecycle(t *testing.T) {
 	}
 }
 
+func TestProjectWideDiagnostics(t *testing.T) {
+	vanillaDir := t.TempDir()
+	modDir := t.TempDir()
+
+	// Vanilla file with an unresolved reference — must NOT be flagged.
+	vanillaEffect := writeFile(t, vanillaDir, "common/scripted_effects/00_v.txt",
+		"v = { add_trait = ghost }\n")
+	// Mod file with an unresolved reference — must be flagged even though it's
+	// never opened.
+	writeFile(t, modDir, "common/traits/00_t.txt", "brave = { }\n")
+	modEffect := writeFile(t, modDir, "common/scripted_effects/00_e.txt",
+		"e = { add_trait = nope }\n")
+
+	cfg := config.Default()
+	cfg.Cache.Enabled = false
+	s := NewServer(Options{Config: cfg})
+	s.initMod = modDir
+	if err := s.buildProject(vanillaDir, modDir); err != nil {
+		t.Fatal(err)
+	}
+
+	got := map[string][]protocol.Diagnostic{}
+	ctx := captureCtx(got)
+
+	// Publish project-wide without opening any document.
+	s.mu.Lock()
+	s.publishProjectDiagnostics(ctx.Notify)
+	s.mu.Unlock()
+
+	// The unopened mod effect file is flagged.
+	modURI := pathToURI(modEffect)
+	if d := got[modURI]; len(d) != 1 {
+		t.Fatalf("expected 1 diagnostic for unopened mod file, got %d: %v", len(d), d)
+	} else if !strings.Contains(d[0].Message, "nope") {
+		t.Errorf("expected message to mention nope, got %q", d[0].Message)
+	}
+
+	// The vanilla file is never published (mod-only scope).
+	if d, ok := got[pathToURI(vanillaEffect)]; ok {
+		t.Errorf("expected no publish for vanilla file, got %v", d)
+	}
+
+	// Fix the reference on disk equivalent by defining the trait via the buffer,
+	// then re-publish: the mod file's diagnostics must be cleared.
+	s.mu.Lock()
+	if err := s.proj.UpdateSource(modEffect, []byte("e = { add_trait = brave }\n")); err != nil {
+		t.Fatal(err)
+	}
+	s.publishProjectDiagnostics(ctx.Notify)
+	s.mu.Unlock()
+	if d, ok := got[modURI]; !ok || len(d) != 0 {
+		t.Errorf("expected cleared diagnostics for mod file after fix, got %v (present=%v)", d, ok)
+	}
+}
+
 func TestOffsetToPosition(t *testing.T) {
 	text := []byte("ab\ncdé f\n")
 	// Line 1 is "cdé f". 'é' is 2 UTF-8 bytes but 1 UTF-16 unit, so the space
