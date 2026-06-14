@@ -32,10 +32,12 @@ Nix users: activate the toolchain with `nix-shell` before running make commands.
 
 ## Architecture
 
+For the in-depth narrative — pipeline diagram, key data structures, request lifecycles, and cross-cutting invariants — see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The summary below is the quick map.
+
 pdxl is a toolkit for parsing Paradox Interactive scripting files (PDXScript, used in EU5, CK3, Victoria 3, etc.). The grammar is the same across all games; only semantics differ.
 
 ```
-cmd/pdxl/               — CLI: lex, parse, lint, init, index, check, cache subcommands
+cmd/pdxl/               — CLI: lex, parse, lint, init, index, check, cache, watch, lsp subcommands
 internal/lexer/         — tokenizer (internal; not public API yet)
 internal/parser/
   v1/                   — participle-based reference parser (benchmarking baseline only)
@@ -43,6 +45,7 @@ internal/parser/
   v3/                   — same algorithm, flat node-pool AST (fastest; preferred for new tools)
 internal/files/         — directory scanning + mod-overlay resolution (FileSet)
 internal/validate/      — cross-file semantic analysis: SymbolTable + reference resolution
+internal/lsp/           — Language Server (go-to-definition + live mod-scoped diagnostics) over validate.Project
 internal/cache/         — two-level parse cache: in-memory LRU + on-disk gob store
 internal/config/        — TOML config loader (pdxl.toml)
 internal/testutil/      — shared TestdataDir() and DiffLines() used by all test packages
@@ -129,6 +132,15 @@ Cross-file semantic layer on top of v3 trees + `FileSet`. `Analyze(fs, astStore,
 
 Not yet implemented (future phases): full macro expansion, scope tracking, broader schema coverage.
 
+### LSP (`internal/lsp`)
+
+Long-running language server (glsp / LSP 3.16, stdio) wrapping a single in-memory `validate.Project`. `pdxl lsp` starts it. Features: live diagnostics + go-to-definition. **Scope is editor DX, not validation depth** — ck3-tiger owns deep validation; keep validate lightweight.
+
+- `initialize` stores paths and returns fast; the project is built asynchronously in `initialized` (large corpora exceed the client init timeout).
+- Edits flow `didChange → debounce (200ms) → analyzeAndPublish → Project.UpdateSource (re-parse one file) → publishProjectDiagnostics`. Diagnostics publish for **every mod file** with unresolved refs (opened or not), filtered by `underModRoot`; vanilla files are analyzed but never flagged.
+- **`Server.mu` is not reentrant.** Methods called with the lock held (e.g. `publishProjectDiagnostics`) must use `readFileLocked`, not `readFile` (which locks). Mixing them deadlocks.
+- Byte offsets ↔ LSP positions go through `offsetToPosition` / `positionToOffset` (UTF-16 code units). Tests build a project then drive handlers directly with a capturing notify (`captureCtx`).
+
 ### Config (`internal/config`)
 
 Config file is `pdxl.toml` in the project root (created by `pdxl init`). Missing file is not an error — defaults are used.
@@ -163,6 +175,8 @@ ignore_files = ["credits.txt", "checksum_manifest.txt", "guids.txt", "license.tx
 | `pdxl lex <file>` | Dump token stream |
 | `pdxl index [--game DIR] [--mod DIR\|.mod] [--proton-prefix DIR] [--dry]` | Scan game+mod, parse all winning files, report file/diagnostic counts (progress bar) |
 | `pdxl check [--game DIR] [--mod DIR\|.mod] [--proton-prefix DIR] [--no-cache]` | Index definitions + resolve references; prints per-kind counts, duplicates, unresolved refs; exits non-zero on unresolved |
+| `pdxl watch [--game DIR] [--mod DIR\|.mod] [--proton-prefix DIR] [--addr ADDR]` | Persistent validator: build once, watch mod dir (fsnotify), serve diagnostics over HTTP (`GET /diagnostics[?file=…]`, `/health`; default `127.0.0.1:7777`) |
+| `pdxl lsp [--game DIR] [--log-level LEVEL]` | Run the language server over stdio (go-to-definition + live mod-scoped diagnostics) |
 | `pdxl cache size [--detailed]` / `pdxl cache clear` | Report (ast vs symbols) or delete cached entries |
 
 All subcommands accept `--verbose` / `-v` (debug logging via slog) and `--config`.
@@ -176,6 +190,8 @@ All parser packages share the same `testdata/*.txt` fixtures. Each has its own `
 ### Token naming
 
 Tag constants use `snake_case` (e.g. `literal_boolean`, `l_brace`). The linter's `var-naming` rule is disabled for this.
+
+`golangci-lint` enforces revive `cognitive-complexity` (max 20) and `nestif` — keep functions small and flat; extract helpers rather than nesting. Verbose debug-logging blocks can trip these.
 
 ### Commit style
 

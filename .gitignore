@@ -24,3 +24,6 @@
 /bin
 
 *.csv
+
+# Personal Claude Code context (machine-specific)
+.claude.local.md
