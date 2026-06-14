@@ -112,6 +112,20 @@ func (p *Project) FactsAt(fullPath string) (FileFacts, bool) {
 	return p.facts[key.rel], true
 }
 
+// References returns every reference to (kind, name) across the project, in walk
+// order (deterministic).
+func (p *Project) References(kind SymbolKind, name string) []Ref {
+	var out []Ref
+	for _, k := range p.order {
+		for _, r := range p.facts[k.rel].Refs {
+			if r.Kind == kind && r.Name == name {
+				out = append(out, r)
+			}
+		}
+	}
+	return out
+}
+
 // RelToFull resolves a FileSet RelPath back to an on-disk full path, or false if
 // no tracked file matches.
 func (p *Project) RelToFull(relPath string) (string, bool) {

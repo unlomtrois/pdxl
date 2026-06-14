@@ -74,6 +74,7 @@ func (s *Server) Run() error {
 		TextDocumentDidSave:    s.didSave,
 		TextDocumentDidClose:   s.didClose,
 		TextDocumentDefinition: s.definition,
+		TextDocumentReferences: s.references,
 	}
 	srv := glspserv.NewServer(&handler, "pdxl", false)
 	err := srv.RunStdio()
@@ -121,6 +122,7 @@ func (s *Server) initialize(_ *glsp.Context, params *protocol.InitializeParams) 
 		Capabilities: protocol.ServerCapabilities{
 			TextDocumentSync:   syncFull,
 			DefinitionProvider: true,
+			ReferencesProvider: true,
 		},
 		ServerInfo: &protocol.InitializeResultServerInfo{Name: name},
 	}, nil
@@ -455,6 +457,125 @@ func (s *Server) definition(_ *glsp.Context, params *protocol.DefinitionParams) 
 			End:   offsetToPosition(defSrc, sym.EndOffset),
 		},
 	}, nil
+}
+
+// symbolAt returns the (kind, name) of the definition name or reference spanning
+// the byte offset off. Definitions are checked first so the cursor on a NAME = {}
+// name triggers find-references for that symbol.
+func symbolAt(facts validate.FileFacts, off int) (validate.SymbolKind, string, bool) {
+	for _, d := range facts.Defs {
+		if d.Offset <= off && off < d.EndOffset {
+			return d.Kind, d.Name, true
+		}
+	}
+	for i := range facts.Refs {
+		r := &facts.Refs[i]
+		if r.Start <= off && off < r.End {
+			return r.Kind, r.Name, true
+		}
+	}
+	return 0, "", false
+}
+
+// references handles textDocument/references: it resolves the symbol under the
+// cursor and returns every reference to it across the project, optionally
+// including the declaration.
+func (s *Server) references(_ *glsp.Context, params *protocol.ReferenceParams) ([]protocol.Location, error) {
+	path := uriToPath(params.TextDocument.URI)
+	slog.Debug("lsp: references request", "uri", params.TextDocument.URI,
+		"line", params.Position.Line, "char", params.Position.Character)
+
+	s.mu.Lock()
+	if s.proj == nil {
+		s.mu.Unlock()
+		return nil, nil
+	}
+	facts, ok := s.proj.FactsAt(path)
+	s.mu.Unlock()
+	if !ok {
+		slog.Debug("lsp: references, file not in project", "path", path)
+		return nil, nil
+	}
+
+	src, err := s.readFile(path)
+	if err != nil {
+		slog.Warn("lsp: references, failed to read source", "path", path, "err", err)
+		return nil, nil
+	}
+	off := positionToOffset(src, params.Position)
+
+	kind, name, ok := symbolAt(facts, off)
+	if !ok {
+		slog.Debug("lsp: references, no symbol at position", "path", path, "offset", off)
+		return nil, nil
+	}
+
+	s.mu.Lock()
+	refs := s.proj.References(kind, name)
+	var decl *protocol.Location
+	if params.Context.IncludeDeclaration {
+		if sym, found := s.proj.Table().Lookup(kind, name); found {
+			if defFull, ok := s.proj.RelToFull(sym.File); ok {
+				decl = s.symbolLocationLocked(defFull, sym.Offset, sym.EndOffset)
+			}
+		}
+	}
+	s.mu.Unlock()
+
+	locs := s.refsToLocations(refs)
+	if decl != nil {
+		locs = append(locs, *decl)
+	}
+	slog.Debug("lsp: references, resolved",
+		"kind", kind.String(), "name", name, "count", len(locs))
+	return locs, nil
+}
+
+// refsToLocations converts refs to LSP locations, reading each file once.
+func (s *Server) refsToLocations(refs []validate.Ref) []protocol.Location {
+	srcCache := make(map[string][]byte)
+	var locs []protocol.Location
+	for _, r := range refs {
+		text, ok := srcCache[r.File]
+		if !ok {
+			b, err := s.readFile(r.File)
+			if err != nil {
+				slog.Warn("lsp: references, failed to read file", "path", r.File, "err", err)
+				srcCache[r.File] = nil
+				continue
+			}
+			text = b
+			srcCache[r.File] = b
+		}
+		if text == nil {
+			continue
+		}
+		locs = append(locs, protocol.Location{
+			URI: pathToURI(r.File),
+			Range: protocol.Range{
+				Start: offsetToPosition(text, r.Start),
+				End:   offsetToPosition(text, r.End),
+			},
+		})
+	}
+	return locs
+}
+
+// symbolLocationLocked builds a Location for a byte range in fullPath. Called with
+// s.mu held (uses readFileLocked).
+func (s *Server) symbolLocationLocked(fullPath string, start, end int) *protocol.Location {
+	text, err := s.readFileLocked(fullPath)
+	if err != nil {
+		slog.Warn("lsp: references, failed to read declaration file", "path", fullPath, "err", err)
+		return nil
+	}
+	return &protocol.Location{
+		URI: pathToURI(fullPath),
+		Range: protocol.Range{
+			Start: offsetToPosition(text, start),
+			End:   offsetToPosition(text, end),
+		},
+	}
 }
 
 // readFile returns the content of the file at path, preferring the in-memory

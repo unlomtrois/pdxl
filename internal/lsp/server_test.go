@@ -263,3 +263,100 @@ func TestDefinition(t *testing.T) {
 		t.Errorf("expected nil for unresolved reference, got %v", loc)
 	}
 }
+
+func TestReferences(t *testing.T) {
+	dir := t.TempDir()
+	traitPath := writeFile(t, dir, "common/traits/00_t.txt", "brave = { }\n")
+	// Two files referencing brave (identical prefix → "brave" at char 18), one
+	// referencing an undefined trait.
+	eff1 := writeFile(t, dir, "common/scripted_effects/00_e1.txt", "e = { add_trait = brave }\n")
+	eff2 := writeFile(t, dir, "common/scripted_effects/00_e2.txt", "f = { add_trait = brave }\n")
+	writeFile(t, dir, "common/scripted_effects/00_e3.txt", "g = { add_trait = nope }\n")
+
+	cfg := config.Default()
+	cfg.Cache.Enabled = false
+	s := NewServer(Options{Config: cfg})
+	if err := s.buildProject("", dir); err != nil {
+		t.Fatal(err)
+	}
+
+	eff1URI := pathToURI(eff1)
+	eff2URI := pathToURI(eff2)
+	traitURI := pathToURI(traitPath)
+	ctx := &glsp.Context{}
+
+	uriSet := func(locs []protocol.Location) map[string]int {
+		m := map[string]int{}
+		for _, l := range locs {
+			m[l.URI]++
+		}
+		return m
+	}
+
+	// Cursor on the "brave" reference in eff1 (char 18); declaration excluded.
+	locs, err := s.references(ctx, &protocol.ReferenceParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: eff1URI},
+			Position:     protocol.Position{Line: 0, Character: 18},
+		},
+		Context: protocol.ReferenceContext{IncludeDeclaration: false},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(locs) != 2 {
+		t.Fatalf("expected 2 references, got %d: %v", len(locs), locs)
+	}
+	got := uriSet(locs)
+	if got[eff1URI] != 1 || got[eff2URI] != 1 {
+		t.Errorf("expected one ref in each effect file, got %v", got)
+	}
+	if got[traitURI] != 0 {
+		t.Errorf("declaration should be excluded, got %v", got)
+	}
+
+	// With IncludeDeclaration the trait definition is appended.
+	locs, err = s.references(ctx, &protocol.ReferenceParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: eff1URI},
+			Position:     protocol.Position{Line: 0, Character: 18},
+		},
+		Context: protocol.ReferenceContext{IncludeDeclaration: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(locs) != 3 || uriSet(locs)[traitURI] != 1 {
+		t.Fatalf("expected 3 locations incl. declaration, got %d: %v", len(locs), locs)
+	}
+
+	// Cursor on the definition NAME "brave" in the traits file (char 0) finds the
+	// same references.
+	locs, err = s.references(ctx, &protocol.ReferenceParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: traitURI},
+			Position:     protocol.Position{Line: 0, Character: 0},
+		},
+		Context: protocol.ReferenceContext{IncludeDeclaration: false},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(locs) != 2 {
+		t.Errorf("expected 2 references from the definition name, got %d: %v", len(locs), locs)
+	}
+
+	// Cursor on whitespace resolves no symbol.
+	locs, err = s.references(ctx, &protocol.ReferenceParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{URI: eff1URI},
+			Position:     protocol.Position{Line: 0, Character: 1},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if locs != nil {
+		t.Errorf("expected nil for cursor on whitespace, got %v", locs)
+	}
+}
