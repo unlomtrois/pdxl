@@ -27,3 +27,9 @@
 
 # Personal Claude Code context (machine-specific)
 .claude.local.md
+
+# Rust build artifacts
+/rust/target
+
+# Stray go build output
+/lexdump

@@ -1,0 +1,15 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/pdxl-source",
+    "crates/pdxl-lexer",
+]
+
+[workspace.package]
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/unlomtrois/pdxl"
+rust-version = "1.96"
+
+[workspace.dependencies]
+pdxl-source = { path = "crates/pdxl-source" }

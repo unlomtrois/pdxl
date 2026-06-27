@@ -1,0 +1,13 @@
+a = b
+bad ! q ?
+lone_dollar = $ end
+bare_at = @ done
+math = @[x * -1]
+neg = -221.1.1
+frac = { .7 1. 0.05 }
+chain = scope:foo.bar|baz
+invalid_utf8 = ÿ€Ã tail
+uni = LinnÃ©a_JosÃ©
+1abc = 8_x
+percent = 29% SUCCESS_%
+unterminated = "no close

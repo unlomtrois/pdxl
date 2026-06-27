@@ -1,0 +1,18 @@
+[package]
+name = "pdxl-lexer"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Byte-offset tokenizer for Paradox script files (port of internal/lexer)."
+
+[dependencies]
+pdxl-source.workspace = true
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[[bin]]
+name = "lexdump"
+path = "src/bin/lexdump.rs"
