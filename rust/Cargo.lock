@@ -12,3 +12,11 @@ dependencies = [
 [[package]]
 name = "pdxl-source"
 version = "0.1.0"
+
+[[package]]
+name = "pdxl-syntax"
+version = "0.1.0"
+dependencies = [
+ "pdxl-lexer",
+ "pdxl-source",
+]

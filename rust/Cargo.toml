@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/pdxl-source",
     "crates/pdxl-lexer",
+    "crates/pdxl-syntax",
 ]
 
 [workspace.package]
@@ -13,3 +14,4 @@ rust-version = "1.96"
 
 [workspace.dependencies]
 pdxl-source = { path = "crates/pdxl-source" }
+pdxl-lexer = { path = "crates/pdxl-lexer" }

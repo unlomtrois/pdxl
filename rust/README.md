@@ -31,7 +31,7 @@ in the lexer, syntax tree, or analysis layers.
 |-----------|-----------|--------|
 | 0 | Reconnaissance + parity harness | Done |
 | 1 | Source model + lexer (`pdxl-source`, `pdxl-lexer`) | Done — byte-for-byte parity |
-| 2 | Parser v3 (flat node pool) | Not started |
+| 2 | Parser v3, flat node pool (`pdxl-syntax`) | Done — exact node-layout & diagnostic parity |
 | 3+ | FileSet, cache, analysis, CK3 rules, CLI, LSP | Not started |
 
 ## Crates
@@ -39,6 +39,10 @@ in the lexer, syntax tree, or analysis layers.
 - `pdxl-source` — `TextRange` and source-offset primitives.
 - `pdxl-lexer` — byte-offset tokenizer (port of `internal/lexer`), plus a
   `lexdump` binary that emits a deterministic `<kind>\t<start>\t<end>` token dump.
+- `pdxl-syntax` — flat node-pool syntax tree and parser (port of
+  `internal/parser/v3`), plus a `parsedump` binary that emits a canonical,
+  normalized structured dump (nodes, child-index array, diagnostics) for
+  differential testing against the Go oracle (`tools/parsedump`).
 
 Crates are added only when their milestone begins.
 

@@ -83,3 +83,20 @@ Simple throughput harness (not Criterion); methodology differs from Go's
 **Result:** the Rust lexer is ~1.37× the Go lexer's throughput on the large
 fixture (~280 vs ~205 MB/s) and allocates nothing per token. No performance
 regression; optimization is explicitly out of scope for this milestone.
+
+## Parser benchmark — Rust port (`cargo run --release --example parsebench`)
+
+Simple throughput harness (not Criterion); like the Go `Parse`, it includes
+tokenization. The flat node pool is stored inline (no per-node heap allocation;
+the pool/child-index/diagnostics vectors still allocate as they grow).
+
+| Case | Go v3 | Rust | Difference |
+|---|---|---|---|
+| ParseLarge (international_organization.txt) | ~176 MB/s, 863 allocs/op | ~282 MB/s | Rust ~1.6× faster |
+| advance.txt | ~104 MB/s | ~187 MB/s | Rust faster |
+| subject_type.txt | ~125 MB/s | ~217 MB/s | Rust faster |
+
+Node/child counts are identical to Go (verified by the structured differential
+dump): the large fixture yields 626 nodes / 625 child-index entries. The Go
+"863 allocs/op" counts pool growth + child slices + diagnostics, not nodes.
+No regression; parser optimization is out of scope for this milestone.
