@@ -32,7 +32,8 @@ in the lexer, syntax tree, or analysis layers.
 | 0 | Reconnaissance + parity harness | Done |
 | 1 | Source model + lexer (`pdxl-source`, `pdxl-lexer`) | Done — byte-for-byte parity |
 | 2 | Parser v3, flat node pool (`pdxl-syntax`) | Done — exact node-layout & diagnostic parity |
-| 3+ | FileSet, cache, analysis, CK3 rules, CLI, LSP | Not started |
+| 3 | FileSet & overlay resolution (`pdxl-files`) | Done — exact entry-order, stats & descriptor parity |
+| 4+ | Cache, analysis, CK3 rules, CLI, LSP | Not started |
 
 ## Crates
 
@@ -43,6 +44,12 @@ in the lexer, syntax tree, or analysis layers.
   `internal/parser/v3`), plus a `parsedump` binary that emits a canonical,
   normalized structured dump (nodes, child-index array, diagnostics) for
   differential testing against the Go oracle (`tools/parsedump`).
+- `pdxl-files` — project file discovery + Paradox mod-overlay resolution (port of
+  `internal/files`): deterministic `.txt` scanning, normalized overlay keys,
+  `replace_path`, ignore rules, and `.mod` descriptor parsing (via `pdxl-syntax`).
+  Ships a `filesetdump` binary compared against the Go oracle (`tools/filesetdump`).
+  The Proton/`drive_c` path translation is intentionally not ported (mods are
+  referenced by local folder path).
 
 Crates are added only when their milestone begins.
 

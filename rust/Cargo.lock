@@ -3,6 +3,13 @@
 version = 4
 
 [[package]]
+name = "pdxl-files"
+version = "0.1.0"
+dependencies = [
+ "pdxl-syntax",
+]
+
+[[package]]
 name = "pdxl-lexer"
 version = "0.1.0"
 dependencies = [
