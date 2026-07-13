@@ -1,0 +1,18 @@
+[package]
+name = "pdxl-moddesc"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = ".mod descriptor parsing for Paradox mods (port of internal/files ParseMod)."
+
+[dependencies]
+pdxl-parser.workspace = true
+pdxl-path.workspace = true
+
+[dev-dependencies]
+pdxl-testutil.workspace = true
+
+[lints.rust]
+unsafe_code = "forbid"

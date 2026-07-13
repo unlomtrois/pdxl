@@ -1,0 +1,17 @@
+[package]
+name = "pdxl-fileset"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Project file discovery and Paradox mod-overlay resolution (port of internal/files)."
+
+[dependencies]
+pdxl-path.workspace = true
+
+[dev-dependencies]
+pdxl-testutil.workspace = true
+
+[lints.rust]
+unsafe_code = "forbid"

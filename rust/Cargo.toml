@@ -1,10 +1,19 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/pdxl-source",
-    "crates/pdxl-lexer",
-    "crates/pdxl-syntax",
-    "crates/pdxl-files",
+    # foundation
+    "crates/pdxl-src",      # TextRange: zero-based, half-open byte ranges
+    "crates/pdxl-path",     # Go-compatible lexical path helpers
+    # syntax pipeline
+    "crates/pdxl-lexer",    # byte-offset tokenizer
+    "crates/pdxl-ast",      # flat node-pool syntax tree (data only)
+    "crates/pdxl-parser",   # recursive-descent parser producing pdxl-ast trees
+    # project model
+    "crates/pdxl-fileset",  # directory scanning + mod-overlay resolution
+    "crates/pdxl-moddesc",  # .mod descriptor parsing
+    # test / parity infrastructure
+    "crates/pdxl-testutil", # shared test helpers (temp trees, repo root)
+    "crates/pdxl-parity",   # dump formats, dump binaries, Go differential tests
 ]
 
 [workspace.package]
@@ -14,6 +23,11 @@ repository = "https://github.com/unlomtrois/pdxl"
 rust-version = "1.96"
 
 [workspace.dependencies]
-pdxl-source = { path = "crates/pdxl-source" }
+pdxl-src = { path = "crates/pdxl-src" }
+pdxl-path = { path = "crates/pdxl-path" }
 pdxl-lexer = { path = "crates/pdxl-lexer" }
-pdxl-syntax = { path = "crates/pdxl-syntax" }
+pdxl-ast = { path = "crates/pdxl-ast" }
+pdxl-parser = { path = "crates/pdxl-parser" }
+pdxl-fileset = { path = "crates/pdxl-fileset" }
+pdxl-moddesc = { path = "crates/pdxl-moddesc" }
+pdxl-testutil = { path = "crates/pdxl-testutil" }

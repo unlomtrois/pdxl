@@ -17,7 +17,7 @@
 
 mod rune;
 
-pub use pdxl_source::TextRange;
+pub use pdxl_src::TextRange;
 use rune::decode_rune;
 
 /// The UTF-8 BOM byte sequence skipped at the start of a source buffer.
@@ -33,52 +33,52 @@ pub enum TokenKind {
     Identifier, // id
 
     // Literals
-    LiteralNumber, // 123, 0.1, 1.2.3
-    LiteralString, // "string"
+    LiteralNumber,  // 123, 0.1, 1.2.3
+    LiteralString,  // "string"
     LiteralBoolean, // yes, no
-    LiteralDate, // 1099.1.1
+    LiteralDate,    // 1099.1.1
 
     // Delimiters
-    LBrace, // {
-    RBrace, // }
+    LBrace,   // {
+    RBrace,   // }
     LBracket, // [
     RBracket, // ]
 
     // Arithmetic operators
-    Plus, // `+`
-    Minus, // `-`
+    Plus,     // `+`
+    Minus,    // `-`
     Multiply, // `*`
-    Divide, // `/`
+    Divide,   // `/`
 
     // Comparison operators
-    GreaterThan, // `>`
+    GreaterThan,  // `>`
     GreaterEqual, // `>=`
-    LessThan, // `<`
-    LessEqual, // `<=`
+    LessThan,     // `<`
+    LessEqual,    // `<=`
 
     // Assignment
     Equal, // `=`
 
     // Equality
-    EqualEqual, // `==`
-    NotEqual, // `!=`
+    EqualEqual,    // `==`
+    NotEqual,      // `!=`
     QuestionEqual, // `?=`
 
     // Scope resolution operators / PDXScript specials
-    Dot, // `.`
-    Colon, // `:`
-    At, // `@`
-    Pipe, // `|`
-    Dollar, // `$`
-    MacroParam, // `$IDENT$`
+    Dot,         // `.`
+    Colon,       // `:`
+    At,          // `@`
+    Pipe,        // `|`
+    Dollar,      // `$`
+    MacroParam,  // `$IDENT$`
     ScriptValue, // `@name`
-    ScriptMath, // `@[ ... ]`
+    ScriptMath,  // `@[ ... ]`
 
     Percent, // `%`
 
     Comment, // `#...`
     Invalid, // invalid token
-    Eof, // end of file
+    Eof,     // end of file
 }
 
 impl TokenKind {
