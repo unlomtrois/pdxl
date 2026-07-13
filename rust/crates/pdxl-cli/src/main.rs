@@ -49,6 +49,10 @@ enum Command {
         /// accepted for editor-client compatibility; stdio is the only transport
         #[arg(long, hide = true)]
         stdio: bool,
+        /// log level (accepted for client compatibility; logging is minimal
+        /// stderr for now)
+        #[arg(long = "log-level", default_value = "info")]
+        log_level: String,
     },
     /// Index project definitions and resolve references across game+mod
     Check {
@@ -81,7 +85,11 @@ fn main() -> ExitCode {
             mod_,
             no_cache,
         } => check::run(file.as_deref(), game.as_deref(), mod_.as_deref(), no_cache),
-        Command::Lsp { game, stdio: _ } => {
+        Command::Lsp {
+            game,
+            stdio: _,
+            log_level: _,
+        } => {
             return match pdxl_lsp::run_stdio(pdxl_lsp::Options { game_path: game }) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(e) => {
