@@ -37,7 +37,7 @@ in the lexer, syntax tree, or analysis layers.
 | 5 | Per-file facts (`pdxl-analysis`, `pdxl-ck3`) | Done — byte-identical extraction; FactStore deliberately not ported (benchmark-justified) |
 | 6 | Whole-project analysis (`pdxl-project` + table/resolve in `pdxl-analysis`) | Done — byte-identical counts/duplicates/diagnostics; incremental ≡ fresh |
 | 7 | CLI (`pdxl-cli`: lex, parse, check) | Done — snapshot-identical stdout + exit codes; ParseMod Unix-path fix landed in both implementations |
-| 8 | LSP | Not started |
+| 8a | LSP (`pdxl-lsp`: sync, diagnostics, definition) | Done — verified against real CK3+T4N; 8b (references, outline, hover) next |
 
 ## Crates
 
@@ -58,7 +58,9 @@ pdxl-ck3        CK3 schema: def dirs, ref keys, skips      (dep: analysis)
 pdxl-project    FileSet walk → analyze; incremental updates (dep: analysis,
                                                              fileset, parser, path,
                                                              cache [opt-in])
-pdxl-cli        the `pdxl` binary: lex / parse / check      (dep: most of the above,
+pdxl-lsp        language server: diagnostics + definition   (dep: project, ck3,
+                                                             lsp-server, lsp-types)
+pdxl-cli        the `pdxl` binary: lex/parse/check/lsp      (dep: most of the above,
                                                              clap)
 ```
 

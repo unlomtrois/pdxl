@@ -41,6 +41,15 @@ enum Command {
         #[arg(long)]
         tree: bool,
     },
+    /// Run the language server over stdio (diagnostics + go-to-definition)
+    Lsp {
+        /// path to vanilla game directory
+        #[arg(long)]
+        game: Option<String>,
+        /// accepted for editor-client compatibility; stdio is the only transport
+        #[arg(long, hide = true)]
+        stdio: bool,
+    },
     /// Index project definitions and resolve references across game+mod
     Check {
         /// report only this file's unresolved references
@@ -72,6 +81,15 @@ fn main() -> ExitCode {
             mod_,
             no_cache,
         } => check::run(file.as_deref(), game.as_deref(), mod_.as_deref(), no_cache),
+        Command::Lsp { game, stdio: _ } => {
+            return match pdxl_lsp::run_stdio(pdxl_lsp::Options { game_path: game }) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(e) => {
+                    eprintln!("Error: {e}");
+                    ExitCode::FAILURE
+                }
+            };
+        }
     };
     match result {
         Ok(code) => code,

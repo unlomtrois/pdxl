@@ -17,7 +17,8 @@ members = [
     "crates/pdxl-ck3",      # CK3 schema: def dirs, ref keys, skip lists
     "crates/pdxl-project",  # whole-project analysis + incremental updates
     # user-facing
-    "crates/pdxl-cli",      # the pdxl binary: lex / parse / check
+    "crates/pdxl-cli",      # the pdxl binary: lex / parse / check / lsp
+    "crates/pdxl-lsp",      # the language server (M8a: sync, diagnostics, definition)
     # test / parity infrastructure
     "crates/pdxl-testutil", # shared test helpers (temp trees, repo root)
     "crates/pdxl-parity",   # dump formats, dump binaries, Go differential tests
@@ -41,6 +42,7 @@ pdxl-cache = { path = "crates/pdxl-cache" }
 pdxl-analysis = { path = "crates/pdxl-analysis" }
 pdxl-ck3 = { path = "crates/pdxl-ck3" }
 pdxl-project = { path = "crates/pdxl-project" }
+pdxl-lsp = { path = "crates/pdxl-lsp" }
 pdxl-testutil = { path = "crates/pdxl-testutil" }
 
 # external — added for the syntax cache (M4); versions pinned at the workspace
@@ -48,3 +50,8 @@ serde = { version = "1", features = ["derive"] }
 postcard = { version = "1", default-features = false, features = ["alloc"] }
 sha2 = "0.10"
 clap = { version = "4", features = ["derive"] }
+# external — added for the LSP (M8a)
+lsp-server = "0.7"
+lsp-types = "0.95"
+serde_json = "1"
+crossbeam-channel = "0.5"

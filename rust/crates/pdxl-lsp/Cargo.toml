@@ -1,0 +1,25 @@
+[package]
+name = "pdxl-lsp"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "PDXScript language server (port of internal/lsp): live diagnostics + go-to-definition over pdxl-project."
+
+[dependencies]
+pdxl-analysis.workspace = true
+pdxl-ck3.workspace = true
+pdxl-fileset.workspace = true
+pdxl-path.workspace = true
+pdxl-project.workspace = true
+lsp-server.workspace = true
+lsp-types.workspace = true
+serde_json.workspace = true
+crossbeam-channel.workspace = true
+
+[dev-dependencies]
+pdxl-testutil.workspace = true
+
+[lints.rust]
+unsafe_code = "forbid"
