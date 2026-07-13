@@ -1,0 +1,22 @@
+[package]
+name = "pdxl-cache"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Two-level parse cache: in-memory LRU over a versioned on-disk store (port of internal/cache)."
+
+[dependencies]
+pdxl-ast.workspace = true
+pdxl-parser.workspace = true
+pdxl-path.workspace = true
+serde.workspace = true
+postcard.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+pdxl-testutil.workspace = true
+
+[lints.rust]
+unsafe_code = "forbid"

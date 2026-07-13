@@ -70,6 +70,20 @@ pub enum NodeKind {
 }
 
 impl NodeKind {
+    /// The kind whose discriminant is `v`, or `None` for an out-of-range byte.
+    /// Inverse of `kind as u8`; used by persistent stores (the syntax cache).
+    #[inline]
+    pub const fn from_u8(v: u8) -> Option<NodeKind> {
+        match v {
+            0 => Some(NodeKind::File),
+            1 => Some(NodeKind::Field),
+            2 => Some(NodeKind::Block),
+            3 => Some(NodeKind::TaggedBlock),
+            4 => Some(NodeKind::Scalar),
+            _ => None,
+        }
+    }
+
     /// Stable lowercase name used in structured dumps.
     pub const fn as_str(self) -> &'static str {
         match self {

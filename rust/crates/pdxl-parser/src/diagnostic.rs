@@ -18,6 +18,17 @@ pub enum Severity {
 }
 
 impl Severity {
+    /// The severity whose discriminant is `v`, or `None` for an out-of-range
+    /// byte. Inverse of `severity as u8`; used by persistent stores.
+    #[inline]
+    pub const fn from_u8(v: u8) -> Option<Severity> {
+        match v {
+            0 => Some(Severity::Error),
+            1 => Some(Severity::Warning),
+            _ => None,
+        }
+    }
+
     /// Stable lowercase name used in structured dumps.
     pub const fn as_str(self) -> &'static str {
         match self {

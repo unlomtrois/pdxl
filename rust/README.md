@@ -33,7 +33,8 @@ in the lexer, syntax tree, or analysis layers.
 | 1 | Source model + lexer (`pdxl-src`, `pdxl-lexer`) | Done — byte-for-byte parity |
 | 2 | Parser v3, flat node pool (`pdxl-ast`, `pdxl-parser`) | Done — exact node-layout & diagnostic parity |
 | 3 | FileSet & overlay resolution (`pdxl-path`, `pdxl-fileset`, `pdxl-moddesc`) | Done — exact entry-order, stats & descriptor parity |
-| 4+ | Cache, analysis, CK3 rules, CLI, LSP | Not started |
+| 4 | Syntax cache (`pdxl-cache`) | Done — Go semantics + mandated hardening (versioned entries, atomic writes, race-free L1) |
+| 5+ | Analysis, CK3 rules, CLI, LSP | Not started |
 
 ## Crates
 
@@ -47,6 +48,8 @@ pdxl-ast        flat node-pool syntax tree, data only      (dep: src, lexer)
 pdxl-parser     recursive-descent parser → pdxl-ast trees  (dep: src, lexer, ast)
 pdxl-fileset    scanning + mod-overlay resolution          (dep: path)
 pdxl-moddesc    .mod descriptor parsing                    (dep: parser, path)
+pdxl-cache      two-level parse cache (LRU + disk)         (dep: ast, parser, path;
+                                                            serde/postcard/sha2)
 ```
 
 Test / parity infrastructure (never a production dependency):

@@ -11,6 +11,7 @@ members = [
     # project model
     "crates/pdxl-fileset",  # directory scanning + mod-overlay resolution
     "crates/pdxl-moddesc",  # .mod descriptor parsing
+    "crates/pdxl-cache",    # two-level parse cache (in-memory LRU + disk)
     # test / parity infrastructure
     "crates/pdxl-testutil", # shared test helpers (temp trees, repo root)
     "crates/pdxl-parity",   # dump formats, dump binaries, Go differential tests
@@ -30,4 +31,10 @@ pdxl-ast = { path = "crates/pdxl-ast" }
 pdxl-parser = { path = "crates/pdxl-parser" }
 pdxl-fileset = { path = "crates/pdxl-fileset" }
 pdxl-moddesc = { path = "crates/pdxl-moddesc" }
+pdxl-cache = { path = "crates/pdxl-cache" }
 pdxl-testutil = { path = "crates/pdxl-testutil" }
+
+# external — added for the syntax cache (M4); versions pinned at the workspace
+serde = { version = "1", features = ["derive"] }
+postcard = { version = "1", default-features = false, features = ["alloc"] }
+sha2 = "0.10"

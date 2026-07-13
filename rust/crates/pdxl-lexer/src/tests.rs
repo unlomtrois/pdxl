@@ -415,3 +415,13 @@ fn every_token_slice_matches_range() {
         assert_eq!(tok.value(source), slice);
     }
 }
+
+#[test]
+fn token_kind_u8_roundtrip() {
+    // ALL must list every variant in discriminant order, or from_u8 lies.
+    for (i, kind) in TokenKind::ALL.iter().enumerate() {
+        assert_eq!(*kind as usize, i, "ALL[{i}] out of order: {kind:?}");
+        assert_eq!(TokenKind::from_u8(i as u8), Some(*kind));
+    }
+    assert_eq!(TokenKind::from_u8(TokenKind::ALL.len() as u8), None);
+}

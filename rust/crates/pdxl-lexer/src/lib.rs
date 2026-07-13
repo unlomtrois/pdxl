@@ -26,7 +26,11 @@ pub const UTF8_BOM: &[u8] = &[0xEF, 0xBB, 0xBF];
 /// The kind of a lexical token.
 ///
 /// Variants and their [`TokenKind::as_str`] names match the Go `Tag` constants
-/// and `Tag.String()` exactly, so token dumps are directly comparable.
+/// and `Tag.String()` exactly, so token dumps are directly comparable. Like
+/// Go's `Tag` (a `uint8`), the kind is byte-sized (`repr(u8)`, discriminants
+/// in declaration order) so it can round-trip through persistent storage via
+/// `as u8` / [`TokenKind::from_u8`].
+#[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TokenKind {
     // Identifier
@@ -82,6 +86,53 @@ pub enum TokenKind {
 }
 
 impl TokenKind {
+    /// Every kind, in discriminant order (`ALL[i] as u8 == i`).
+    pub const ALL: [TokenKind; 33] = {
+        use TokenKind::*;
+        [
+            Identifier,
+            LiteralNumber,
+            LiteralString,
+            LiteralBoolean,
+            LiteralDate,
+            LBrace,
+            RBrace,
+            LBracket,
+            RBracket,
+            Plus,
+            Minus,
+            Multiply,
+            Divide,
+            GreaterThan,
+            GreaterEqual,
+            LessThan,
+            LessEqual,
+            Equal,
+            EqualEqual,
+            NotEqual,
+            QuestionEqual,
+            Dot,
+            Colon,
+            At,
+            Pipe,
+            Dollar,
+            MacroParam,
+            ScriptValue,
+            ScriptMath,
+            Percent,
+            Comment,
+            Invalid,
+            Eof,
+        ]
+    };
+
+    /// The kind whose discriminant is `v`, or `None` for an out-of-range byte.
+    /// Inverse of `kind as u8`; used by persistent stores (the syntax cache).
+    #[inline]
+    pub fn from_u8(v: u8) -> Option<TokenKind> {
+        Self::ALL.get(v as usize).copied()
+    }
+
     /// The display name of this kind, identical to Go's `Tag.String()`.
     pub const fn as_str(self) -> &'static str {
         use TokenKind::*;

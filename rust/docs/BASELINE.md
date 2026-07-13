@@ -100,3 +100,15 @@ Node/child counts are identical to Go (verified by the structured differential
 dump): the large fixture yields 626 nodes / 625 child-index entries. The Go
 "863 allocs/op" counts pool growth + child slices + diagnostics, not nodes.
 No regression; parser optimization is out of scope for this milestone.
+
+## Cache benchmark — Rust port (`cargo run --release --example cachebench`)
+
+Same fixture (24401 B). The Rust format stores source raw (no gzip) and pays an
+atomic temp-file + rename per write; L1 sits behind a `Mutex` (Go's `RWMutex`
+read path was a confirmed data race — see MILESTONE-4-REPORT).
+
+| Case | Go | Rust | Difference |
+|---|---|---|---|
+| CacheReadL1 | ~25 ns | ~126 ns | Rust ~5× slower — the price of the race-free `Mutex` + path hashing; still ~400× faster than the disk path it guards |
+| CacheReadDisk | ~184 µs | ~49 µs | Rust ~3.7× faster (no gzip decompress; hash verify dominates) |
+| CacheWriteDisk | ~606 µs | ~106 µs | Rust ~5.7× faster (no gzip compress, despite the extra rename) |

@@ -21,6 +21,17 @@ mod validate;
 pub use node::{Node, NodeId, NodeKind, SyntaxTree};
 pub use validate::{ValidationError, validate_tree};
 
+/// Version of the syntax data model **and** of everything upstream that shapes
+/// it (lexer token rules, parser behavior, node layout).
+///
+/// Persistent stores (the syntax cache) embed this in every entry and treat a
+/// mismatch as a miss. **Bump it whenever a change would make a previously
+/// stored tree wrong** — new token kinds, changed parse rules, reordered node
+/// fields. This is the fix for the Go implementation's "content-keyed caveat",
+/// where entries keyed only by source content silently served stale trees
+/// after a parser change.
+pub const SYNTAX_VERSION: u32 = 1;
+
 // Re-exported so tree consumers can name operator kinds and ranges without a
 // direct pdxl-lexer / pdxl-src dependency.
 pub use pdxl_lexer::TokenKind;
