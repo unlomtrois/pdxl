@@ -1,0 +1,21 @@
+[package]
+name = "pdxl-project"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Whole-project analysis: gather facts over a FileSet, build the symbol table, update incrementally (port of internal/validate Analyze/Project)."
+
+[dependencies]
+pdxl-analysis.workspace = true
+pdxl-fileset.workspace = true
+pdxl-parser.workspace = true
+pdxl-path.workspace = true
+
+[dev-dependencies]
+pdxl-ck3.workspace = true
+pdxl-testutil.workspace = true
+
+[lints.rust]
+unsafe_code = "forbid"

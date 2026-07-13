@@ -18,10 +18,12 @@
 
 mod facts_dump;
 mod fileset_dump;
+mod project_dump;
 mod token_dump;
 mod tree_dump;
 
 pub use facts_dump::{FACTS_DUMP_VERSION, dump_facts};
 pub use fileset_dump::{FILESET_DUMP_VERSION, dump_descriptor, dump_scan};
+pub use project_dump::{PROJECT_DUMP_VERSION, dump_project};
 pub use token_dump::dump_tokens;
 pub use tree_dump::{DUMP_VERSION, dump_json};

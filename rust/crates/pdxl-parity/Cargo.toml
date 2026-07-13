@@ -18,6 +18,7 @@ pdxl-fileset.workspace = true
 pdxl-moddesc.workspace = true
 pdxl-analysis.workspace = true
 pdxl-ck3.workspace = true
+pdxl-project.workspace = true
 
 [dev-dependencies]
 pdxl-testutil.workspace = true
@@ -40,3 +41,7 @@ path = "src/bin/filesetdump.rs"
 [[bin]]
 name = "factsdump"
 path = "src/bin/factsdump.rs"
+
+[[bin]]
+name = "projectdump"
+path = "src/bin/projectdump.rs"

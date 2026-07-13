@@ -157,6 +157,7 @@ dependencies = [
  "pdxl-moddesc",
  "pdxl-parser",
  "pdxl-path",
+ "pdxl-project",
  "pdxl-src",
  "pdxl-testutil",
 ]
@@ -174,6 +175,18 @@ dependencies = [
 [[package]]
 name = "pdxl-path"
 version = "0.1.0"
+
+[[package]]
+name = "pdxl-project"
+version = "0.1.0"
+dependencies = [
+ "pdxl-analysis",
+ "pdxl-ck3",
+ "pdxl-fileset",
+ "pdxl-parser",
+ "pdxl-path",
+ "pdxl-testutil",
+]
 
 [[package]]
 name = "pdxl-src"
