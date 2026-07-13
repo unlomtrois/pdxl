@@ -31,5 +31,10 @@
 # Rust build artifacts
 /rust/target
 
-# Stray go build output
+# Stray go build outputs
 /lexdump
+/pdxl
+/parsedump
+/filesetdump
+/factsdump
+/projectdump
