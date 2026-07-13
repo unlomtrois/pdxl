@@ -17,6 +17,8 @@
 //! `docs/BASELINE.md`: cold build ≈ 4 s once per session; the caches don't
 //! pay).
 
+#[macro_use]
+mod log;
 mod position;
 mod state;
 
@@ -44,6 +46,8 @@ use pdxl_project::Project;
 pub struct Options {
     /// Vanilla game directory; may also arrive via `initializationOptions`.
     pub game_path: Option<String>,
+    /// Log level: error | warn | info | debug (stderr → "pdxl (server)").
+    pub log_level: String,
 }
 
 /// Go `config.Default()` scan ignores (shared with the CLI's `check`).
@@ -72,6 +76,8 @@ pub fn build_project(game: Option<&str>, mod_dir: Option<&str>) -> std::io::Resu
 
 /// Serves the LSP over stdio until the client disconnects. Blocks.
 pub fn run_stdio(opts: Options) -> Result<(), Box<dyn std::error::Error + Sync + Send>> {
+    log::init(&opts.log_level);
+    log_info!("pdxl-lsp starting (rust)");
     let (connection, io_threads) = Connection::stdio();
 
     let capabilities = ServerCapabilities {
@@ -108,16 +114,27 @@ pub fn run_stdio(opts: Options) -> Result<(), Box<dyn std::error::Error + Sync +
     let (events_tx, events_rx) = unbounded::<Event>();
     let mut server = ServerState::new(mod_dir.clone(), connection.sender.clone());
 
+    log_info!(
+        "initialize: game={} mod={}",
+        game.as_deref().unwrap_or("(none)"),
+        mod_dir
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "(none)".into())
+    );
+
     // Async initial build (Go: the goroutine in `initialized`).
     {
         let events_tx = events_tx.clone();
         let game = game.clone();
         let mod_dir = mod_dir.clone();
         std::thread::spawn(move || {
+            let started = std::time::Instant::now();
             let project = build_project(
                 game.as_deref(),
                 mod_dir.as_ref().map(|p| p.to_string_lossy()).as_deref(),
             );
+            log_info!("project build finished in {:.1?}", started.elapsed());
             let _ = events_tx.send(Event::ProjectReady(project.map(Box::new)));
         });
     }

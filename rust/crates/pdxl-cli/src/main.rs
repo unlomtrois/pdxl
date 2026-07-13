@@ -88,9 +88,12 @@ fn main() -> ExitCode {
         Command::Lsp {
             game,
             stdio: _,
-            log_level: _,
+            log_level,
         } => {
-            return match pdxl_lsp::run_stdio(pdxl_lsp::Options { game_path: game }) {
+            return match pdxl_lsp::run_stdio(pdxl_lsp::Options {
+                game_path: game,
+                log_level,
+            }) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(e) => {
                     eprintln!("Error: {e}");

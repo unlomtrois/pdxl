@@ -77,20 +77,29 @@ impl ServerState {
         let mut project = match project {
             Ok(p) => *p,
             Err(e) => {
-                eprintln!("pdxl-lsp: failed to build project: {e}");
+                log_error!("failed to build project: {e}");
                 return;
             }
         };
         for (path, doc) in &self.docs {
-            let _ = project.update_source(path, doc.text.clone());
+            if let Err(e) = project.update_source(path, doc.text.clone()) {
+                log_warn!("post-build update failed for {}: {e}", path.display());
+            }
         }
         self.project = Some(project);
+        log_info!(
+            "project ready: {} symbols, {} diagnostics, {} open docs",
+            self.project.as_ref().unwrap().table().total(),
+            self.project.as_ref().unwrap().diags().len(),
+            self.docs.len()
+        );
         self.publish_project_diagnostics();
     }
 
     /// `textDocument/didOpen`: store the buffer and analyze immediately.
     pub fn did_open(&mut self, uri: Url, text: String) {
         let path = uri_to_path(&uri);
+        log_debug!("didOpen {}", path.display());
         self.docs.insert(
             path.clone(),
             Doc {
@@ -112,14 +121,21 @@ impl ServerState {
         });
         doc.text = text.into_bytes();
         doc.generation += 1;
+        log_debug!("didChange {} (gen {})", path.display(), doc.generation);
         Some((path, doc.generation))
     }
 
     /// A debounce timer fired; acts only if it carries the latest generation.
     pub fn debounce_fired(&mut self, path: &Path, generation: u64) {
         match self.docs.get(path) {
-            Some(doc) if doc.generation == generation => self.analyze_and_publish(path),
-            _ => {} // superseded by a newer edit, or closed
+            Some(doc) if doc.generation == generation => {
+                log_debug!("debounce fired for {} (gen {generation})", path.display());
+                self.analyze_and_publish(path);
+            }
+            _ => log_debug!(
+                "debounce stale for {} (gen {generation}) — skipped",
+                path.display()
+            ),
         }
     }
 
@@ -144,10 +160,18 @@ impl ServerState {
     /// files, opened or not (Go: `analyzeAndPublish`).
     fn analyze_and_publish(&mut self, path: &Path) {
         let Some(project) = &mut self.project else {
+            log_debug!("analyze skipped, project not ready: {}", path.display());
             return; // project not ready; project_ready will catch up
         };
-        if let Some(doc) = self.docs.get(path) {
-            let _ = project.update_source(path, doc.text.clone());
+        if let Some(doc) = self.docs.get(path)
+            && let Err(e) = project.update_source(path, doc.text.clone())
+        {
+            // The most common cause: a file created after the initial scan —
+            // the FileSet doesn't track it (reload the window to rescan).
+            log_warn!(
+                "update failed for {}: {e} (new files need a window reload)",
+                path.display()
+            );
         }
         self.publish_project_diagnostics();
     }
@@ -201,6 +225,7 @@ impl ServerState {
             self.publish(&file, Vec::new());
         }
 
+        log_debug!("published diagnostics for {} file(s)", by_file.len());
         self.published = by_file.into_keys().collect();
     }
 
