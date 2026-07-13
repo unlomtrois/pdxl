@@ -1,0 +1,17 @@
+[package]
+name = "pdxl-ck3"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "CK3 rules for pdxl-analysis: definition directories, reference keys, skip lists (port of schema_ck3.go)."
+
+[dependencies]
+pdxl-analysis.workspace = true
+
+[dev-dependencies]
+pdxl-parser.workspace = true
+
+[lints.rust]
+unsafe_code = "forbid"

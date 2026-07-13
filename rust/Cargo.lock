@@ -84,6 +84,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68ab91017fe16c622486840e4c83c9a37afeff978bd239b5293d61ece587de66"
 
 [[package]]
+name = "pdxl-analysis"
+version = "0.1.0"
+dependencies = [
+ "pdxl-ast",
+ "pdxl-parser",
+ "pdxl-src",
+]
+
+[[package]]
 name = "pdxl-ast"
 version = "0.1.0"
 dependencies = [
@@ -102,6 +111,14 @@ dependencies = [
  "postcard",
  "serde",
  "sha2",
+]
+
+[[package]]
+name = "pdxl-ck3"
+version = "0.1.0"
+dependencies = [
+ "pdxl-analysis",
+ "pdxl-parser",
 ]
 
 [[package]]
@@ -132,7 +149,9 @@ dependencies = [
 name = "pdxl-parity"
 version = "0.1.0"
 dependencies = [
+ "pdxl-analysis",
  "pdxl-ast",
+ "pdxl-ck3",
  "pdxl-fileset",
  "pdxl-lexer",
  "pdxl-moddesc",

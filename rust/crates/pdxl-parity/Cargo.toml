@@ -16,6 +16,8 @@ pdxl-parser.workspace = true
 pdxl-path.workspace = true
 pdxl-fileset.workspace = true
 pdxl-moddesc.workspace = true
+pdxl-analysis.workspace = true
+pdxl-ck3.workspace = true
 
 [dev-dependencies]
 pdxl-testutil.workspace = true
@@ -34,3 +36,7 @@ path = "src/bin/parsedump.rs"
 [[bin]]
 name = "filesetdump"
 path = "src/bin/filesetdump.rs"
+
+[[bin]]
+name = "factsdump"
+path = "src/bin/factsdump.rs"

@@ -66,9 +66,40 @@ impl TextRange {
     }
 }
 
+/// Converts a byte offset into a 1-indexed `(line, column)` for display.
+///
+/// Matches Go's `Token.getPosition` exactly: lines split on `\n`, and the
+/// column counts **bytes** since the last newline (not runes) — a display-only
+/// derivation used for `file:line:col` strings. Offsets remain the internal
+/// currency everywhere else.
+pub fn line_col(source: &[u8], offset: u32) -> (u32, u32) {
+    let mut line = 1;
+    let mut col = 1;
+    for &b in source.iter().take(offset as usize) {
+        if b == b'\n' {
+            line += 1;
+            col = 1;
+        } else {
+            col += 1;
+        }
+    }
+    (line, col)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn line_col_matches_go_semantics() {
+        let src = b"ab\ncd\n";
+        assert_eq!(line_col(src, 0), (1, 1));
+        assert_eq!(line_col(src, 1), (1, 2));
+        assert_eq!(line_col(src, 3), (2, 1)); // first byte after newline
+        assert_eq!(line_col(src, 5), (2, 3));
+        // Column counts bytes: 'é' is 2 bytes, so the byte after it is col 4.
+        assert_eq!(line_col("aé b".as_bytes(), 3), (1, 4));
+    }
 
     #[test]
     fn len_and_empty() {

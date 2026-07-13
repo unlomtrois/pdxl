@@ -16,10 +16,12 @@
 //! Once the port is complete and the Go oracle retires, this crate can shrink or
 //! disappear without touching anything else.
 
+mod facts_dump;
 mod fileset_dump;
 mod token_dump;
 mod tree_dump;
 
+pub use facts_dump::{FACTS_DUMP_VERSION, dump_facts};
 pub use fileset_dump::{FILESET_DUMP_VERSION, dump_descriptor, dump_scan};
 pub use token_dump::dump_tokens;
 pub use tree_dump::{DUMP_VERSION, dump_json};

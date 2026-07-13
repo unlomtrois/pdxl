@@ -34,7 +34,8 @@ in the lexer, syntax tree, or analysis layers.
 | 2 | Parser v3, flat node pool (`pdxl-ast`, `pdxl-parser`) | Done — exact node-layout & diagnostic parity |
 | 3 | FileSet & overlay resolution (`pdxl-path`, `pdxl-fileset`, `pdxl-moddesc`) | Done — exact entry-order, stats & descriptor parity |
 | 4 | Syntax cache (`pdxl-cache`) | Done — Go semantics + mandated hardening (versioned entries, atomic writes, race-free L1) |
-| 5+ | Analysis, CK3 rules, CLI, LSP | Not started |
+| 5 | Per-file facts (`pdxl-analysis`, `pdxl-ck3`) | Done — byte-identical extraction; FactStore deliberately not ported (benchmark-justified) |
+| 6+ | SymbolTable/Project, CLI, LSP | Not started |
 
 ## Crates
 
@@ -50,6 +51,8 @@ pdxl-fileset    scanning + mod-overlay resolution          (dep: path)
 pdxl-moddesc    .mod descriptor parsing                    (dep: parser, path)
 pdxl-cache      two-level parse cache (LRU + disk)         (dep: ast, parser, path;
                                                             serde/postcard/sha2)
+pdxl-analysis   per-file fact extraction (generic engine)  (dep: src, ast)
+pdxl-ck3        CK3 schema: def dirs, ref keys, skips      (dep: analysis)
 ```
 
 Test / parity infrastructure (never a production dependency):

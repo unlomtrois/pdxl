@@ -12,6 +12,9 @@ members = [
     "crates/pdxl-fileset",  # directory scanning + mod-overlay resolution
     "crates/pdxl-moddesc",  # .mod descriptor parsing
     "crates/pdxl-cache",    # two-level parse cache (in-memory LRU + disk)
+    # semantic analysis
+    "crates/pdxl-analysis", # per-file fact extraction (game-agnostic engine)
+    "crates/pdxl-ck3",      # CK3 schema: def dirs, ref keys, skip lists
     # test / parity infrastructure
     "crates/pdxl-testutil", # shared test helpers (temp trees, repo root)
     "crates/pdxl-parity",   # dump formats, dump binaries, Go differential tests
@@ -32,6 +35,8 @@ pdxl-parser = { path = "crates/pdxl-parser" }
 pdxl-fileset = { path = "crates/pdxl-fileset" }
 pdxl-moddesc = { path = "crates/pdxl-moddesc" }
 pdxl-cache = { path = "crates/pdxl-cache" }
+pdxl-analysis = { path = "crates/pdxl-analysis" }
+pdxl-ck3 = { path = "crates/pdxl-ck3" }
 pdxl-testutil = { path = "crates/pdxl-testutil" }
 
 # external — added for the syntax cache (M4); versions pinned at the workspace

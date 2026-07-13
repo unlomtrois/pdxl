@@ -1,0 +1,20 @@
+# every reference shape and every skip rule
+effect = {
+	add_trait = brave
+	remove_trait = "craven"
+	has_trait = prev
+	has_trait = scope:target
+	has_trait = $TRAIT$
+	add_trait = education_$EDUCATION$_5
+	trigger_event = ns.0001
+	trigger_event = { id = ns.0002 days = 5 }
+}
+events = { loose.1 loose.2 }
+first_valid = { fv.1 }
+on_actions = { chained_action }
+random_events = {
+	100 = 0
+	50 = weighted.1
+	chance_to_happen = 25
+	10 = weighted.2
+}

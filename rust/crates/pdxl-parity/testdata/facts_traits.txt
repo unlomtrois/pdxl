@@ -1,0 +1,17 @@
+# trait definitions with aliases and macro params
+brave = {
+	group = personality
+	monthly_prestige = 0.25
+}
+craven = {
+	group = personality
+	group_equivalence = fearful_family
+	opposites = { brave }
+}
+education_diplomacy_1 = {
+	group = education_diplomacy
+	check = $LEVEL$
+	also = $LEVEL$
+	other = $SKILL$
+}
+namespace = not_a_def
