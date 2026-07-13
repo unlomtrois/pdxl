@@ -112,3 +112,32 @@ read path was a confirmed data race — see MILESTONE-4-REPORT).
 | CacheReadL1 | ~25 ns | ~126 ns | Rust ~5× slower — the price of the race-free `Mutex` + path hashing; still ~400× faster than the disk path it guards |
 | CacheReadDisk | ~184 µs | ~49 µs | Rust ~3.7× faster (no gzip decompress; hash verify dominates) |
 | CacheWriteDisk | ~606 µs | ~106 µs | Rust ~5.7× faster (no gzip compress, despite the extra rename) |
+
+## Real-corpus measurement (M6 addendum): CK3 vanilla + T4N total conversion
+
+4,170 vanilla + 1,681 mod `.txt` files, ~195 MB of script; 15 `replace_path`
+directives from the descriptor; `[scan]` ignores applied on both sides.
+Both implementations agree byte-for-byte: 24,232 symbols, 23 duplicates,
+1 unresolved reference.
+
+| run | time | peak RSS | disk |
+|---|---|---|---|
+| Go `check --no-cache` (cold) | ~6.1 s | ~100 MB | — |
+| Go `check` populate run | ~9.2 s | ~228 MB | writes 205 MB `.pdxl/` |
+| Go `check` warm | ~0.32 s | ~87 MB | reads 205 MB store |
+| Rust cold (1 thread, no caches) | ~4.0 s | ~62 MB | — |
+
+Recalibration of the M5 cache decision: at real scale, Go's warm path beats
+cold Rust for repeated CLI runs, so wiring `pdxl-cache` into `gather_facts`
+is justified **for the M7 `check` command** (measured, not assumed). For the
+LSP (one cold build per session, then incremental updates) the cold path
+remains sufficient. Threading headroom measured at ~2.5× on the real corpus
+(memory-bound, not the ~6× seen on small synthetic files).
+
+Bugs found by real data (reported, not fixed, per porting rules):
+- Go `ParseMod` mishandles **Unix** absolute `path=` values (only Windows
+  absolute paths are special-cased); the Linux launcher writes absolute Unix
+  paths, so real descriptors fail to resolve. Rust reproduces this faithfully;
+  fix both together post-parity.
+- T4N itself: `unknown on_action "ep3_akolouthos_on_action"` at
+  `common/on_action/yearly_on_actions.txt:2393:3`.
