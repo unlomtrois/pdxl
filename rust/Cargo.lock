@@ -445,6 +445,7 @@ dependencies = [
  "pdxl-project",
  "pdxl-src",
  "pdxl-testutil",
+ "serde_json",
 ]
 
 [[package]]

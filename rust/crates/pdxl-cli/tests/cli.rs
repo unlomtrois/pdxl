@@ -175,3 +175,67 @@ fn check_runs_are_deterministic() {
     assert_eq!(a.stdout, b.stdout);
     assert!(!a.status.success(), "unresolved ref → non-zero exit");
 }
+
+#[test]
+fn lsp_handshake_declares_capabilities_at_the_right_nesting() {
+    // Field-tested the hard way: lsp-server's `initialize` helper wraps its
+    // argument in {"capabilities": ...}; passing a pre-wrapped InitializeResult
+    // double-nests everything, and vscode-languageclient then sees no declared
+    // sync/providers and never sends a single textDocument notification. This
+    // test speaks the real wire protocol to the real binary and asserts the
+    // exact JSON shape a spec-respecting client reads.
+    use std::io::{BufRead, BufReader, Read, Write};
+
+    let mut proc = Command::new(env!("CARGO_BIN_EXE_pdxl"))
+        .args(["lsp", "--log-level", "error"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .expect("spawn pdxl lsp");
+
+    let body = serde_json::json!({
+        "jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": { "rootUri": "file:///tmp", "capabilities": {} }
+    })
+    .to_string();
+    let stdin = proc.stdin.as_mut().unwrap();
+    write!(stdin, "Content-Length: {}\r\n\r\n{}", body.len(), body).unwrap();
+    stdin.flush().unwrap();
+
+    let mut reader = BufReader::new(proc.stdout.as_mut().unwrap());
+    let mut content_length = 0usize;
+    loop {
+        let mut line = String::new();
+        reader.read_line(&mut line).unwrap();
+        let line = line.trim();
+        if line.is_empty() {
+            break;
+        }
+        if let Some(v) = line.strip_prefix("Content-Length: ") {
+            content_length = v.parse().unwrap();
+        }
+    }
+    let mut buf = vec![0u8; content_length];
+    reader.read_exact(&mut buf).unwrap();
+    let resp: serde_json::Value = serde_json::from_slice(&buf).unwrap();
+
+    let caps = &resp["result"]["capabilities"];
+    assert_eq!(
+        caps["textDocumentSync"], 1,
+        "full sync must be declared: {resp}"
+    );
+    assert_eq!(caps["definitionProvider"], true);
+    assert_eq!(caps["referencesProvider"], true);
+    assert_eq!(caps["hoverProvider"], true);
+    assert_eq!(caps["documentSymbolProvider"], true);
+    assert_eq!(resp["result"]["serverInfo"]["name"], "pdxl");
+    // The double-nesting bug's signature: capabilities inside capabilities.
+    assert!(
+        caps.get("capabilities").is_none(),
+        "double-wrapped InitializeResult: {resp}"
+    );
+
+    let _ = proc.kill();
+    let _ = proc.wait(); // reap the child (clippy: zombie_processes)
+}

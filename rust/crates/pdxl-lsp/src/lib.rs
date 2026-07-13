@@ -90,11 +90,23 @@ pub fn run_stdio(opts: Options) -> Result<(), Box<dyn std::error::Error + Sync +
     };
     // `initialize` must answer fast (clients time out); the project build is
     // deferred to a background thread below.
-    let init_value = connection.initialize(serde_json::json!({
-        "capabilities": capabilities,
-        "serverInfo": { "name": "pdxl" },
-    }))?;
-    let init: InitializeParams = serde_json::from_value(init_value)?;
+    //
+    // NOTE: use the two-step handshake, NOT `Connection::initialize` — that
+    // helper wraps its argument in `{"capabilities": ...}` itself. Passing a
+    // pre-wrapped InitializeResult double-nests the capabilities, and a
+    // spec-respecting client (vscode-languageclient) then sees no declared
+    // sync/providers and never sends a single textDocument notification.
+    // (Field-tested the hard way; hand-rolled smoke clients that ignore the
+    // handshake cannot catch this.)
+    let (init_id, init_params) = connection.initialize_start()?;
+    let init: InitializeParams = serde_json::from_value(init_params)?;
+    connection.initialize_finish(
+        init_id,
+        serde_json::json!({
+            "capabilities": capabilities,
+            "serverInfo": { "name": "pdxl" },
+        }),
+    )?;
 
     // Game dir: --game flag, overridable by initializationOptions.gamePath.
     let mut game = opts.game_path.clone();

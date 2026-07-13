@@ -22,6 +22,7 @@ clap.workspace = true
 
 [dev-dependencies]
 pdxl-testutil.workspace = true
+serde_json.workspace = true
 
 [lints.rust]
 unsafe_code = "forbid"
