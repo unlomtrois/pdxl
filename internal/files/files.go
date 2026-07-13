@@ -213,7 +213,11 @@ func ParseMod(modFile string) (Mod, error) {
 			m.Name = strings.Trim(val, `"`)
 		case "path":
 			raw := strings.Trim(val, `"`)
-			if IsWindowsAbsolute(raw) {
+			// Absolute paths are kept verbatim: Windows-shaped (C:/...) for
+			// Proton-managed descriptors, and native absolute paths — the Linux
+			// launcher writes absolute Unix paths, which used to be wrongly
+			// joined onto the .mod directory.
+			if IsWindowsAbsolute(raw) || filepath.IsAbs(raw) {
 				m.Path = raw
 			} else {
 				m.Path = filepath.Join(filepath.Dir(modFile), filepath.FromSlash(raw))

@@ -20,10 +20,13 @@
 //! incrementality correct and simple.
 //!
 //! Deliberate deviations from Go (per the measured-simplification plan):
-//! - No `FactStore` (see the M5 benchmark: cold gather of a CK3-scale corpus is
-//!   ~87 ms single-threaded).
-//! - No AST-cache integration in the gather path yet; `pdxl-cache` exists and
-//!   can be wired in at the LSP milestone if warm-start measurements ask for it.
+//! - No `FactStore` (see the M5 benchmark; facts re-extract in one cheap walk).
+//! - The AST cache is opt-in via [`analyze_with`]; real-corpus measurement
+//!   (`docs/BASELINE.md`) showed it does NOT pay for one-shot `check` runs
+//!   (warm ≈ cold: both read+hash every file, and decoding stored trees costs
+//!   as much as parsing) — Go's fast warm path was its tiny-entry FactStore.
+//!   The CLI therefore does not use it; it remains available for consumers
+//!   with different access patterns.
 //! - The schema is an explicit parameter (Go links the CK3 registry directly).
 
 use std::collections::HashMap;
@@ -47,23 +50,39 @@ struct FileKey {
 ///
 /// Mirrors Go's `Analyze(fs, nil, nil)` (no caches).
 pub fn analyze(fs: &FileSet, schema: &Schema) -> io::Result<(SymbolTable, Vec<RefDiag>)> {
-    let (order, facts) = gather_facts(fs, schema)?;
+    analyze_with(fs, schema, None)
+}
+
+/// Like [`analyze`], but parse results flow through the syntax cache when one
+/// is supplied: an unchanged file's tree is reconstructed from the cache entry
+/// instead of re-parsed, and misses populate the cache for the next run.
+///
+/// Real-corpus measurement (see `docs/BASELINE.md`): this does NOT speed up
+/// one-shot `check`-style runs (warm ≈ cold at CK3 scale). It exists for
+/// consumers whose access pattern differs (e.g. re-analyzing a subset).
+pub fn analyze_with(
+    fs: &FileSet,
+    schema: &Schema,
+    cache: Option<&pdxl_cache::Store>,
+) -> io::Result<(SymbolTable, Vec<RefDiag>)> {
+    let (order, facts) = gather_facts(fs, schema, cache)?;
     let rels: Vec<&str> = order.iter().map(|k| k.rel.as_str()).collect();
     Ok(merge_and_resolve(&rels, &facts))
 }
 
-/// Walks `fs` once, parsing every winning file and extracting its facts.
+/// Walks `fs` once, obtaining every winning file's tree (via the cache when
+/// supplied, else by parsing) and extracting its facts.
 fn gather_facts(
     fs: &FileSet,
     schema: &Schema,
+    cache: Option<&pdxl_cache::Store>,
 ) -> io::Result<(Vec<FileKey>, HashMap<String, FileFacts>)> {
     let mut order = Vec::new();
     let mut facts = HashMap::new();
     fs.try_for_each(|entry| -> io::Result<()> {
-        let src = std::fs::read(&entry.full_path)?;
         let full = entry.full_path.to_string_lossy().into_owned();
-        let parsed = pdxl_parser::parse(full.clone(), src);
-        let f = extract_facts(parsed.tree(), &entry.rel_path, &full, schema);
+        let tree = obtain_tree(&entry.full_path, &full, cache)?;
+        let f = extract_facts(&tree, &entry.rel_path, &full, schema);
         order.push(FileKey {
             rel: entry.rel_path.clone(),
             full: entry.full_path.clone(),
@@ -72,6 +91,33 @@ fn gather_facts(
         Ok(())
     })?;
     Ok((order, facts))
+}
+
+/// Returns the syntax tree for a file: a cache hit when possible, otherwise a
+/// fresh parse (which populates the cache). Mirrors Go's `parseEntry`.
+fn obtain_tree(
+    path: &Path,
+    full: &str,
+    cache: Option<&pdxl_cache::Store>,
+) -> io::Result<std::sync::Arc<pdxl_parser::SyntaxTree>> {
+    if let Some(store) = cache {
+        let mtime = pdxl_cache::Store::mtime_nanos(&std::fs::metadata(path)?);
+        if let Some(hit) = store.get(path, mtime) {
+            return Ok(hit.tree);
+        }
+        let src = std::fs::read(path)?;
+        let (tree, diags) = pdxl_parser::parse(full.to_string(), src.clone()).into_parts();
+        let parse = pdxl_cache::CachedParse {
+            tree: std::sync::Arc::new(tree),
+            diagnostics: diags.into(),
+        };
+        // Best-effort: a cache write failure must not fail the analysis.
+        let _ = store.put(path, mtime, &src, parse.clone());
+        return Ok(parse.tree);
+    }
+    let src = std::fs::read(path)?;
+    let (tree, _) = pdxl_parser::parse(full.to_string(), src).into_parts();
+    Ok(std::sync::Arc::new(tree))
 }
 
 /// A whole-project symbol table held in memory, supporting cheap incremental
@@ -90,7 +136,7 @@ impl Project {
     /// Gathers facts for every winning file in `fs` and builds the initial
     /// table and diagnostics.
     pub fn new(fs: &FileSet, schema: Schema) -> io::Result<Project> {
-        let (order, facts) = gather_facts(fs, &schema)?;
+        let (order, facts) = gather_facts(fs, &schema, None)?;
         let mut p = Project {
             schema,
             order,

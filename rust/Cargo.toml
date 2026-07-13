@@ -16,6 +16,8 @@ members = [
     "crates/pdxl-analysis", # per-file fact extraction (game-agnostic engine)
     "crates/pdxl-ck3",      # CK3 schema: def dirs, ref keys, skip lists
     "crates/pdxl-project",  # whole-project analysis + incremental updates
+    # user-facing
+    "crates/pdxl-cli",      # the pdxl binary: lex / parse / check
     # test / parity infrastructure
     "crates/pdxl-testutil", # shared test helpers (temp trees, repo root)
     "crates/pdxl-parity",   # dump formats, dump binaries, Go differential tests
@@ -45,3 +47,4 @@ pdxl-testutil = { path = "crates/pdxl-testutil" }
 serde = { version = "1", features = ["derive"] }
 postcard = { version = "1", default-features = false, features = ["alloc"] }
 sha2 = "0.10"
+clap = { version = "4", features = ["derive"] }

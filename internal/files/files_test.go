@@ -250,3 +250,21 @@ func TestNonTxtSkipped(t *testing.T) {
 		t.Errorf("expected [events.txt], got %v", paths)
 	}
 }
+
+func TestParseModUnixAbsolutePath(t *testing.T) {
+	// The Linux launcher writes absolute Unix paths into .mod descriptors;
+	// they must be kept verbatim, not joined onto the .mod directory.
+	dir := t.TempDir()
+	modFile := filepath.Join(dir, "abs.mod")
+	content := `name="Abs Mod"` + "\n" + `path="/opt/mods/AbsMod"` + "\n"
+	if err := os.WriteFile(modFile, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m, err := ParseMod(modFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Path != "/opt/mods/AbsMod" {
+		t.Errorf("path: got %q, want %q", m.Path, "/opt/mods/AbsMod")
+	}
+}

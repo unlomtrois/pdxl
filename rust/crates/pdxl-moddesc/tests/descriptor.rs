@@ -138,3 +138,14 @@ fn is_windows_absolute_cases() {
         assert_eq!(is_windows_absolute(p), want, "is_windows_absolute({p:?})");
     }
 }
+
+#[test]
+fn unix_absolute_path_kept_verbatim() {
+    // The Linux launcher writes absolute Unix paths into .mod descriptors;
+    // they must be kept verbatim, not joined onto the .mod directory.
+    let t = TempTree::new();
+    let mod_file = t.child("abs.mod");
+    std::fs::write(&mod_file, "name=\"Abs Mod\"\npath=\"/opt/mods/AbsMod\"\n").unwrap();
+    let m = parse_mod(&mod_file).unwrap();
+    assert_eq!(m.path, PathBuf::from("/opt/mods/AbsMod"));
+}

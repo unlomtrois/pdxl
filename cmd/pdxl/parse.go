@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"pdxl/internal/lexer"
 	v3 "pdxl/internal/parser/v3"
 )
 
@@ -25,7 +26,11 @@ var parseCmd = &cobra.Command{
 		}
 		tree, diags := v3.Parse(filename, data)
 		for _, d := range diags {
-			fmt.Fprintf(os.Stderr, "%s\n", d.String())
+			// Format against the actual source: Diagnostic.String() passes a
+			// nil source to FormatPosition, which panics for any diagnostic
+			// past offset 0 (line/col derivation walks the source bytes).
+			tok := lexer.Token{Start: d.Offset, End: d.Offset}
+			fmt.Fprintf(os.Stderr, "%s: %s\n", tok.FormatPosition(d.Filename, data), d.Msg)
 		}
 		switch {
 		case parseJSON:

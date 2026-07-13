@@ -54,7 +54,12 @@ pub fn parse_mod(mod_file: impl AsRef<Path>) -> io::Result<ModDescriptor> {
             b"name" => m.name = trim_quotes(val).to_string(),
             b"path" => {
                 let raw = trim_quotes(val);
-                if is_windows_absolute(raw) {
+                // Absolute paths are kept verbatim: Windows-shaped (C:/...) for
+                // Proton-managed descriptors, and native absolute paths — the
+                // Linux launcher writes absolute Unix paths, which used to be
+                // wrongly joined onto the .mod directory (fixed in Go in
+                // lockstep; see the M7 report).
+                if is_windows_absolute(raw) || raw.starts_with('/') {
                     m.path = PathBuf::from(raw);
                 } else {
                     // Join(dir(modFile), FromSlash(raw)) — FromSlash is identity

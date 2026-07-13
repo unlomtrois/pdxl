@@ -36,7 +36,8 @@ in the lexer, syntax tree, or analysis layers.
 | 4 | Syntax cache (`pdxl-cache`) | Done — Go semantics + mandated hardening (versioned entries, atomic writes, race-free L1) |
 | 5 | Per-file facts (`pdxl-analysis`, `pdxl-ck3`) | Done — byte-identical extraction; FactStore deliberately not ported (benchmark-justified) |
 | 6 | Whole-project analysis (`pdxl-project` + table/resolve in `pdxl-analysis`) | Done — byte-identical counts/duplicates/diagnostics; incremental ≡ fresh |
-| 7+ | CLI, LSP | Not started |
+| 7 | CLI (`pdxl-cli`: lex, parse, check) | Done — snapshot-identical stdout + exit codes; ParseMod Unix-path fix landed in both implementations |
+| 8 | LSP | Not started |
 
 ## Crates
 
@@ -55,7 +56,10 @@ pdxl-cache      two-level parse cache (LRU + disk)         (dep: ast, parser, pa
 pdxl-analysis   facts + symbol table + resolution (pure)   (dep: src, ast)
 pdxl-ck3        CK3 schema: def dirs, ref keys, skips      (dep: analysis)
 pdxl-project    FileSet walk → analyze; incremental updates (dep: analysis,
-                                                             fileset, parser, path)
+                                                             fileset, parser, path,
+                                                             cache [opt-in])
+pdxl-cli        the `pdxl` binary: lex / parse / check      (dep: most of the above,
+                                                             clap)
 ```
 
 Test / parity infrastructure (never a production dependency):

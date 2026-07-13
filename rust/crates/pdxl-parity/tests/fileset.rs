@@ -268,6 +268,12 @@ fn descriptor_differential() {
     .unwrap();
     mod_files.push(broken);
 
+    // Unix-absolute path: kept verbatim after the lockstep ParseMod fix (M7) —
+    // the Linux launcher writes absolute Unix paths into real descriptors.
+    let unix_abs = misc.child("abs.mod");
+    std::fs::write(&unix_abs, "name=\"Abs\"\npath=\"/opt/mods/AbsMod\"\n").unwrap();
+    mod_files.push(unix_abs);
+
     for mf in &mod_files {
         let m = parse_mod(mf).expect("parse_mod");
         let rust = dump_descriptor(&m);

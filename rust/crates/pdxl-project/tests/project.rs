@@ -284,3 +284,29 @@ fn incremental_equals_fresh_analysis() {
         );
     }
 }
+
+#[test]
+fn analyze_with_cache_matches_uncached() {
+    // The AST cache must be invisible to results: cold, populate, and warm
+    // runs all produce the same table and diagnostics.
+    let d = TempTree::new();
+    d.write("common/traits/00_t.txt", "brave = { }\n");
+    d.write(
+        "common/scripted_effects/e.txt",
+        "e = { add_trait = brave add_trait = nope }\n",
+    );
+    let fs = fileset(&d);
+    let schema = pdxl_ck3::schema();
+
+    let (cold_table, cold_diags) = analyze(&fs, &schema).unwrap();
+    let store = pdxl_cache::Store::new(d.child(".cache"), 16).unwrap();
+    let (_, populate_diags) = pdxl_project::analyze_with(&fs, &schema, Some(&store)).unwrap();
+    let (warm_table, warm_diags) = pdxl_project::analyze_with(&fs, &schema, Some(&store)).unwrap();
+
+    assert_eq!(cold_diags, populate_diags);
+    assert_eq!(cold_diags, warm_diags);
+    assert_eq!(cold_table.total(), warm_table.total());
+    for kind in SymbolKind::ALL {
+        assert_eq!(cold_table.count(kind), warm_table.count(kind), "{kind:?}");
+    }
+}
