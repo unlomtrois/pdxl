@@ -30,55 +30,55 @@ pub const UTF8_BOM: &[u8] = &[0xEF, 0xBB, 0xBF];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum TokenKind {
     // Identifier
-    Identifier,
+    Identifier, // id
 
     // Literals
-    LiteralNumber,
-    LiteralString,
-    LiteralBoolean,
-    LiteralDate,
+    LiteralNumber, // 123, 0.1, 1.2.3
+    LiteralString, // "string"
+    LiteralBoolean, // yes, no
+    LiteralDate, // 1099.1.1
 
     // Delimiters
-    LBrace,
-    RBrace,
-    LBracket,
-    RBracket,
+    LBrace, // {
+    RBrace, // }
+    LBracket, // [
+    RBracket, // ]
 
     // Arithmetic operators
-    Plus,
-    Minus,
-    Multiply,
-    Divide,
+    Plus, // `+`
+    Minus, // `-`
+    Multiply, // `*`
+    Divide, // `/`
 
     // Comparison operators
-    GreaterThan,
-    GreaterEqual,
-    LessThan,
-    LessEqual,
+    GreaterThan, // `>`
+    GreaterEqual, // `>=`
+    LessThan, // `<`
+    LessEqual, // `<=`
 
     // Assignment
-    Equal,
+    Equal, // `=`
 
     // Equality
-    EqualEqual,
-    NotEqual,
-    QuestionEqual,
+    EqualEqual, // `==`
+    NotEqual, // `!=`
+    QuestionEqual, // `?=`
 
     // Scope resolution operators / PDXScript specials
-    Dot,
-    Colon,
-    At,
-    Pipe,
-    Dollar,
-    MacroParam,
-    ScriptValue,
-    ScriptMath,
+    Dot, // `.`
+    Colon, // `:`
+    At, // `@`
+    Pipe, // `|`
+    Dollar, // `$`
+    MacroParam, // `$IDENT$`
+    ScriptValue, // `@name`
+    ScriptMath, // `@[ ... ]`
 
-    Percent,
+    Percent, // `%`
 
-    Comment,
-    Invalid,
-    Eof,
+    Comment, // `#...`
+    Invalid, // invalid token
+    Eof, // end of file
 }
 
 impl TokenKind {
