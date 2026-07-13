@@ -95,3 +95,23 @@ full-text (Go parity). Position encoding: UTF-16 at the boundary only.
 completion and rename (the two "hard" features), workspace/symbol (needs
 explicit sorting), `pdxl.toml` loading, and editor field-testing via VS Code
 against the real T4N workspace.
+
+## Field test (VS Code + real T4N workspace) — PASSED
+Setup: the existing `editor/vscode` extension unchanged (built + installed as
+a .vsix); workspace `.vscode/settings.json` pointing `pdxl.serverPath` at the
+Rust release binary and `pdxl.gamePath` at the CK3 game dir. The Rust server
+is a drop-in replacement for the Go one behind the same client.
+
+Two launch-blocking bugs were found only by the real client, then fixed:
+1. **Deploy-order**: the extension always passes `--log-level`, which the
+   binary initially rejected (added in `5721ca2` + `3b73678` gave the flag a
+   real leveled stderr logger feeding the "pdxl (server)" output channel).
+2. **Double-wrapped InitializeResult** (`c800593`): `lsp-server`'s
+   `initialize()` helper wraps its argument in `{"capabilities": ...}`; we
+   passed a pre-wrapped result, so VS Code saw no declared sync/providers and
+   — being spec-respecting — never sent a single textDocument notification.
+   Hand-rolled smoke clients ignore the handshake and could not catch this;
+   the wire-level regression test now asserts the exact nesting.
+
+Confirmed live by the user: hot reload works — diagnostics appear/clear
+~200 ms after edits, across the full CK3 vanilla + T4N corpus.
