@@ -311,3 +311,238 @@ fn event_enum_is_send() {
     fn assert_send<T: Send>() {}
     assert_send::<Event>();
 }
+
+// ── M8b: references, outline, hover ─────────────────────────────────────────
+
+/// A three-file project: one definition (with params), two referencing files.
+fn m8b_project() -> (TempTree, ServerState, Receiver<Message>) {
+    let t = TempTree::new();
+    t.write(
+        "common/scripted_triggers/00.txt",
+        "# top\nmy_trigger = {\n\tx = $COUNT$\n}\nother_trigger = { always = yes }\n",
+    );
+    t.write("common/traits/00.txt", "brave = { }\n");
+    t.write(
+        "common/scripted_effects/a.txt",
+        "e = { add_trait = brave }\n",
+    );
+    t.write(
+        "common/scripted_effects/b.txt",
+        "f = { add_trait = brave has_trait = brave }\n",
+    );
+    let (server, rx) = server_over_parts(&t);
+    (t, server, rx)
+}
+
+fn server_over_parts(t: &TempTree) -> (ServerState, Receiver<Message>) {
+    let (tx, rx) = unbounded();
+    let mut server = ServerState::new(Some(t.path.clone()), tx);
+    let project = build_project(None, Some(&t.path.to_string_lossy()));
+    server.project_ready(project.map(Box::new));
+    (server, rx)
+}
+
+#[test]
+fn references_from_a_reference_site() {
+    let (t, server, _rx) = m8b_project();
+    // Cursor on "brave" in a.txt: `e = { add_trait = brave }` → col 19.
+    let uri = uri_for(&t, "common/scripted_effects/a.txt");
+    let locs = server.references(
+        &uri,
+        Position {
+            line: 0,
+            character: 19,
+        },
+        false,
+    );
+    assert_eq!(locs.len(), 3, "three reference sites: {locs:?}");
+    assert!(locs.iter().all(|l| {
+        let p = l.uri.to_file_path().unwrap();
+        p.ends_with("a.txt") || p.ends_with("b.txt")
+    }));
+}
+
+#[test]
+fn references_include_declaration_appends_definition_last() {
+    let (t, server, _rx) = m8b_project();
+    let uri = uri_for(&t, "common/scripted_effects/a.txt");
+    let locs = server.references(
+        &uri,
+        Position {
+            line: 0,
+            character: 19,
+        },
+        true,
+    );
+    assert_eq!(locs.len(), 4, "three refs + declaration");
+    let last = locs.last().unwrap().uri.to_file_path().unwrap();
+    assert!(
+        last.ends_with("common/traits/00.txt"),
+        "declaration last (Go parity)"
+    );
+}
+
+#[test]
+fn references_from_the_definition_name() {
+    // Defs-first symbolAt: cursor on the DEFINITION name finds its references.
+    let (t, server, _rx) = m8b_project();
+    let uri = uri_for(&t, "common/traits/00.txt");
+    let locs = server.references(
+        &uri,
+        Position {
+            line: 0,
+            character: 2,
+        },
+        false,
+    );
+    assert_eq!(locs.len(), 3, "cursor on `brave = {{}}` finds all refs");
+}
+
+#[test]
+fn document_symbol_lists_definitions() {
+    let (t, server, _rx) = m8b_project();
+    let uri = uri_for(&t, "common/scripted_triggers/00.txt");
+    let symbols = server.document_symbol(&uri);
+    let names: Vec<&str> = symbols.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(names, vec!["my_trigger", "other_trigger"]);
+    assert!(
+        symbols
+            .iter()
+            .all(|s| s.kind == lsp_types::SymbolKind::FUNCTION)
+    );
+    // my_trigger is on line 1 (after the comment).
+    assert_eq!(
+        symbols[0].range.start,
+        Position {
+            line: 1,
+            character: 0
+        }
+    );
+    assert_eq!(
+        symbols[0].selection_range.end,
+        Position {
+            line: 1,
+            character: 10
+        }
+    );
+}
+
+#[test]
+fn hover_shows_kind_file_and_params() {
+    let (t, server, _rx) = m8b_project();
+    // Hover the definition name of my_trigger (has $COUNT$).
+    let uri = uri_for(&t, "common/scripted_triggers/00.txt");
+    let hover = server
+        .hover(
+            &uri,
+            Position {
+                line: 1,
+                character: 3,
+            },
+        )
+        .expect("hover on definition");
+    let lsp_types::HoverContents::Markup(m) = hover.contents else {
+        panic!("expected markup");
+    };
+    assert!(
+        m.value.contains("scripted_trigger my_trigger"),
+        "{}",
+        m.value
+    );
+    assert!(
+        m.value.contains("common/scripted_triggers/00.txt"),
+        "{}",
+        m.value
+    );
+    assert!(m.value.contains("`$COUNT$`"), "{}", m.value);
+    // The highlighted span is the definition name on line 1.
+    assert_eq!(
+        hover.range.unwrap().start,
+        Position {
+            line: 1,
+            character: 0
+        }
+    );
+}
+
+#[test]
+fn hover_on_unresolved_reference_says_so() {
+    let t = TempTree::new();
+    t.write(
+        "common/scripted_effects/e.txt",
+        "e = { add_trait = ghost }\n",
+    );
+    let (server, _rx) = server_over_parts(&t);
+    let uri = uri_for(&t, "common/scripted_effects/e.txt");
+    let hover = server
+        .hover(
+            &uri,
+            Position {
+                line: 0,
+                character: 19,
+            },
+        )
+        .expect("hover on unresolved ref");
+    let lsp_types::HoverContents::Markup(m) = hover.contents else {
+        panic!("expected markup");
+    };
+    assert!(m.value.contains("trait ghost"), "{}", m.value);
+    assert!(m.value.contains("(unresolved)"), "{}", m.value);
+}
+
+#[test]
+fn m8b_no_result_branches_are_empty() {
+    let (t, server, _rx) = m8b_project();
+    let uri = uri_for(&t, "common/scripted_effects/a.txt");
+    // NOTE: character 0 (the key "e") is NOT empty — in scripted_effects/ the
+    // top-level key is a definition, and defs-first symbol_at finds it. The
+    // truly symbol-free position is the '=' at character 2.
+    assert!(
+        server
+            .references(
+                &uri,
+                Position {
+                    line: 0,
+                    character: 2
+                },
+                true
+            )
+            .is_empty()
+    );
+    assert!(
+        server
+            .hover(
+                &uri,
+                Position {
+                    line: 0,
+                    character: 2
+                }
+            )
+            .is_none()
+    );
+    // And the def-at-char-0 behavior itself: declaration-only result.
+    let decl_only = server.references(
+        &uri,
+        Position {
+            line: 0,
+            character: 0,
+        },
+        true,
+    );
+    assert_eq!(decl_only.len(), 1, "def with no refs → declaration only");
+    // Untracked file.
+    let stranger = Url::from_file_path(t.child("nope.txt")).unwrap();
+    assert!(
+        server
+            .references(
+                &stranger,
+                Position {
+                    line: 0,
+                    character: 0
+                },
+                true
+            )
+            .is_empty()
+    );
+    assert!(server.document_symbol(&stranger).is_empty());
+}

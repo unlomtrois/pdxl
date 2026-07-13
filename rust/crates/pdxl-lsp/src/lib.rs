@@ -11,9 +11,11 @@
 //! scale) runs off-thread exactly like Go's `initialized` goroutine, keeping
 //! the handshake fast.
 //!
-//! Deviations from Go (documented): no AST/facts caches in the build (measured
-//! in `docs/BASELINE.md`: cold build ≈ 4 s once per session; the caches don't
-//! pay), and `referencesProvider` is not yet declared (M8b).
+//! M8b adds references (Go parity), plus document outline and hover — the
+//! first features the Go server does not have. Deviations from Go
+//! (documented): no AST/facts caches in the build (measured in
+//! `docs/BASELINE.md`: cold build ≈ 4 s once per session; the caches don't
+//! pay).
 
 mod position;
 mod state;
@@ -75,6 +77,9 @@ pub fn run_stdio(opts: Options) -> Result<(), Box<dyn std::error::Error + Sync +
     let capabilities = ServerCapabilities {
         text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)),
         definition_provider: Some(OneOf::Left(true)),
+        references_provider: Some(OneOf::Left(true)),
+        document_symbol_provider: Some(OneOf::Left(true)),
+        hover_provider: Some(lsp_types::HoverProviderCapability::Simple(true)),
         ..ServerCapabilities::default()
     };
     // `initialize` must answer fast (clients time out); the project build is
@@ -168,6 +173,59 @@ fn handle_request(server: &mut ServerState, out: &Sender<Message>, req: lsp_serv
                     );
                     let result = location.map(GotoDefinitionResponse::Scalar);
                     Response::new_ok(req.id, result)
+                }
+                Err(e) => Response::new_err(
+                    req.id,
+                    lsp_server::ErrorCode::InvalidParams as i32,
+                    e.to_string(),
+                ),
+            };
+            let _ = out.send(Message::Response(resp));
+        }
+        lsp_types::request::References::METHOD => {
+            let resp = match serde_json::from_value::<lsp_types::ReferenceParams>(req.params) {
+                Ok(params) => {
+                    let locations = server.references(
+                        &params.text_document_position.text_document.uri,
+                        params.text_document_position.position,
+                        params.context.include_declaration,
+                    );
+                    // Go parity: an empty result is null, not [].
+                    let result = (!locations.is_empty()).then_some(locations);
+                    Response::new_ok(req.id, result)
+                }
+                Err(e) => Response::new_err(
+                    req.id,
+                    lsp_server::ErrorCode::InvalidParams as i32,
+                    e.to_string(),
+                ),
+            };
+            let _ = out.send(Message::Response(resp));
+        }
+        lsp_types::request::DocumentSymbolRequest::METHOD => {
+            let resp = match serde_json::from_value::<lsp_types::DocumentSymbolParams>(req.params) {
+                Ok(params) => {
+                    let symbols = server.document_symbol(&params.text_document.uri);
+                    let result = (!symbols.is_empty())
+                        .then_some(lsp_types::DocumentSymbolResponse::Nested(symbols));
+                    Response::new_ok(req.id, result)
+                }
+                Err(e) => Response::new_err(
+                    req.id,
+                    lsp_server::ErrorCode::InvalidParams as i32,
+                    e.to_string(),
+                ),
+            };
+            let _ = out.send(Message::Response(resp));
+        }
+        lsp_types::request::HoverRequest::METHOD => {
+            let resp = match serde_json::from_value::<lsp_types::HoverParams>(req.params) {
+                Ok(params) => {
+                    let hover = server.hover(
+                        &params.text_document_position_params.text_document.uri,
+                        params.text_document_position_params.position,
+                    );
+                    Response::new_ok(req.id, hover)
                 }
                 Err(e) => Response::new_err(
                     req.id,

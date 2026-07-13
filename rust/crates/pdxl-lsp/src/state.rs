@@ -241,6 +241,142 @@ impl ServerState {
         })
     }
 
+    /// `textDocument/references`: resolves the symbol under the cursor
+    /// (definitions first — the cursor on a `NAME = {}` name finds that
+    /// symbol's references) and returns every reference across the project in
+    /// walk order, with the declaration appended last when requested
+    /// (Go parity: `references` + `symbolAt` + `refsToLocations`).
+    pub fn references(&self, uri: &Url, pos: Position, include_declaration: bool) -> Vec<Location> {
+        let path = uri_to_path(uri);
+        let Some(project) = &self.project else {
+            return Vec::new();
+        };
+        let Some(facts) = project.facts_at(&path) else {
+            return Vec::new();
+        };
+        let Ok(src) = self.read_file(&path) else {
+            return Vec::new();
+        };
+        let off = position_to_offset(&src, pos);
+        let Some((kind, name)) = symbol_at(facts, off) else {
+            return Vec::new();
+        };
+        let name = name.to_string();
+
+        // Convert refs to locations, reading each file once (Go's srcCache).
+        let mut src_cache: HashMap<PathBuf, Option<Vec<u8>>> = HashMap::new();
+        let mut locations = Vec::new();
+        for r in project.references(kind, &name) {
+            let file = PathBuf::from(&r.file);
+            let text = src_cache
+                .entry(file.clone())
+                .or_insert_with(|| self.read_file(&file).ok());
+            let Some(text) = text else { continue };
+            locations.push(Location {
+                uri: path_to_uri(&file),
+                range: Range {
+                    start: offset_to_position(text, r.start),
+                    end: offset_to_position(text, r.end),
+                },
+            });
+        }
+
+        if include_declaration
+            && let Some(symbol) = project.table().lookup(kind, &name)
+            && let Some(def_full) = project.rel_to_full(&symbol.file)
+            && let Ok(def_src) = self.read_file(def_full)
+        {
+            locations.push(Location {
+                uri: path_to_uri(def_full),
+                range: Range {
+                    start: offset_to_position(&def_src, symbol.offset),
+                    end: offset_to_position(&def_src, symbol.end_offset),
+                },
+            });
+        }
+        locations
+    }
+
+    /// `textDocument/documentSymbol`: the file's definitions as a flat outline.
+    /// Built from `FileFacts.defs` — a feature the Go server does not have.
+    pub fn document_symbol(&self, uri: &Url) -> Vec<lsp_types::DocumentSymbol> {
+        let path = uri_to_path(uri);
+        let Some(project) = &self.project else {
+            return Vec::new();
+        };
+        let Some(facts) = project.facts_at(&path) else {
+            return Vec::new();
+        };
+        let Ok(src) = self.read_file(&path) else {
+            return Vec::new();
+        };
+        facts
+            .defs
+            .iter()
+            .map(|d| {
+                let range = Range {
+                    start: offset_to_position(&src, d.offset),
+                    end: offset_to_position(&src, d.end_offset),
+                };
+                #[allow(deprecated)] // `deprecated` is a required struct field
+                lsp_types::DocumentSymbol {
+                    name: d.name.clone(),
+                    detail: Some(d.kind.as_str().to_string()),
+                    kind: lsp_symbol_kind(d.kind),
+                    tags: None,
+                    deprecated: None,
+                    // Facts carry the name span, not the block extent; both
+                    // ranges are the name until the facts record block ends.
+                    range,
+                    selection_range: range,
+                    children: None,
+                }
+            })
+            .collect()
+    }
+
+    /// `textDocument/hover`: kind, name, defining file, and macro parameters
+    /// of the symbol under the cursor (definitions first, like references).
+    pub fn hover(&self, uri: &Url, pos: Position) -> Option<lsp_types::Hover> {
+        let path = uri_to_path(uri);
+        let project = self.project.as_ref()?;
+        let facts = project.facts_at(&path)?;
+        let src = self.read_file(&path).ok()?;
+        let off = position_to_offset(&src, pos);
+        let (kind, name) = symbol_at(facts, off)?;
+
+        let mut text = format!("```pdxscript\n{} {}\n```", kind.as_str(), name);
+        if let Some(symbol) = project.table().lookup(kind, name) {
+            text.push_str(&format!("\n\nDefined in `{}`", symbol.file));
+            if !symbol.params.is_empty() {
+                text.push_str("\n\nParameters: ");
+                text.push_str(
+                    &symbol
+                        .params
+                        .iter()
+                        .map(|p| format!("`${p}$`"))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                );
+            }
+        } else {
+            text.push_str("\n\n*(unresolved)*");
+        }
+
+        // Highlight the exact span the hover describes.
+        let span = span_at(facts, off)?;
+        Some(lsp_types::Hover {
+            contents: lsp_types::HoverContents::Markup(lsp_types::MarkupContent {
+                kind: lsp_types::MarkupKind::Markdown,
+                value: text,
+            }),
+            range: Some(Range {
+                start: offset_to_position(&src, span.0),
+                end: offset_to_position(&src, span.1),
+            }),
+        })
+    }
+
     /// Whether `path` lives under the mod root; no root = everything in scope.
     fn under_mod_root(&self, path: &Path) -> bool {
         let Some(root) = &self.mod_root else {
@@ -262,5 +398,52 @@ impl ServerState {
     /// Test/introspection: whether the project is built.
     pub fn is_ready(&self) -> bool {
         self.project.is_some()
+    }
+}
+
+/// The (kind, name) of the definition name or reference spanning byte offset
+/// `off`. Definitions are checked first so the cursor on a `NAME = {}` name
+/// resolves to that symbol (Go's `symbolAt`).
+fn symbol_at(
+    facts: &pdxl_analysis::FileFacts,
+    off: u32,
+) -> Option<(pdxl_analysis::SymbolKind, &str)> {
+    for d in &facts.defs {
+        if d.offset <= off && off < d.end_offset {
+            return Some((d.kind, &d.name));
+        }
+    }
+    for r in &facts.refs {
+        if r.start <= off && off < r.end {
+            return Some((r.kind, &r.name));
+        }
+    }
+    None
+}
+
+/// The byte span backing `symbol_at`'s answer (for hover highlighting).
+fn span_at(facts: &pdxl_analysis::FileFacts, off: u32) -> Option<(u32, u32)> {
+    for d in &facts.defs {
+        if d.offset <= off && off < d.end_offset {
+            return Some((d.offset, d.end_offset));
+        }
+    }
+    for r in &facts.refs {
+        if r.start <= off && off < r.end {
+            return Some((r.start, r.end));
+        }
+    }
+    None
+}
+
+/// Presentation mapping from pdxl symbol kinds to LSP outline icons.
+fn lsp_symbol_kind(kind: pdxl_analysis::SymbolKind) -> lsp_types::SymbolKind {
+    use pdxl_analysis::SymbolKind as K;
+    match kind {
+        K::ScriptedTrigger | K::ScriptedEffect => lsp_types::SymbolKind::FUNCTION,
+        K::Event | K::OnAction => lsp_types::SymbolKind::EVENT,
+        K::Trait => lsp_types::SymbolKind::ENUM_MEMBER,
+        K::Decision => lsp_types::SymbolKind::METHOD,
+        K::Character => lsp_types::SymbolKind::OBJECT,
     }
 }

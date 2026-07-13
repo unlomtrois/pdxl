@@ -74,8 +74,24 @@ full-text (Go parity). Position encoding: UTF-16 at the boundary only.
   `pdxl-cli/{Cargo.toml, src/main.rs}` (+`lsp` subcommand).
 - Unchanged: all Go code.
 
-## Recommendation for M8b — do not begin
-References (`Project::references` exists; port Go's `symbolAt` defs-first
-rule), documentSymbol (that file's `FileFacts.defs` — exceeds Go), hover
-(kind + defining file + `$PARAM$`s). Then editor field-testing via VS Code
-(`pdxl lsp --game …` as a custom server) against the real T4N workspace.
+## M8b (completed on the follow-up branch)
+- **references** (Go parity): defs-first `symbol_at` (cursor on a `NAME = {}`
+  name finds that symbol's references), all reference sites in walk order via
+  `Project::references`, declaration appended last under `includeDeclaration`,
+  per-file source cache (Go's `refsToLocations`). Empty result → null.
+- **documentSymbol** (exceeds Go): the file's `FileFacts.defs` as a flat
+  outline (name span as both range and selection until facts record block
+  extents), with a presentation mapping to LSP symbol kinds.
+- **hover** (exceeds Go): markdown with kind + name, defining rel_path,
+  `$PARAM$` list; unresolved symbols marked `*(unresolved)*`; highlight range
+  = the def/ref span under the cursor.
+- 7 new behavior tests (18 total in the crate), incl. a test that documents
+  the defs-first subtlety: in `common/scripted_effects/`, the top-level key
+  at character 0 IS a definition, so "cursor on nothing" is the `=` sign.
+- Live smoke on real CK3+T4N: 18 outline symbols in ~13 ms, hover ~1.4 ms,
+  references ~2.2 ms, clean exit.
+
+## Remaining LSP work (future)
+completion and rename (the two "hard" features), workspace/symbol (needs
+explicit sorting), `pdxl.toml` loading, and editor field-testing via VS Code
+against the real T4N workspace.

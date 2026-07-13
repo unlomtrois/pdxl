@@ -37,7 +37,8 @@ in the lexer, syntax tree, or analysis layers.
 | 5 | Per-file facts (`pdxl-analysis`, `pdxl-ck3`) | Done — byte-identical extraction; FactStore deliberately not ported (benchmark-justified) |
 | 6 | Whole-project analysis (`pdxl-project` + table/resolve in `pdxl-analysis`) | Done — byte-identical counts/duplicates/diagnostics; incremental ≡ fresh |
 | 7 | CLI (`pdxl-cli`: lex, parse, check) | Done — snapshot-identical stdout + exit codes; ParseMod Unix-path fix landed in both implementations |
-| 8a | LSP (`pdxl-lsp`: sync, diagnostics, definition) | Done — verified against real CK3+T4N; 8b (references, outline, hover) next |
+| 8a | LSP (`pdxl-lsp`: sync, diagnostics, definition) | Done — verified against real CK3+T4N |
+| 8b | LSP: references, document outline, hover | Done — references at Go parity; outline & hover exceed the Go server |
 
 ## Crates
 
