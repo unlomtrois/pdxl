@@ -457,6 +457,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "pdxl-gamedocs"
+version = "0.1.0"
+
+[[package]]
 name = "pdxl-lexer"
 version = "0.1.0"
 dependencies = [

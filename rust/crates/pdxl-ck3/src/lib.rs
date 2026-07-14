@@ -21,6 +21,8 @@ use pdxl_analysis::{
     DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule, Schema, SymbolKind,
 };
 
+pub mod tables;
+
 /// The file prefix that gates the on_action list/weighted reference rules —
 /// those shapes are ambiguous elsewhere (Go: `OnActionDir`).
 pub const ON_ACTION_DIR: &str = "common/on_action/";

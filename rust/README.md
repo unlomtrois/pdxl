@@ -66,6 +66,16 @@ pdxl-cli        the `pdxl` binary: lex/parse/check/lsp      (dep: most of the ab
                                                              clap)
 ```
 
+Dev tooling:
+
+- `pdxl-gamedocs` — parsers for the game's script-documentation dumps
+  (`effects.log`, `triggers.log`, `event_targets.log`, `event_scopes.log`,
+  `modifiers.log`) plus the `gen-tables` binary that renders them into the
+  generated tables under `pdxl-ck3/src/tables/`. Those tables are committed
+  and reviewed like golden files; regenerate after a game patch. They are the
+  *data* half of scope awareness — the scope engine (context classification,
+  chain resolution) builds on them.
+
 Test / parity infrastructure (never a production dependency):
 
 - `pdxl-testutil` — shared test helpers (temp trees, repo-root discovery, Go

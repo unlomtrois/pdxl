@@ -19,6 +19,8 @@ members = [
     # user-facing
     "crates/pdxl-cli",      # the pdxl binary: lex / parse / check / lsp
     "crates/pdxl-lsp",      # the language server (M8a: sync, diagnostics, definition)
+    # dev tooling
+    "crates/pdxl-gamedocs", # parses the game's doc dumps; gen-tables renders pdxl-ck3 tables
     # test / parity infrastructure
     "crates/pdxl-testutil", # shared test helpers (temp trees, repo root)
     "crates/pdxl-parity",   # dump formats, dump binaries, Go differential tests
