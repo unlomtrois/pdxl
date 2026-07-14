@@ -470,5 +470,6 @@ fn lsp_symbol_kind(kind: pdxl_analysis::SymbolKind) -> lsp_types::SymbolKind {
         K::Trait => lsp_types::SymbolKind::ENUM_MEMBER,
         K::Decision => lsp_types::SymbolKind::METHOD,
         K::Character => lsp_types::SymbolKind::OBJECT,
+        K::Title => lsp_types::SymbolKind::NAMESPACE, // hierarchical, like titles
     }
 }

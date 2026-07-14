@@ -1,28 +1,29 @@
-//! Differential parity test: Rust fact extraction vs the Go oracle.
+//! Facts extraction regression tests — golden snapshots.
 //!
-//! Every fixture is extracted under several directory *personas* (the same
-//! bytes mean different things under different rel_paths — location is
-//! semantics in PDXScript), and the canonical dumps must match the Go tool
-//! (`go run ./tools/factsdump`) byte-for-byte: defs (name, kind, file, offsets,
-//! params), aliases, and refs (kind, name, byte range, file:line:col loc).
+//! **The Go oracle is retired for the analysis layer** as of the landed-titles
+//! schema (`ANALYSIS_VERSION` 2): the Rust schema has grown past the Go
+//! implementation, so byte-comparison against `tools/factsdump` is no longer
+//! meaningful. Regressions are pinned instead by golden files capturing the
+//! canonical dump of every fixture under every directory persona.
 //!
-//! Self-skips with a warning if `go` is unavailable.
+//! To accept an intentional behavior change, regenerate with:
+//! `UPDATE_GOLDENS=1 cargo test -p pdxl-parity --test facts`
+//! and review the golden diff like any other code change.
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use pdxl_analysis::extract_facts;
 use pdxl_parity::dump_facts;
-use pdxl_testutil::go_available;
 
-/// Directory personas: one per CK3 def rule, one gated (on_action), one that
-/// matches nothing.
+/// Directory personas: one per CK3 def rule (incl. the nested landed-titles
+/// rule), one gated (on_action), one that matches nothing.
 const PERSONAS: &[&str] = &[
     "common/scripted_triggers/f.txt",
     "common/scripted_effects/f.txt",
     "common/traits/f.txt",
     "common/decisions/f.txt",
     "common/on_action/f.txt",
+    "common/landed_titles/f.txt",
     "events/f.txt",
     "history/characters/f.txt",
     "gfx/f.txt",
@@ -39,7 +40,7 @@ fn fixtures(root: &Path) -> Vec<PathBuf> {
         root.join("testdata/ck3"),
         root.join("testdata/lint"),
         root.join("rust/crates/pdxl-lexer/testdata"),
-        root.join("rust/crates/pdxl-parity/testdata"), // facts stress fixtures
+        root.join("rust/crates/pdxl-parity/testdata"),
     ];
     for dir in dirs {
         let Ok(entries) = std::fs::read_dir(&dir) else {
@@ -57,11 +58,12 @@ fn fixtures(root: &Path) -> Vec<PathBuf> {
 }
 
 #[test]
-fn facts_match_go_oracle() {
+fn facts_match_goldens() {
     let root = repo_root();
-    if !go_available() {
-        eprintln!("warning: `go` not found — skipping facts differential parity test");
-        return;
+    let goldens_dir = root.join("rust/crates/pdxl-parity/testdata/goldens/facts");
+    let update = std::env::var_os("UPDATE_GOLDENS").is_some();
+    if update {
+        std::fs::create_dir_all(&goldens_dir).unwrap();
     }
 
     let schema = pdxl_ck3::schema();
@@ -70,57 +72,54 @@ fn facts_match_go_oracle() {
 
     let mut compared = 0;
     for file in &fixtures {
-        // Both sides receive the same path string (relative to the repo root)
-        // so ref `file`/`loc` fields agree without normalization.
+        // Repo-relative path keeps goldens machine-independent.
         let rel_file = file
             .strip_prefix(&root)
             .expect("fixture under repo root")
             .to_string_lossy()
             .into_owned();
 
-        // Rust side: parse once, extract under every persona (in-process).
         let src = std::fs::read(file).expect("read fixture");
         let parsed = pdxl_parser::parse(rel_file.clone(), src);
-        let mut rust = String::new();
+        let mut dump = String::new();
         for persona in PERSONAS {
             let facts = extract_facts(parsed.tree(), persona, &rel_file, &schema);
-            rust.push_str(&dump_facts(&facts, persona));
+            dump.push_str(&dump_facts(&facts, persona));
         }
 
-        // Go side: one invocation, all personas.
-        let mut args: Vec<String> =
-            vec!["run".into(), "./tools/factsdump".into(), rel_file.clone()];
-        args.extend(PERSONAS.iter().map(|p| p.to_string()));
-        let out = Command::new("go")
-            .current_dir(&root)
-            .args(&args)
-            .output()
-            .expect("spawn go factsdump");
-        assert!(
-            out.status.success(),
-            "go factsdump failed for {rel_file}:\n{}",
-            String::from_utf8_lossy(&out.stderr)
-        );
-        let go = String::from_utf8(out.stdout).expect("utf8");
-
-        if rust != go {
-            let rust_lines: Vec<&str> = rust.lines().collect();
-            let go_lines: Vec<&str> = go.lines().collect();
-            let mut detail = String::from("(no line-level difference found)");
-            for i in 0..rust_lines.len().max(go_lines.len()) {
-                let r = rust_lines.get(i).copied().unwrap_or("<none>");
-                let g = go_lines.get(i).copied().unwrap_or("<none>");
-                if r != g {
-                    detail = format!("line {i}:\n  rust: {r}\n  go:   {g}");
-                    break;
+        let stem = file.file_stem().unwrap().to_string_lossy();
+        let golden_path = goldens_dir.join(format!("{stem}.golden"));
+        if update {
+            std::fs::write(&golden_path, &dump).unwrap();
+            continue;
+        }
+        let golden = std::fs::read_to_string(&golden_path).unwrap_or_else(|_| {
+            panic!("missing golden {golden_path:?} — run with UPDATE_GOLDENS=1")
+        });
+        if dump != golden {
+            let d: Vec<&str> = dump.lines().collect();
+            let g: Vec<&str> = golden.lines().collect();
+            for i in 0..d.len().max(g.len()) {
+                let (a, b) = (
+                    d.get(i).copied().unwrap_or("<none>"),
+                    g.get(i).copied().unwrap_or("<none>"),
+                );
+                if a != b {
+                    panic!(
+                        "facts dump changed for {stem} at line {i}:\n  now:    {a}\n  golden: {b}\n\
+                         If intentional, regenerate: UPDATE_GOLDENS=1 cargo test -p pdxl-parity --test facts"
+                    );
                 }
             }
-            panic!("facts dump mismatch for {rel_file}:\n{detail}");
         }
         compared += 1;
     }
-    eprintln!(
-        "facts parity: {compared} fixtures × {} personas byte-identical to Go oracle",
-        PERSONAS.len()
-    );
+    if update {
+        eprintln!("facts goldens regenerated for {} fixtures", fixtures.len());
+    } else {
+        eprintln!(
+            "facts goldens: {compared} fixtures × {} personas match",
+            PERSONAS.len()
+        );
+    }
 }

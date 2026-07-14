@@ -39,6 +39,7 @@ in the lexer, syntax tree, or analysis layers.
 | 7 | CLI (`pdxl-cli`: lex, parse, check) | Done — snapshot-identical stdout + exit codes; ParseMod Unix-path fix landed in both implementations |
 | 8a | LSP (`pdxl-lsp`: sync, diagnostics, definition) | Done — verified against real CK3+T4N |
 | 8b | LSP: references, document outline, hover | Done — references at Go parity; outline & hover exceed the Go server |
+| — | Landed titles schema (`ANALYSIS_VERSION` 2) | Done — first post-parity feature; the analysis layer's Go oracle is retired (golden snapshots replace the facts/project/check differentials; lexer/parser/fileset/descriptor stay Go-verified) |
 
 ## Crates
 

@@ -1,0 +1,26 @@
+# landed-titles tree with attribute decoys at every level
+@map_color_boost = 50
+e_empire = {
+	color = { 120 1 1 }
+	capital = c_shore
+	definite_form = yes
+	ai_primary_priority = {
+		if = { limit = { always = yes } add = @map_color_boost }
+	}
+	k_kingdom = {
+		color = { 255 200 25 }
+		cultural_names = {
+			name_list_foo = k_decoy_loc_key
+		}
+		d_duchy = {
+			c_shore = {
+				b_port = { province = 466 }
+				b_fort = { province = 467 }
+			}
+			c_inland = { b_keep = { province = 468 } }
+		}
+	}
+	c_direct_county = { b_lone = { province = 469 } }
+}
+k_titular = { color = { 1 2 3 } }
+h_hegemony = { color = { 9 9 9 } landless = yes }

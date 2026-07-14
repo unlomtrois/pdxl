@@ -15,6 +15,13 @@ use crate::model::SymbolKind;
 pub struct DefRule {
     pub prefix: &'static str,
     pub kind: SymbolKind,
+    /// `None`: definitions are the top-level `NAME = { … }` fields (the
+    /// original model). `Some(prefixes)`: definitions form a **tree** — a key
+    /// is a definition (and is recursed into) iff it starts with one of these
+    /// prefixes AND its value is a block. CK3 landed titles:
+    /// `e_x = { k_y = { d_z = { … } } }` with attribute keys (`color`,
+    /// `cultural_names`, …) interleaved at every level.
+    pub nested_key_prefixes: Option<&'static [&'static str]>,
 }
 
 /// Everything the extraction engine needs to know about a game's conventions.
@@ -40,6 +47,13 @@ pub struct Schema {
     /// Relative-scope keywords a reference value may be at runtime
     /// (`has_trait = prev`); unresolvable without scope tracking, so skipped.
     pub scope_keywords: HashSet<&'static str>,
+    /// Self-identifying scope-literal prefixes: any scalar (key, value, or
+    /// list item, at any depth) of the form `<prefix>:<name>[.chain…]`
+    /// references `<name>` as the mapped kind. CK3: `title:` → Title
+    /// (`has_title = title:e_hre`, `title:k_england = { … }`,
+    /// `title:e_byzantium.holder`). The extracted range covers exactly the
+    /// name, so editor features land on it precisely.
+    pub scope_ref_prefixes: Vec<(&'static str, SymbolKind)>,
 }
 
 impl Schema {

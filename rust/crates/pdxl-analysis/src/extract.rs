@@ -27,7 +27,12 @@ pub fn extract_facts(
 
     if let Some(rule) = schema.rule_for(rel_path) {
         for node in tree.children(tree.root()) {
-            harvest_def(tree, node, rule.kind, rel_path, schema, &mut facts);
+            match rule.nested_key_prefixes {
+                Some(prefixes) => {
+                    harvest_nested_defs(tree, node, prefixes, rule.kind, rel_path, &mut facts)
+                }
+                None => harvest_def(tree, node, rule.kind, rel_path, schema, &mut facts),
+            }
         }
     }
 
@@ -95,6 +100,55 @@ fn harvest_def(
     }
 }
 
+/// Recursively harvests tree-shaped definitions (CK3 landed titles): a key is
+/// a definition iff it starts with one of `prefixes` AND its value is a block,
+/// and its block is recursed into for child definitions. Attribute keys
+/// (`color`, `capital`, `cultural_names`, …) are neither definitions nor
+/// recursion targets — which also keeps loc-key decoys like
+/// `cultural_names = { x = k_something }` out (scalar value, not a block).
+///
+/// `params` is left empty for nested definitions: titles carry no `$PARAM$`s,
+/// and collecting over each subtree would be quadratic on real title trees
+/// (a single empire subtree spans thousands of lines).
+fn harvest_nested_defs(
+    tree: &SyntaxTree,
+    node_id: NodeId,
+    prefixes: &[&str],
+    kind: SymbolKind,
+    rel_path: &str,
+    facts: &mut FileFacts,
+) {
+    let node = tree.node(node_id);
+    if node.kind != NodeKind::Field {
+        return;
+    }
+    let children = tree.child_ids(node_id);
+    if children.len() != 2 {
+        return;
+    }
+    let (key_id, value_id) = (children[0], children[1]);
+    let value = tree.node(value_id);
+    if value.kind != NodeKind::Block && value.kind != NodeKind::TaggedBlock {
+        return;
+    }
+    let key = tree.node_text(key_id);
+    if !prefixes.iter().any(|p| key.starts_with(p.as_bytes())) {
+        return;
+    }
+
+    facts.defs.push(Symbol {
+        name: String::from_utf8_lossy(key).into_owned(),
+        kind,
+        file: rel_path.to_string(),
+        offset: node.range.start,
+        end_offset: tree.node(key_id).range.end,
+        params: Vec::new(),
+    });
+    for child in tree.children(value_id) {
+        harvest_nested_defs(tree, child, prefixes, kind, rel_path, facts);
+    }
+}
+
 /// Recursively collects references from the subtree rooted at `node_id`.
 /// `gated` enables list/weighted forms (on_action files only in CK3).
 fn extract_refs(
@@ -105,15 +159,65 @@ fn extract_refs(
     schema: &Schema,
     refs: &mut Vec<Ref>,
 ) {
-    if tree.node(node_id).kind == NodeKind::Field {
+    let node = tree.node(node_id);
+    if node.kind == NodeKind::Field {
         let children = tree.child_ids(node_id);
         if children.len() == 2 {
             let key = tree.node_text(children[0]);
             extract_field_refs(tree, key, children[1], path, gated, schema, refs);
         }
     }
+    // Self-identifying scope literals (`title:<name>[.chain]`) can appear in
+    // ANY scalar position — value, key, or list item — so every scalar in the
+    // tree is scanned, not just known-key values.
+    if node.kind == NodeKind::Scalar {
+        scan_prefix_refs(tree, node_id, path, schema, refs);
+    }
     for child in tree.children(node_id) {
         extract_refs(tree, child, path, gated, schema, refs);
+    }
+}
+
+/// Extracts a reference from a scalar of the form `<prefix>:<name>[.chain…]`
+/// for each configured scope prefix. The reference's byte range covers exactly
+/// `<name>` — not the prefix, not the trailing scope chain — so diagnostics
+/// and go-to-definition land on the title name itself.
+fn scan_prefix_refs(
+    tree: &SyntaxTree,
+    node_id: NodeId,
+    path: &str,
+    schema: &Schema,
+    refs: &mut Vec<Ref>,
+) {
+    let text = tree.node_text(node_id);
+    for (prefix, kind) in &schema.scope_ref_prefixes {
+        let plen = prefix.len();
+        if text.len() <= plen + 1 || !text.starts_with(prefix.as_bytes()) || text[plen] != b':' {
+            continue;
+        }
+        let name_start = plen + 1;
+        let name_end = text[name_start..]
+            .iter()
+            .position(|&b| b == b'.')
+            .map_or(text.len(), |i| name_start + i);
+        let name = String::from_utf8_lossy(&text[name_start..name_end]);
+        if schema.skip_ref_value(&name) {
+            continue; // macro-interpolated ($X$) or empty names
+        }
+
+        let node = tree.node(node_id);
+        let start = node.range.start + name_start as u32;
+        let end = node.range.start + name_end as u32;
+        let (line, col) = pdxl_src::line_col(tree.source(), start);
+        refs.push(Ref {
+            kind: *kind,
+            name: name.into_owned(),
+            file: path.to_string(),
+            start,
+            end,
+            loc: format!("{path}:{line}:{col}"),
+        });
+        break; // a scalar names at most one scope literal
     }
 }
 

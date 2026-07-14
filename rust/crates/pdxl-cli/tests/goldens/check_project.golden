@@ -1,0 +1,17 @@
+scripted_trigger        0
+scripted_effect         1
+trait                   3
+event                   1
+decision                0
+on_action               1
+character               0
+title                   3
+total                   9
+
+1 duplicate definitions:
+  trait "brave" redefined in common/traits/01.txt (first in common/traits/00.txt)
+
+3 unresolved references:
+  <mod>/mymod/common/on_action/oa.txt:1:23: unknown event "t.9"
+  <mod>/mymod/common/scripted_effects/e.txt:5:14: unknown trait "missing"
+  <mod>/mymod/common/scripted_effects/e.txt:7:20: unknown title "k_x"

@@ -1,67 +1,61 @@
-//! Differential parity test: Rust whole-project analysis vs the Go oracle.
+//! Whole-project analysis regression tests — golden snapshots.
 //!
-//! Each scenario builds a temp project tree; both sides analyze the same roots
-//! and the canonical dumps (symbol counts by kind, duplicates in merge order,
-//! unresolved diagnostics in walk order — full file/offset/loc/msg) must match
-//! byte-for-byte. Self-skips if `go` is unavailable.
+//! **The Go oracle is retired for the analysis layer** as of the landed-titles
+//! schema (`ANALYSIS_VERSION` 2): `SymbolKind::Title` changes the counts shape,
+//! so byte-comparison against `tools/projectdump` is no longer meaningful.
+//! Each scenario builds a temp project tree, analyzes it, and compares the
+//! canonical dump (with the temp root normalized to `<root>`) against a golden.
+//!
+//! To accept an intentional behavior change, regenerate with:
+//! `UPDATE_GOLDENS=1 cargo test -p pdxl-parity --test project`
 
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::PathBuf;
 
 use pdxl_fileset::{FileKind, FileSet};
 use pdxl_parity::dump_project;
-use pdxl_testutil::{TempTree, go_available};
+use pdxl_testutil::TempTree;
 
 fn repo_root() -> PathBuf {
     pdxl_testutil::repo_root(env!("CARGO_MANIFEST_DIR"))
 }
 
-fn kind_str(k: FileKind) -> &'static str {
-    k.as_str()
-}
-
-fn rust_dump(roots: &[(&Path, FileKind)]) -> String {
+/// Analyzes `roots` and returns the dump with every root path normalized.
+fn scenario_dump(roots: &[(&TempTree, FileKind)]) -> String {
     let mut fs = FileSet::new();
-    for (root, kind) in roots {
-        fs.add(root, *kind).expect("add root");
+    for (tree, kind) in roots {
+        fs.add(&tree.path, *kind).expect("add root");
     }
     let (table, diags) = pdxl_project::analyze(&fs, &pdxl_ck3::schema()).expect("analyze");
-    dump_project(&table, &diags)
-}
-
-fn go_dump(repo: &Path, roots: &[(&Path, FileKind)]) -> String {
-    let mut args: Vec<String> = vec!["run".into(), "./tools/projectdump".into()];
-    for (root, kind) in roots {
-        args.push("--root".into());
-        args.push(format!("{}:{}", root.display(), kind_str(*kind)));
+    let mut dump = dump_project(&table, &diags);
+    for (i, (tree, _)) in roots.iter().enumerate() {
+        dump = dump.replace(
+            &tree.path.to_string_lossy().into_owned(),
+            &format!("<root{i}>"),
+        );
     }
-    let out = Command::new("go")
-        .current_dir(repo)
-        .args(&args)
-        .output()
-        .expect("spawn go projectdump");
-    assert!(
-        out.status.success(),
-        "go projectdump failed: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-    String::from_utf8(out.stdout).expect("utf8")
+    dump
 }
 
-fn assert_parity(name: &str, repo: &Path, roots: &[(&Path, FileKind)]) {
-    let rust = rust_dump(roots);
-    let go = go_dump(repo, roots);
-    assert_eq!(rust, go, "project dump mismatch in scenario '{name}'");
+fn check_golden(name: &str, dump: &str) {
+    let goldens_dir = repo_root().join("rust/crates/pdxl-parity/testdata/goldens/project");
+    let golden_path = goldens_dir.join(format!("{name}.golden"));
+    if std::env::var_os("UPDATE_GOLDENS").is_some() {
+        std::fs::create_dir_all(&goldens_dir).unwrap();
+        std::fs::write(&golden_path, dump).unwrap();
+        eprintln!("regenerated {golden_path:?}");
+        return;
+    }
+    let golden = std::fs::read_to_string(&golden_path)
+        .unwrap_or_else(|_| panic!("missing golden {golden_path:?} — run with UPDATE_GOLDENS=1"));
+    assert_eq!(
+        dump, golden,
+        "project dump changed for scenario '{name}'. If intentional, regenerate:\n\
+         UPDATE_GOLDENS=1 cargo test -p pdxl-parity --test project"
+    );
 }
 
 #[test]
-fn project_differential() {
-    let repo = repo_root();
-    if !go_available() {
-        eprintln!("warning: `go` not found — skipping project differential parity test");
-        return;
-    }
-
+fn project_scenarios_match_goldens() {
     // --- resolution across files and kinds; aliases; quoted refs ---
     let a = TempTree::new();
     a.write(
@@ -77,17 +71,16 @@ fn project_differential() {
         "common/on_action/oa.txt",
         "real_oa = { }\nmy_oa = {\n\tevents = { t.1 t.9 }\n\tfirst_valid = { t.1 }\n\trandom_events = { 100 = t.1  50 = t.8  chance_to_happen = 10  0 = 0 }\n\ton_actions = { real_oa missing_oa }\n}\n",
     );
-    assert_parity("resolution", &repo, &[(&a.path, FileKind::Mod)]);
+    check_golden("resolution", &scenario_dump(&[(&a, FileKind::Mod)]));
 
     // --- duplicates: within a root and their stable "first" ordering ---
     let d = TempTree::new();
     d.write("common/traits/00.txt", "brave = { }\ncraven = { }\n");
     d.write("common/traits/01.txt", "brave = { }\n");
     d.write("common/traits/02.txt", "brave = { }\ncraven = { }\n");
-    assert_parity("duplicates", &repo, &[(&d.path, FileKind::Mod)]);
+    check_golden("duplicates", &scenario_dump(&[(&d, FileKind::Mod)]));
 
-    // --- overlay: shadowing removes a definition AND its aliases; a mod file
-    //     replacing a vanilla file must not create duplicates ---
+    // --- overlay: shadowing removes definitions AND aliases; no false dups ---
     let van = TempTree::new();
     let md = TempTree::new();
     van.write(
@@ -99,21 +92,32 @@ fn project_differential() {
         "common/scripted_effects/e.txt",
         "e = {\n add_trait = brave\n has_trait = personality\n add_trait = missing\n}\n",
     );
-    md.write("common/traits/00.txt", "craven = { }\n"); // shadows vanilla 00
-    assert_parity(
+    md.write("common/traits/00.txt", "craven = { }\n");
+    check_golden(
         "overlay",
-        &repo,
-        &[(&van.path, FileKind::Vanilla), (&md.path, FileKind::Mod)],
+        &scenario_dump(&[(&van, FileKind::Vanilla), (&md, FileKind::Mod)]),
     );
 
-    // --- skip rules end to end: macros/scopes never produce diagnostics ---
+    // --- skip rules end to end ---
     let s = TempTree::new();
     s.write("common/traits/00.txt", "brave = { }\n");
     s.write(
         "common/scripted_effects/e.txt",
         "e = {\n\tadd_trait = $TRAIT$\n\thas_trait = scope:x\n\thas_trait = prev\n\tadd_trait = education_$E$_5\n}\n",
     );
-    assert_parity("skips", &repo, &[(&s.path, FileKind::Mod)]);
+    check_golden("skips", &scenario_dump(&[(&s, FileKind::Mod)]));
 
-    eprintln!("project parity: 4 scenarios byte-identical to Go oracle");
+    // --- titles: tree defs + title: refs across the project (post-parity) ---
+    let t = TempTree::new();
+    t.write(
+        "common/landed_titles/00.txt",
+        "e_empire = {\n\tcolor = { 1 2 3 }\n\tk_kingdom = {\n\t\td_duchy = {\n\t\t\tc_shore = { b_port = { province = 1 } }\n\t\t}\n\t}\n}\nh_hegemony = { }\n",
+    );
+    t.write(
+        "common/scripted_effects/e.txt",
+        "e = {\n\thas_title = title:e_empire\n\tx = title:d_duchy.holder\n\ttitle:h_hegemony = { set_x = 1 }\n\thas_title = title:k_gone\n}\n",
+    );
+    check_golden("titles", &scenario_dump(&[(&t, FileKind::Mod)]));
+
+    eprintln!("project goldens: 5 scenarios match");
 }

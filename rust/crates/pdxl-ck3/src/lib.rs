@@ -1,6 +1,11 @@
-//! CK3 rules for `pdxl-analysis` — a data-only transcription of the Go
-//! `internal/validate/schema_ck3.go` registry (plus the scope keywords from
-//! `resolve.go` and the trait-alias keys hardcoded in `facts.go`).
+//! CK3 rules for `pdxl-analysis` — the game's conventions as *data*.
+//!
+//! Originally a transcription of the Go `internal/validate/schema_ck3.go`
+//! registry (plus the scope keywords from `resolve.go` and the trait-alias
+//! keys hardcoded in `facts.go`). Since the landed-titles addition
+//! (`ANALYSIS_VERSION` 2) this schema has grown past the Go implementation —
+//! the analysis layer's Go oracle is retired; regressions are pinned by golden
+//! snapshots in `pdxl-parity` instead.
 //!
 //! Deliberately hand-written and small: deep CK3 validation is ck3-tiger's
 //! territory; this schema stays just rich enough to power editor features
@@ -14,38 +19,58 @@ use pdxl_analysis::{DefRule, Schema, SymbolKind};
 /// (Go: `OnActionDir`).
 pub const ON_ACTION_DIR: &str = "common/on_action/";
 
+/// Landed-title tier prefixes, as observed in vanilla + real mods: empire,
+/// kingdom, duchy, county, barony, and the hegemony tier (`h_china`, …).
+/// A key in `common/landed_titles/` is a title definition iff it starts with
+/// one of these AND has a block body (which excludes loc-key decoys like
+/// `cultural_names = { x = k_something }`).
+pub const TITLE_TIER_PREFIXES: &[&str] = &["e_", "k_", "d_", "c_", "b_", "h_"];
+
 /// Builds the CK3 schema. Cheap to construct; build once and share.
 pub fn schema() -> Schema {
     Schema {
-        // Directories whose top-level `NAME = { … }` fields are definitions.
+        // Directories whose fields define symbols. All rules harvest top-level
+        // `NAME = { … }` fields except landed titles, which form a tree.
         def_rules: vec![
             DefRule {
                 prefix: "common/scripted_triggers/",
                 kind: SymbolKind::ScriptedTrigger,
+                nested_key_prefixes: None,
             },
             DefRule {
                 prefix: "common/scripted_effects/",
                 kind: SymbolKind::ScriptedEffect,
+                nested_key_prefixes: None,
             },
             DefRule {
                 prefix: "common/traits/",
                 kind: SymbolKind::Trait,
+                nested_key_prefixes: None,
             },
             DefRule {
                 prefix: "common/decisions/",
                 kind: SymbolKind::Decision,
+                nested_key_prefixes: None,
             },
             DefRule {
                 prefix: "common/on_action/",
                 kind: SymbolKind::OnAction,
+                nested_key_prefixes: None,
             },
             DefRule {
                 prefix: "events/",
                 kind: SymbolKind::Event,
+                nested_key_prefixes: None,
             },
             DefRule {
                 prefix: "history/characters/",
                 kind: SymbolKind::Character,
+                nested_key_prefixes: None,
+            },
+            DefRule {
+                prefix: "common/landed_titles/",
+                kind: SymbolKind::Title,
+                nested_key_prefixes: Some(TITLE_TIER_PREFIXES),
             },
         ],
         // key = value — the scalar value must resolve to the kind.
@@ -85,5 +110,8 @@ pub fn schema() -> Schema {
             "prevprevprevprev",
         ]
         .into(),
+        // Self-identifying scope literals: `title:e_hre`, `title:k_x = { … }`,
+        // `title:e_byzantium.holder` — anywhere, any position.
+        scope_ref_prefixes: vec![("title", SymbolKind::Title)],
     }
 }

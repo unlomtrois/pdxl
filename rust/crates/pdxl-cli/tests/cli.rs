@@ -1,11 +1,13 @@
-//! CLI snapshot parity: the Rust `pdxl` binary vs the Go `cmd/pdxl` on the
-//! same inputs — stdout compared byte-for-byte, exit codes compared exactly.
-//! Covers `lex` (all flag combinations), `parse` (flat + `--tree`), and
-//! `check` (project report incl. duplicates/unresolved and the single-file
-//! form; run with `--no-cache` from the repo root so Go's `pdxl.toml` — which
-//! equals the built-in defaults — keeps both sides identically configured).
+//! CLI snapshot tests.
 //!
-//! Self-skips if `go` is unavailable.
+//! `lex` and `parse` are still compared byte-for-byte against the Go binary —
+//! those layers remain at exact parity. `check` output depends on the analysis
+//! schema, whose Go oracle retired with the landed-titles addition
+//! (`ANALYSIS_VERSION` 2: the counts table gained a `title` row Go doesn't
+//! print), so its scenarios are pinned by golden files instead; regenerate
+//! deliberately with `UPDATE_GOLDENS=1 cargo test -p pdxl-cli --test cli`.
+//!
+//! Go-comparing tests self-skip if `go` is unavailable.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -74,16 +76,37 @@ fn lex_and_parse_match_go() {
     }
 }
 
-#[test]
-fn check_matches_go() {
-    let repo = repo_root();
-    if !go_available() {
-        eprintln!("warning: `go` not found — skipping check parity test");
+/// Runs the Rust binary, returning (stdout with roots normalized, success).
+fn run_check(args: &[&str], roots: &[(&str, &TempTree)]) -> (String, bool) {
+    let out = Command::new(env!("CARGO_BIN_EXE_pdxl"))
+        .args(args)
+        .output()
+        .expect("spawn pdxl");
+    let mut stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+    for (placeholder, tree) in roots {
+        stdout = stdout.replace(&tree.path.to_string_lossy().into_owned(), placeholder);
+    }
+    (stdout, out.status.success())
+}
+
+fn check_golden(name: &str, dump: &str) {
+    let dir = repo_root().join("rust/crates/pdxl-cli/tests/goldens");
+    let path = dir.join(format!("{name}.golden"));
+    if std::env::var_os("UPDATE_GOLDENS").is_some() {
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(&path, dump).unwrap();
         return;
     }
+    let golden = std::fs::read_to_string(&path)
+        .unwrap_or_else(|_| panic!("missing golden {path:?} — run with UPDATE_GOLDENS=1"));
+    assert_eq!(dump, golden, "check output changed for '{name}'");
+}
 
+#[test]
+fn check_matches_goldens() {
     // A project with duplicates, aliases, resolved and unresolved refs, plus a
-    // .mod descriptor exercising replace_path and the (fixed) absolute path.
+    // .mod descriptor exercising replace_path and Unix-absolute paths — and,
+    // post-parity, a landed-titles tree with title: references.
     let van = TempTree::new();
     van.write(
         "common/traits/00.txt",
@@ -94,8 +117,12 @@ fn check_matches_go() {
     van.write("events/ev.txt", "namespace = t\nt.1 = { }\n");
     let md = TempTree::new();
     md.write(
+        "mymod/common/landed_titles/t4n.txt",
+        "e_empire = { k_kingdom = { d_duchy = { } } }\n",
+    );
+    md.write(
         "mymod/common/scripted_effects/e.txt",
-        "e = {\n\tadd_trait = brave\n\thas_trait = personality\n\ttrigger_event = t.1\n\tadd_trait = missing\n}\n",
+        "e = {\n\tadd_trait = brave\n\thas_trait = personality\n\ttrigger_event = t.1\n\tadd_trait = missing\n\thas_title = title:k_kingdom\n\thas_title = title:k_x\n}\n",
     );
     md.write(
         "mymod/common/on_action/oa.txt",
@@ -106,24 +133,26 @@ fn check_matches_go() {
         &mod_file,
         format!(
             "name=\"Bench\"\npath=\"{}\"\nreplace_path=\"common/landed_titles\"\n",
-            md.child("mymod").display() // absolute Unix path: the M7 fix
+            md.child("mymod").display()
         ),
     )
     .unwrap();
 
-    let van_s = van.path.to_string_lossy();
-    let mod_s = mod_file.to_string_lossy();
+    let van_s = van.path.to_string_lossy().into_owned();
+    let mod_s = mod_file.to_string_lossy().into_owned();
+    let roots: &[(&str, &TempTree)] = &[("<van>", &van), ("<mod>", &md)];
 
-    // Whole-project report (has unresolved → both must exit non-zero).
-    assert_cli_parity(
-        &repo,
+    // Whole-project report: k_x was replaced away, so title:k_x is unresolved.
+    let (stdout, ok) = run_check(
         &["check", "--game", &van_s, "--mod", &mod_s, "--no-cache"],
+        roots,
     );
+    assert!(!ok, "unresolved refs must exit non-zero");
+    check_golden("check_project", &stdout);
 
     // Single-file report.
     let effect = md.child("mymod/common/scripted_effects/e.txt");
-    assert_cli_parity(
-        &repo,
+    let (stdout, ok) = run_check(
         &[
             "check",
             effect.to_string_lossy().as_ref(),
@@ -133,24 +162,29 @@ fn check_matches_go() {
             &mod_s,
             "--no-cache",
         ],
+        roots,
     );
+    assert!(!ok);
+    check_golden("check_file", &stdout);
 
-    // Clean project (no unresolved → both must exit zero).
+    // Clean project (no unresolved → exit zero).
     let clean = TempTree::new();
     clean.write("common/traits/00.txt", "brave = { }\n");
     clean.write(
         "common/scripted_effects/e.txt",
         "e = { add_trait = brave }\n",
     );
-    assert_cli_parity(
-        &repo,
+    let (stdout, ok) = run_check(
         &[
             "check",
             "--mod",
             clean.path.to_string_lossy().as_ref(),
             "--no-cache",
         ],
+        &[("<mod>", &clean)],
     );
+    assert!(ok, "clean project must exit zero:\n{stdout}");
+    check_golden("check_clean", &stdout);
 }
 
 #[test]

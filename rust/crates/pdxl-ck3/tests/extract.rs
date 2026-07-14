@@ -187,3 +187,152 @@ fn partial_trees_still_extract() {
     assert_eq!(def_names(&f), vec!["brave"]);
     assert_eq!(f.aliases[0].name, "personality");
 }
+
+// ── landed titles (ANALYSIS_VERSION 2; first post-parity schema) ─────────────
+
+const TITLE_TREE: &str = "@var = 1\n\
+e_empire = {\n\
+\tcolor = { 1 2 3 }\n\
+\tcapital = c_shore\n\
+\tcultural_names = { name_list_x = k_decoy }\n\
+\tai_primary_priority = { if = { limit = { always = yes } } }\n\
+\tk_kingdom = {\n\
+\t\td_duchy = {\n\
+\t\t\tc_shore = { b_port = { province = 1 } }\n\
+\t\t}\n\
+\t}\n\
+}\n\
+k_titular = { color = { 4 5 6 } }\n\
+h_hegemony = { }\n";
+
+#[test]
+fn title_tree_harvests_all_tiers_recursively() {
+    let f = extract(TITLE_TREE, "common/landed_titles/00.txt");
+    assert_eq!(
+        def_names(&f),
+        vec![
+            "e_empire",
+            "k_kingdom",
+            "d_duchy",
+            "c_shore",
+            "b_port",
+            "k_titular",
+            "h_hegemony"
+        ],
+        "definition order = tree pre-order"
+    );
+    assert!(f.defs.iter().all(|d| d.kind == SymbolKind::Title));
+    assert!(f.defs.iter().all(|d| d.params.is_empty()));
+}
+
+#[test]
+fn title_tree_skips_attribute_keys_and_loc_decoys() {
+    let f = extract(TITLE_TREE, "common/landed_titles/00.txt");
+    let names = def_names(&f);
+    for decoy in [
+        "color",
+        "capital",
+        "cultural_names",
+        "ai_primary_priority",
+        "k_decoy",
+        "@var",
+    ] {
+        assert!(!names.contains(&decoy), "{decoy} must not be a definition");
+    }
+    // `capital = c_shore` (scalar value) is not a def; the real c_shore block is.
+    assert_eq!(names.iter().filter(|n| **n == "c_shore").count(), 1);
+}
+
+#[test]
+fn title_defs_only_in_landed_titles_dir() {
+    let f = extract(TITLE_TREE, "common/scripted_effects/x.txt");
+    // Outside landed_titles the tier keys are ordinary top-level defs of the
+    // dir's own kind (scripted_effect), not titles.
+    assert!(f.defs.iter().all(|d| d.kind == SymbolKind::ScriptedEffect));
+}
+
+#[test]
+fn title_scope_refs_in_all_positions() {
+    let f = extract(
+        "e = {\n\
+         \thas_title = title:e_empire\n\
+         \tis_at_war_with = title:e_empire.holder\n\
+         \ttitle:k_titular = { set_flag = x }\n\
+         \tOR = { title:h_hegemony.holder title:c_shore }\n\
+         }\n",
+        "common/scripted_effects/e.txt",
+    );
+    let titles: Vec<(&str, &str)> = f
+        .refs
+        .iter()
+        .filter(|r| r.kind == SymbolKind::Title)
+        .map(|r| (r.name.as_str(), r.loc.rsplit(':').nth(1).unwrap()))
+        .collect();
+    let names: Vec<&str> = titles.iter().map(|(n, _)| *n).collect();
+    assert_eq!(
+        names,
+        vec!["e_empire", "e_empire", "k_titular", "h_hegemony", "c_shore"],
+        "value, chained value, key, and loose list items must all extract"
+    );
+}
+
+#[test]
+fn title_ref_range_covers_only_the_name() {
+    let src = "x = title:e_empire.holder\n";
+    //         0123456789...
+    let f = extract(src, "common/scripted_effects/e.txt");
+    let r = f.refs.iter().find(|r| r.kind == SymbolKind::Title).unwrap();
+    assert_eq!(&src[r.start as usize..r.end as usize], "e_empire");
+    assert!(
+        r.loc.ends_with(":1:11"),
+        "loc points at the name: {}",
+        r.loc
+    );
+}
+
+#[test]
+fn title_refs_skip_macros_and_lookalikes() {
+    let f = extract(
+        "e = {\n\
+         \thas_title = title:$TITLE$\n\
+         \tx = subtitle:e_fake\n\
+         \ty = title_something\n\
+         }\n",
+        "common/scripted_effects/e.txt",
+    );
+    assert!(
+        f.refs.iter().all(|r| r.kind != SymbolKind::Title),
+        "macros and non-title: prefixes must not extract: {:?}",
+        f.refs
+    );
+}
+
+#[test]
+fn title_refs_resolve_against_tree_defs() {
+    // End-to-end through merge_and_resolve: tree def + title: ref → resolved;
+    // missing one → diagnostic naming the title kind.
+    use pdxl_analysis::merge_and_resolve;
+    use std::collections::HashMap;
+
+    let defs = extract(TITLE_TREE, "common/landed_titles/00.txt");
+    let refs = extract(
+        "e = { has_title = title:d_duchy has_title = title:d_gone }\n",
+        "common/scripted_effects/e.txt",
+    );
+    let mut facts = HashMap::new();
+    facts.insert("common/landed_titles/00.txt".to_string(), defs);
+    facts.insert("common/scripted_effects/e.txt".to_string(), refs);
+    let order = [
+        "common/landed_titles/00.txt",
+        "common/scripted_effects/e.txt",
+    ];
+    let (table, diags) = merge_and_resolve(&order, &facts);
+
+    assert_eq!(table.count(SymbolKind::Title), 7);
+    assert_eq!(diags.len(), 1, "{diags:?}");
+    assert!(
+        diags[0].msg.contains("unknown title \"d_gone\""),
+        "{}",
+        diags[0].msg
+    );
+}

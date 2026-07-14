@@ -18,11 +18,14 @@ pub enum SymbolKind {
     Decision = 4,
     OnAction = 5,
     Character = 6,
+    /// Landed titles (`common/landed_titles/` tree). First post-parity kind:
+    /// not present in the Go implementation.
+    Title = 7,
 }
 
 impl SymbolKind {
     /// Every kind, in discriminant order (stable iteration for reports).
-    pub const ALL: [SymbolKind; 7] = [
+    pub const ALL: [SymbolKind; 8] = [
         SymbolKind::ScriptedTrigger,
         SymbolKind::ScriptedEffect,
         SymbolKind::Trait,
@@ -30,6 +33,7 @@ impl SymbolKind {
         SymbolKind::Decision,
         SymbolKind::OnAction,
         SymbolKind::Character,
+        SymbolKind::Title,
     ];
 
     /// The report name, identical to Go's `SymbolKind.String()`.
@@ -42,6 +46,7 @@ impl SymbolKind {
             SymbolKind::Decision => "decision",
             SymbolKind::OnAction => "on_action",
             SymbolKind::Character => "character",
+            SymbolKind::Title => "title",
         }
     }
 }
