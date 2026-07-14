@@ -180,6 +180,29 @@ pub fn context_at(
     ctx
 }
 
+/// Folds the context transitions over an enclosing-block key chain
+/// (outermost first) — the brace stack a completion engine derives from the
+/// raw tokens around a cursor. Unlike [`context_at`] this needs no parsed
+/// tree, so it stays correct inside empty blocks and half-typed input.
+/// Anonymous blocks (list items) pass an empty key. An empty chain is file
+/// top level ([`ClauseKind::Config`]).
+pub fn context_of_chain<'a, I>(keys: I, rel_path: &str, schema: &ContextSchema) -> ClauseKind
+where
+    I: IntoIterator<Item = &'a [u8]>,
+{
+    let Some(body_kind) = schema.root_for(rel_path) else {
+        return ClauseKind::Unknown;
+    };
+    let mut ctx: Option<ClauseKind> = None;
+    for key in keys {
+        ctx = Some(match ctx {
+            None => body_kind, // the outermost block is a definition body
+            Some(c) => step(c, key, true),
+        });
+    }
+    ctx.unwrap_or(ClauseKind::Config)
+}
+
 /// The context transition: entering the value of `key = value` from `ctx`.
 fn step(ctx: ClauseKind, key: &[u8], value_is_block: bool) -> ClauseKind {
     match ctx {

@@ -478,6 +478,7 @@ dependencies = [
  "pdxl-analysis",
  "pdxl-ck3",
  "pdxl-fileset",
+ "pdxl-lexer",
  "pdxl-path",
  "pdxl-project",
  "pdxl-testutil",

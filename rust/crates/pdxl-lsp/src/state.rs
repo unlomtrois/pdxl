@@ -402,6 +402,37 @@ impl ServerState {
         })
     }
 
+    /// `textDocument/completion`: context-aware items. The enclosing-key
+    /// chain is derived from the raw token stream (brace stack up to the
+    /// cursor) rather than the parsed tree — parser node ranges cover keys
+    /// only (Go parity), and a cursor inside an empty block sits in no node
+    /// at all; tokens stay honest on half-typed input too. The chain's
+    /// structural context picks the completion sources (struct fields /
+    /// effects / triggers / keyword sets).
+    pub fn completion(&self, uri: &Url, pos: Position) -> Vec<lsp_types::CompletionItem> {
+        let path = uri_to_path(uri);
+        let Some(project) = &self.project else {
+            return Vec::new();
+        };
+        let Some(rel) = project.rel_at(&path).map(str::to_string) else {
+            return Vec::new();
+        };
+        let Ok(src) = self.read_file(&path) else {
+            return Vec::new();
+        };
+        let off = position_to_offset(&src, pos);
+        let chain = enclosing_key_chain(&src, off);
+        if chain.is_empty() {
+            return crate::completion::top_level_items(&rel);
+        }
+        let ctx = pdxl_analysis::context::context_of_chain(
+            chain.iter().map(Vec::as_slice),
+            &rel,
+            pdxl_ck3::contexts::context_schema(),
+        );
+        crate::completion::items_for(ctx, project.table())
+    }
+
     /// Whether `path` lives under the mod root; no root = everything in scope.
     fn under_mod_root(&self, path: &Path) -> bool {
         let Some(root) = &self.mod_root else {
@@ -424,6 +455,82 @@ impl ServerState {
     pub fn is_ready(&self) -> bool {
         self.project.is_some()
     }
+}
+
+/// The keys of the blocks enclosing byte offset `off`, outermost first,
+/// from a raw token scan: push on `{` (with the key inferred from the
+/// preceding `key =` / `key = tag` tokens; empty for anonymous blocks),
+/// pop on `}`. A token containing `off` (the word being typed) is excluded.
+fn enclosing_key_chain(src: &[u8], off: u32) -> Vec<Vec<u8>> {
+    use pdxl_lexer::TokenKind as T;
+    let is_scalar = |k: T| {
+        matches!(
+            k,
+            T::Identifier
+                | T::LiteralNumber
+                | T::LiteralString
+                | T::LiteralBoolean
+                | T::LiteralDate
+                | T::MacroParam
+                | T::ScriptValue
+        )
+    };
+    let is_op = |k: T| {
+        matches!(
+            k,
+            T::Equal
+                | T::QuestionEqual
+                | T::EqualEqual
+                | T::NotEqual
+                | T::GreaterThan
+                | T::GreaterEqual
+                | T::LessThan
+                | T::LessEqual
+        )
+    };
+
+    let mut stack: Vec<Vec<u8>> = Vec::new();
+    // The most recent non-comment tokens, enough to see `key = tag` behind
+    // an opening brace.
+    let mut recent: Vec<pdxl_lexer::Token> = Vec::new();
+    for tok in pdxl_lexer::tokenize(src) {
+        if tok.range.start >= off {
+            break;
+        }
+        match tok.kind {
+            T::LBrace => {
+                let n = recent.len();
+                // `key = tag {` (tagged block) or `key = {`.
+                let key = if n >= 3
+                    && is_scalar(recent[n - 1].kind)
+                    && is_op(recent[n - 2].kind)
+                    && is_scalar(recent[n - 3].kind)
+                {
+                    src[recent[n - 3].range.start as usize..recent[n - 3].range.end as usize]
+                        .to_vec()
+                } else if n >= 2 && is_op(recent[n - 1].kind) && is_scalar(recent[n - 2].kind) {
+                    src[recent[n - 2].range.start as usize..recent[n - 2].range.end as usize]
+                        .to_vec()
+                } else {
+                    Vec::new() // anonymous block (list item)
+                };
+                stack.push(key);
+                recent.clear();
+            }
+            T::RBrace => {
+                stack.pop();
+                recent.clear();
+            }
+            T::Comment => {}
+            _ => {
+                if recent.len() == 3 {
+                    recent.remove(0);
+                }
+                recent.push(tok);
+            }
+        }
+    }
+    stack
 }
 
 /// The (kind, name) of the definition name or reference spanning byte offset

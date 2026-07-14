@@ -76,4 +76,12 @@ impl SymbolTable {
     pub fn lookup(&self, kind: SymbolKind, name: &str) -> Option<&Symbol> {
         self.by_kind.get(&kind)?.get(name)
     }
+
+    /// All defined names of a kind, in arbitrary order (completion sources).
+    pub fn names(&self, kind: SymbolKind) -> impl Iterator<Item = &str> {
+        self.by_kind
+            .get(&kind)
+            .into_iter()
+            .flat_map(|m| m.keys().map(String::as_str))
+    }
 }

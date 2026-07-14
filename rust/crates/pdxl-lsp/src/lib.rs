@@ -19,6 +19,7 @@
 
 #[macro_use]
 mod log;
+mod completion;
 mod position;
 mod state;
 
@@ -82,6 +83,7 @@ pub fn run_stdio(opts: Options) -> Result<(), Box<dyn std::error::Error + Sync +
 
     let capabilities = ServerCapabilities {
         text_document_sync: Some(TextDocumentSyncCapability::Kind(TextDocumentSyncKind::FULL)),
+        completion_provider: Some(lsp_types::CompletionOptions::default()),
         definition_provider: Some(OneOf::Left(true)),
         references_provider: Some(OneOf::Left(true)),
         document_symbol_provider: Some(OneOf::Left(true)),
@@ -238,6 +240,23 @@ fn handle_request(server: &mut ServerState, out: &Sender<Message>, req: lsp_serv
                     let result = (!symbols.is_empty())
                         .then_some(lsp_types::DocumentSymbolResponse::Nested(symbols));
                     Response::new_ok(req.id, result)
+                }
+                Err(e) => Response::new_err(
+                    req.id,
+                    lsp_server::ErrorCode::InvalidParams as i32,
+                    e.to_string(),
+                ),
+            };
+            let _ = out.send(Message::Response(resp));
+        }
+        lsp_types::request::Completion::METHOD => {
+            let resp = match serde_json::from_value::<lsp_types::CompletionParams>(req.params) {
+                Ok(params) => {
+                    let items = server.completion(
+                        &params.text_document_position.text_document.uri,
+                        params.text_document_position.position,
+                    );
+                    Response::new_ok(req.id, lsp_types::CompletionResponse::Array(items))
                 }
                 Err(e) => Response::new_err(
                     req.id,

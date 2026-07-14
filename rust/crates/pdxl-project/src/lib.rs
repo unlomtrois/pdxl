@@ -153,6 +153,15 @@ impl Project {
         &self.schema
     }
 
+    /// The FileSet `RelPath` key of a project file (drives directory-keyed
+    /// features: structural contexts, def rules).
+    pub fn rel_at(&self, full_path: &Path) -> Option<&str> {
+        self.order
+            .iter()
+            .find(|k| k.full == full_path)
+            .map(|k| k.rel.as_str())
+    }
+
     /// Recomputes the table and diagnostics from the in-memory facts.
     fn rebuild(&mut self) {
         let rels: Vec<&str> = self.order.iter().map(|k| k.rel.as_str()).collect();

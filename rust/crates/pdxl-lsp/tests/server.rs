@@ -546,3 +546,131 @@ fn m8b_no_result_branches_are_empty() {
     );
     assert!(server.document_symbol(&stranger).is_empty());
 }
+
+// ── completion ──────────────────────────────────────────────────────────────
+
+/// Position of the first byte of `needle` in `rel`'s content, as an LSP
+/// Position (single-byte-per-char fixtures keep this trivial).
+fn pos_of(src: &str, needle: &str) -> Position {
+    let off = src.find(needle).expect("needle in fixture");
+    let line = src[..off].matches('\n').count() as u32;
+    let col = (off - src[..off].rfind('\n').map_or(0, |i| i + 1)) as u32;
+    Position::new(line, col)
+}
+
+const COMPLETION_EVENT: &str = "namespace = t\n\
+t.1 = {\n\
+\ttrigger = { is_adult = yes }\n\
+\timmediate = { add_gold = 5 }\n\
+\toption = {\n\
+\t\tname = t.1.a\n\
+\t\tadd_dread = 5\n\
+\t}\n\
+}\n";
+
+fn completion_server() -> (ServerState, Receiver<Message>, TempTree) {
+    let t = TempTree::new();
+    t.write("events/e.txt", COMPLETION_EVENT);
+    t.write(
+        "common/scripted_effects/fx.txt",
+        "my_scripted_fx = { add_gold = 1 }\n",
+    );
+    let (server, rx) = server_over(&t);
+    (server, rx, t)
+}
+
+fn labels(items: &[lsp_types::CompletionItem]) -> Vec<&str> {
+    items.iter().map(|i| i.label.as_str()).collect()
+}
+
+#[test]
+fn completion_in_effect_block_offers_effects_and_scripted() {
+    let (server, _rx, t) = completion_server();
+    let uri = uri_for(&t, "events/e.txt");
+    // Cursor on `add_gold` inside immediate.
+    let items = server.completion(&uri, pos_of(COMPLETION_EVENT, "add_gold"));
+    let names = labels(&items);
+    assert!(names.contains(&"add_gold"), "builtin effect offered");
+    assert!(names.contains(&"my_scripted_fx"), "scripted effect offered");
+    assert!(names.contains(&"if"), "effect control offered");
+    assert!(
+        !names.contains(&"is_adult"),
+        "triggers not offered in effects"
+    );
+    // Detail carries the supported scopes from the doc tables.
+    let add_gold = items.iter().find(|i| i.label == "add_gold").unwrap();
+    assert_eq!(
+        add_gold.detail.as_deref(),
+        Some("effect · scopes: character")
+    );
+}
+
+#[test]
+fn completion_in_trigger_block_offers_triggers() {
+    let (server, _rx, t) = completion_server();
+    let uri = uri_for(&t, "events/e.txt");
+    let items = server.completion(&uri, pos_of(COMPLETION_EVENT, "is_adult"));
+    let names = labels(&items);
+    assert!(names.contains(&"is_adult"));
+    assert!(names.contains(&"trigger_if"));
+    assert!(
+        !names.contains(&"add_gold"),
+        "effects not offered in triggers"
+    );
+}
+
+#[test]
+fn completion_in_option_offers_fields_and_inline_effects() {
+    let (server, _rx, t) = completion_server();
+    let uri = uri_for(&t, "events/e.txt");
+    let items = server.completion(&uri, pos_of(COMPLETION_EVENT, "add_dread"));
+    let names = labels(&items);
+    // Structural fields (snippet-shaped)…
+    assert!(names.contains(&"ai_chance"));
+    let trigger = items.iter().find(|i| i.label == "trigger").unwrap();
+    assert_eq!(trigger.insert_text.as_deref(), Some("trigger = {\n\t$0\n}"));
+    // …plus effects via the option fallback.
+    assert!(names.contains(&"add_dread"));
+    assert!(names.contains(&"my_scripted_fx"));
+}
+
+#[test]
+fn completion_at_event_top_level_offers_field_snippets() {
+    let (server, _rx, t) = completion_server();
+    let uri = uri_for(&t, "events/e.txt");
+    // Cursor on the `trigger` KEY: container is the event struct.
+    let items = server.completion(&uri, pos_of(COMPLETION_EVENT, "trigger"));
+    let names = labels(&items);
+    assert!(names.contains(&"immediate"));
+    assert!(names.contains(&"option"));
+    let option = items.iter().find(|i| i.label == "option").unwrap();
+    assert!(option.insert_text.as_deref().unwrap().contains("name = $1"));
+    assert!(
+        !names.contains(&"add_gold"),
+        "event struct is strict: no effects"
+    );
+}
+
+#[test]
+fn completion_at_file_top_level_offers_event_skeleton() {
+    let (server, _rx, t) = completion_server();
+    let uri = uri_for(&t, "events/e.txt");
+    // Line 0, column 0 — before `namespace`, resolves to the file root…
+    // actually `namespace` scalar contains it; use the very end of file.
+    let end_line = COMPLETION_EVENT.matches('\n').count() as u32;
+    let items = server.completion(&uri, Position::new(end_line, 0));
+    let names = labels(&items);
+    assert!(
+        names.contains(&"event"),
+        "skeleton snippet at top level: {names:?}"
+    );
+    assert!(names.contains(&"namespace"));
+    let event = items.iter().find(|i| i.label == "event").unwrap();
+    assert!(
+        event
+            .insert_text
+            .as_deref()
+            .unwrap()
+            .contains("immediate = {")
+    );
+}
