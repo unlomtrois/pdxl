@@ -336,3 +336,34 @@ fn title_refs_resolve_against_tree_defs() {
         diags[0].msg
     );
 }
+
+// ── gated capital → title refs (ANALYSIS_VERSION 3) ─────────────────────────
+
+#[test]
+fn capital_in_landed_titles_is_a_title_ref() {
+    let f = extract(
+        "k_kingdom = {\n\tcapital = c_shore\n\tc_shore = { b_port = { province = 1 } }\n}\n",
+        "common/landed_titles/00.txt",
+    );
+    let r = f
+        .refs
+        .iter()
+        .find(|r| r.name == "c_shore")
+        .expect("capital value extracted as a ref");
+    assert_eq!(r.kind, SymbolKind::Title);
+}
+
+#[test]
+fn capital_outside_landed_titles_is_not_a_ref() {
+    // `capital` elsewhere (events, effects, history) means other things —
+    // the rule is gated to the landed-titles directory.
+    let f = extract(
+        "e = {\n\tcapital = c_shore\n}\n",
+        "common/scripted_effects/e.txt",
+    );
+    assert!(
+        f.refs.iter().all(|r| r.name != "c_shore"),
+        "gated rule must not fire outside common/landed_titles/: {:?}",
+        ref_names(&f)
+    );
+}

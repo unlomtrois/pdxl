@@ -36,4 +36,4 @@ pub use table::{Duplicate, SymbolTable};
 /// facts cache must embed this in its keys (alongside content hash and
 /// rel_path) and treat mismatches as misses; bump it whenever extraction rules
 /// or the [`FileFacts`] model change meaning.
-pub const ANALYSIS_VERSION: u32 = 2; // 2: landed titles (nested defs + title: scope refs)
+pub const ANALYSIS_VERSION: u32 = 3; // 3: gated capital→title refs; 2: landed titles
