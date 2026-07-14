@@ -27,11 +27,13 @@ pub fn extract_facts(
 
     if let Some(rule) = schema.rule_for(rel_path) {
         for node in tree.children(tree.root()) {
-            match rule.nested_key_prefixes {
-                Some(prefixes) => {
-                    harvest_nested_defs(tree, node, prefixes, rule.kind, rel_path, &mut facts)
+            match rule.shape {
+                crate::schema::DefShape::TopLevel => {
+                    harvest_def(tree, node, rule.kind, rel_path, schema, &mut facts)
                 }
-                None => harvest_def(tree, node, rule.kind, rel_path, schema, &mut facts),
+                crate::schema::DefShape::Tree { key_prefixes } => {
+                    harvest_nested_defs(tree, node, key_prefixes, rule.kind, rel_path, &mut facts)
+                }
             }
         }
     }

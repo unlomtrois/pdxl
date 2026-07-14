@@ -13,7 +13,7 @@
 //! and bump [`pdxl_analysis::ANALYSIS_VERSION`] when a change alters what
 //! previously extracted facts mean.
 
-use pdxl_analysis::{DefRule, Schema, SymbolKind};
+use pdxl_analysis::{DefRule, DefShape, Schema, SymbolKind};
 
 /// The file prefix under which list/weighted reference rules apply
 /// (Go: `OnActionDir`).
@@ -35,42 +35,44 @@ pub fn schema() -> Schema {
             DefRule {
                 prefix: "common/scripted_triggers/",
                 kind: SymbolKind::ScriptedTrigger,
-                nested_key_prefixes: None,
+                shape: DefShape::TopLevel,
             },
             DefRule {
                 prefix: "common/scripted_effects/",
                 kind: SymbolKind::ScriptedEffect,
-                nested_key_prefixes: None,
+                shape: DefShape::TopLevel,
             },
             DefRule {
                 prefix: "common/traits/",
                 kind: SymbolKind::Trait,
-                nested_key_prefixes: None,
+                shape: DefShape::TopLevel,
             },
             DefRule {
                 prefix: "common/decisions/",
                 kind: SymbolKind::Decision,
-                nested_key_prefixes: None,
+                shape: DefShape::TopLevel,
             },
             DefRule {
                 prefix: "common/on_action/",
                 kind: SymbolKind::OnAction,
-                nested_key_prefixes: None,
+                shape: DefShape::TopLevel,
             },
             DefRule {
                 prefix: "events/",
                 kind: SymbolKind::Event,
-                nested_key_prefixes: None,
+                shape: DefShape::TopLevel,
             },
             DefRule {
                 prefix: "history/characters/",
                 kind: SymbolKind::Character,
-                nested_key_prefixes: None,
+                shape: DefShape::TopLevel,
             },
             DefRule {
                 prefix: "common/landed_titles/",
                 kind: SymbolKind::Title,
-                nested_key_prefixes: Some(TITLE_TIER_PREFIXES),
+                shape: DefShape::Tree {
+                    key_prefixes: TITLE_TIER_PREFIXES,
+                },
             },
         ],
         // key = value — the scalar value must resolve to the kind.

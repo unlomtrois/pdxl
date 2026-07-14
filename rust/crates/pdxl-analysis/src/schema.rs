@@ -10,18 +10,35 @@ use std::collections::{HashMap, HashSet};
 
 use crate::model::SymbolKind;
 
+/// How definitions are shaped inside a directory's files.
+///
+/// An enum rather than optional fields on [`DefRule`], following ck3-tiger's
+/// precedent (`ItemLoader::Normal` vs `::Full`): the common case pays no
+/// ceremony, each variant names a real shape, and invalid flag combinations
+/// are unrepresentable. If a future shape ever needs *logic* beyond data
+/// (tiger's landed-titles handler also validates tier nesting order), the
+/// escape hatch is tiger's: a bespoke extractor — not more fields here.
+#[derive(Clone, Debug)]
+pub enum DefShape {
+    /// Definitions are the top-level `NAME = { … }` fields (the original
+    /// model; every kind except landed titles).
+    TopLevel,
+    /// Definitions form a **tree**: a key is a definition (and is recursed
+    /// into) iff it starts with one of these prefixes AND its value is a
+    /// block. CK3 landed titles: `e_x = { k_y = { d_z = { … } } }` with
+    /// attribute keys (`color`, `cultural_names`, …) interleaved at every
+    /// level.
+    Tree {
+        key_prefixes: &'static [&'static str],
+    },
+}
+
 /// Maps a `RelPath` prefix to the kind of symbol defined by files there.
 #[derive(Clone, Debug)]
 pub struct DefRule {
     pub prefix: &'static str,
     pub kind: SymbolKind,
-    /// `None`: definitions are the top-level `NAME = { … }` fields (the
-    /// original model). `Some(prefixes)`: definitions form a **tree** — a key
-    /// is a definition (and is recursed into) iff it starts with one of these
-    /// prefixes AND its value is a block. CK3 landed titles:
-    /// `e_x = { k_y = { d_z = { … } } }` with attribute keys (`color`,
-    /// `cultural_names`, …) interleaved at every level.
-    pub nested_key_prefixes: Option<&'static [&'static str]>,
+    pub shape: DefShape,
 }
 
 /// Everything the extraction engine needs to know about a game's conventions.
