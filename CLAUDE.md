@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+> **NOTE:** the Go implementation described below is legacy (retired oracle).
+> Active development is the Rust workspace — see the "Rust port (rust/)"
+> section at the end of this file.
+
 ## Commands
 
 ```sh
@@ -196,3 +200,43 @@ Tag constants use `snake_case` (e.g. `literal_boolean`, `l_brace`). The linter's
 ### Commit style
 
 Use git-flow prefixes: `feat(scope):`, `fix(scope):`, `refactor(scope):`, `chore(scope):`, etc.
+
+## Rust port (rust/) — the reference implementation
+
+The Go code is legacy/oracle; new work happens in the `rust/` cargo workspace
+(12 crates, see `rust/README.md` for the dependency diagram and milestone log).
+
+```sh
+cd rust
+cargo test --workspace                                   # all tests incl. parity/goldens
+cargo clippy --workspace --all-targets --all-features -- -D warnings   # must be clean
+cargo fmt --all --check
+bash ../scripts/parity.sh                                # Go tests + Rust tests + differentials
+```
+
+### Testing policy (which layer answers to what)
+
+- lexer / parser / fileset / .mod descriptors: still **byte-differential vs Go**
+  (`pdxl-parity/tests/{lexer,parser,fileset}.rs` run `go run ./tools/<name>dump`).
+- analysis layer (facts / project / `check` output): Go oracle **retired** —
+  **golden snapshots**; regenerate deliberately with
+  `UPDATE_GOLDENS=1 cargo test -p pdxl-parity --test facts --test project`
+  (and `-p pdxl-cli --test cli`), then review the golden diff like code.
+- Never modify Go production behavior except deliberate lockstep fixes
+  (precedent: ParseMod Unix-path fix); additive Go tools/tests are fine.
+
+### Invariants & gotchas
+
+- Bump `pdxl_analysis::ANALYSIS_VERSION` whenever schema/extraction semantics
+  change; `pdxl_ast::SYNTAX_VERSION` for lexer/parser/tree changes (cache keys).
+- Schema growth: rules are data in `pdxl-ck3` (`DefShape`, `scope_ref_prefixes`);
+  shapes needing *logic* get bespoke extractors, not new fields —
+  see `rust/docs/SCHEMA-SCALING.md` before extending the schema.
+- Edition 2024: let-chains are used; clippy runs with `-D warnings`.
+- `Stats.shadowed` is always 0 (preserved Go bug, documented in the M3 report).
+- lsp-server crate: use `initialize_start`/`initialize_finish`, NOT
+  `Connection::initialize` with a pre-wrapped result (double-nests capabilities;
+  regression-tested in `pdxl-cli/tests/cli.rs`).
+- Shell here is zsh: unquoted `$VARS` do NOT word-split — pass args explicitly.
+- Design/measurement history lives in `rust/docs/` (BASELINE.md, MILESTONE-*.md,
+  SCHEMA-SCALING.md).
