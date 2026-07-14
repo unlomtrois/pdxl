@@ -669,6 +669,10 @@ fn completion_server() -> (ServerState, Receiver<Message>, TempTree) {
         "events/scoped.txt",
         "namespace = t\nt.6 = { type = character_event immediate = {  } }\n",
     );
+    t.write(
+        "events/title-scoped.txt",
+        "namespace = t\nt.7 = { type = character_event immediate = { title:e_test = {  } } }\n",
+    );
     let (server, rx) = server_over(&t);
     (server, rx, t)
 }
@@ -844,8 +848,21 @@ fn completion_ranks_builtin_items_for_the_current_scope() {
         item("set_variable").sort_text.as_deref(),
         Some("4_set_variable")
     );
-    assert_eq!(
-        item("set_title_color").sort_text.as_deref(),
-        Some("5_set_title_color")
+    assert!(!items.iter().any(|item| item.label == "set_title_color"));
+}
+
+#[test]
+fn completion_filters_effects_in_a_known_title_scope() {
+    let (server, _rx, t) = completion_server();
+    let src =
+        "namespace = t\nt.7 = { type = character_event immediate = { title:e_test = {  } } }\n";
+    let uri = uri_for(&t, "events/title-scoped.txt");
+    let items = server.completion(&uri, pos_after(src, "title:e_test = { "));
+    let names = labels(&items);
+    assert!(names.contains(&"set_title_color"));
+    assert!(
+        names.contains(&"set_variable"),
+        "global effects remain valid"
     );
+    assert!(!names.contains(&"add_character_flag"));
 }

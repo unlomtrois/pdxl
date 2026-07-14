@@ -229,6 +229,12 @@ fn push_doc_rows(
     scope: Option<&str>,
 ) {
     for row in rows {
+        if let Some(scope) = scope
+            && !row.scopes.contains(&scope)
+            && !row.scopes.contains(&"none")
+        {
+            continue;
+        }
         items.push(CompletionItem {
             label: row.name.to_string(),
             kind: Some(CompletionItemKind::FUNCTION),
@@ -245,13 +251,12 @@ fn push_doc_rows(
     }
 }
 
-/// Keep all documented items while a scope estimate is incomplete, but put
-/// compatible rows ahead of global (`none`) and incompatible rows.
+/// Compatible rows lead global (`none`) rows. Unknown scope keeps the legacy
+/// ordering, and known mismatches are filtered before this point.
 fn scope_rank(row: &DocRow, scope: Option<&str>) -> u8 {
     match scope {
         Some(scope) if row.scopes.contains(&scope) => 3,
-        Some(_) if row.scopes.contains(&"none") => 4,
-        Some(_) => 5,
+        Some(_) => 4,
         None => 3,
     }
 }
