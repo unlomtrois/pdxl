@@ -89,9 +89,27 @@ pub fn symbol_value_items<I>(table: &SymbolTable, schema: &Schema, kinds: I) -> 
 where
     I: IntoIterator<Item = SymbolKind>,
 {
+    symbol_value_items_matching(table, schema, kinds, "")
+}
+
+/// Defined symbols matching a schema reference query and a partially typed
+/// value. This lets scope links such as `title:k_` query the project's symbol
+/// table before the client applies its own completion filtering.
+pub fn symbol_value_items_matching<I>(
+    table: &SymbolTable,
+    schema: &Schema,
+    kinds: I,
+    name_prefix: &str,
+) -> Vec<CompletionItem>
+where
+    I: IntoIterator<Item = SymbolKind>,
+{
     let mut items = Vec::new();
     for kind in kinds {
-        for name in table.names(kind) {
+        for name in table
+            .names(kind)
+            .filter(|name| name.starts_with(name_prefix))
+        {
             let symbol = table.lookup(kind, name).expect("name from symbol table");
             items.push(CompletionItem {
                 label: name.to_string(),

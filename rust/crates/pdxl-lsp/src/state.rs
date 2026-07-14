@@ -435,10 +435,11 @@ impl ServerState {
         let off = position_to_offset(&src, pos);
         let cursor = cursor_context(&src, off);
         if let Some(prefix) = cursor.scope_prefix.as_deref() {
-            return crate::completion::symbol_value_items(
+            return crate::completion::symbol_value_items_matching(
                 project.table(),
                 project.schema(),
                 project.schema().scope_prefix_kinds(prefix, &rel),
+                cursor.scope_name_prefix.as_deref().unwrap_or_default(),
             );
         }
         if let Some(key) = cursor.value_key.as_deref() {
@@ -878,6 +879,7 @@ struct CursorContext {
     chain: Vec<Vec<u8>>,
     value_key: Option<String>,
     scope_prefix: Option<String>,
+    scope_name_prefix: Option<String>,
 }
 
 /// The enclosing brace-key chain plus the value syntax immediately before the
@@ -986,10 +988,25 @@ fn cursor_context(src: &[u8], off: u32) -> CursorContext {
     } else {
         None
     };
+    let scope_name_prefix = if recent.len() >= 3
+        && is_scalar(recent[recent.len() - 3].kind)
+        && recent[recent.len() - 2].kind == T::Colon
+        && is_scalar(recent[recent.len() - 1].kind)
+    {
+        std::str::from_utf8(
+            &src[recent[recent.len() - 1].range.start as usize
+                ..recent[recent.len() - 1].range.end as usize],
+        )
+        .ok()
+        .map(str::to_owned)
+    } else {
+        None
+    };
     CursorContext {
         chain: stack,
         value_key,
         scope_prefix,
+        scope_name_prefix,
     }
 }
 

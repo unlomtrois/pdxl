@@ -643,7 +643,10 @@ fn completion_server() -> (ServerState, Receiver<Message>, TempTree) {
         "my_scripted_fx = { add_gold = 1 }\n",
     );
     t.write("common/traits/t.txt", "patient = {}\n");
-    t.write("common/landed_titles/t.txt", "e_test = {}\n");
+    t.write(
+        "common/landed_titles/t.txt",
+        "e_test = {}\nk_testshire = {}\nk_kingdom = {}\n",
+    );
     t.write("events/other.txt", "t.2 = {}\n");
     t.write(
         "events/value.txt",
@@ -820,6 +823,19 @@ fn completion_for_scope_prefix_offers_titles() {
     let items = server.completion(&uri, pos_after(src, "title:e"));
     let names = labels(&items);
     assert!(names.contains(&"e_test"));
+}
+
+#[test]
+fn completion_for_partially_typed_scope_prefix_filters_symbols() {
+    let (mut server, _rx, t) = completion_server();
+    let src = "namespace = t\nt.5 = { immediate = { add_trait = title:k_ } }\n";
+    let uri = uri_for(&t, "events/scope.txt");
+    server.did_open(uri.clone(), src.to_string());
+    let items = server.completion(&uri, pos_after(src, "title:k_"));
+    let names = labels(&items);
+    assert!(names.contains(&"k_testshire"));
+    assert!(names.contains(&"k_kingdom"));
+    assert!(!names.contains(&"e_test"));
 }
 
 #[test]
