@@ -64,7 +64,22 @@ pdxl-lsp        language server: diagnostics + definition   (dep: project, ck3,
                                                              lsp-server, lsp-types)
 pdxl-cli        the `pdxl` binary: lex/parse/check/lsp      (dep: most of the above,
                                                              clap)
+pdxl-mcp        MCP server: agent-facing CK3 queries        (dep: ck3, rmcp)
 ```
+
+### MCP server
+
+`pdxl-mcp` is a stdio MCP server for coding agents. Its first tool,
+`search_script_items`, searches the generated CK3 effects, triggers, modifiers,
+and scope links. Callers can restrict the item kinds, filter by input scope, and
+cap the number of deterministically ranked matches.
+
+```sh
+cargo run --release -p pdxl-mcp --features mcp
+```
+
+The stdio server binary and its RMCP runtime dependencies are only enabled by
+the `mcp` feature. The search library remains available without it.
 
 Dev tooling:
 

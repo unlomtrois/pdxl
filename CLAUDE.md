@@ -204,7 +204,7 @@ Use git-flow prefixes: `feat(scope):`, `fix(scope):`, `refactor(scope):`, `chore
 ## Rust port (rust/) — the reference implementation
 
 The Go code is legacy/oracle; new work happens in the `rust/` cargo workspace
-(12 crates, see `rust/README.md` for the dependency diagram and milestone log).
+(see `rust/README.md` for the dependency diagram and milestone log).
 
 ```sh
 cd rust

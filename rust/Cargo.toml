@@ -19,6 +19,7 @@ members = [
     # user-facing
     "crates/pdxl-cli",      # the pdxl binary: lex / parse / check / lsp
     "crates/pdxl-lsp",      # the language server (M8a: sync, diagnostics, definition)
+    "crates/pdxl-mcp",      # MCP server for agent-facing semantic queries
     # dev tooling
     "crates/pdxl-gamedocs", # parses the game's doc dumps; gen-tables renders pdxl-ck3 tables
     # test / parity infrastructure
@@ -57,3 +58,7 @@ lsp-server = "0.7"
 lsp-types = "0.95"
 serde_json = "1"
 crossbeam-channel = "0.5"
+# external — official Model Context Protocol SDK
+rmcp = { version = "0.16", features = ["server", "transport-io"] }
+schemars = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std"] }
