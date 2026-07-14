@@ -643,6 +643,8 @@ fn completion_server() -> (ServerState, Receiver<Message>, TempTree) {
         "my_scripted_fx = { add_gold = 1 }\n",
     );
     t.write("common/traits/t.txt", "patient = {}\n");
+    t.write("common/culture/cultures/t.txt", "abe_culture = {}\n");
+    t.write("common/religion/faiths/t.txt", "abe_faith = {}\n");
     t.write(
         "common/landed_titles/t.txt",
         "e_test = {}\nk_testshire = {}\nk_kingdom = {}\n",
@@ -854,6 +856,24 @@ fn completion_for_partially_typed_scope_prefix_filters_symbols() {
 }
 
 #[test]
+fn completion_for_culture_and_faith_prefixes_offers_matching_symbols() {
+    let (mut server, _rx, t) = completion_server();
+    let culture_src = "namespace = t\nt.5 = { immediate = { culture:abe } }\n";
+    let uri = uri_for(&t, "events/scope.txt");
+    server.did_open(uri.clone(), culture_src.to_string());
+    assert!(
+        labels(&server.completion(&uri, pos_after(culture_src, "culture:abe")))
+            .contains(&"abe_culture")
+    );
+
+    let faith_src = "namespace = t\nt.5 = { immediate = { faith:abe } }\n";
+    server.did_change(uri.clone(), faith_src.to_string());
+    assert!(
+        labels(&server.completion(&uri, pos_after(faith_src, "faith:abe"))).contains(&"abe_faith")
+    );
+}
+
+#[test]
 fn completion_after_scope_link_dot_offers_members() {
     let (mut server, _rx, t) = completion_server();
     let src = "namespace = t\nt.5 = { immediate = { title:e_test. } }\n";
@@ -867,6 +887,18 @@ fn completion_after_scope_link_dot_offers_members() {
     let holder = items.iter().find(|item| item.label == "holder").unwrap();
     assert_eq!(holder.filter_text.as_deref(), Some("title:e_test.holder"));
     assert!(holder.text_edit.is_some());
+}
+
+#[test]
+fn completion_uses_scope_from_a_chained_title_link() {
+    let (mut server, _rx, t) = completion_server();
+    let src = "namespace = t\nt.8 = { type = character_event trigger = { title:e_test.culture = {  } } }\n";
+    let uri = uri_for(&t, "events/title-scoped.txt");
+    server.did_open(uri.clone(), src.to_string());
+    let items = server.completion(&uri, pos_after(src, "culture = { "));
+    let names = labels(&items);
+    assert!(names.contains(&"has_innovation"), "{names:?}");
+    assert!(!names.contains(&"add_character_flag"));
 }
 
 #[test]

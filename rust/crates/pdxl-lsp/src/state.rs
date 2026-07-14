@@ -598,7 +598,15 @@ fn scope_hints(src: &[u8], rel_path: &str, requested: Range) -> Vec<InlayHint> {
             T::LBrace => {
                 let key = block_key(src, &recent, &is_scalar, &is_op);
                 let parent_scope = stack.last().and_then(|frame| frame.scope.clone());
-                let scope = block_scope(src, &recent, &key, &stack, rel_path, parent_scope);
+                let scope = block_scope(
+                    src,
+                    token.range.start,
+                    &recent,
+                    &key,
+                    &stack,
+                    rel_path,
+                    parent_scope,
+                );
                 if let Some(scope) = &scope {
                     let position = offset_to_position(src, token.range.end);
                     if position_in_range(position, requested) {
@@ -688,7 +696,15 @@ pub(crate) fn scope_at(src: &[u8], rel_path: &str, off: u32) -> Option<String> {
             T::LBrace => {
                 let key = block_key(src, &recent, &is_scalar, &is_op);
                 let inherited = stack.last().and_then(|frame| frame.scope.clone());
-                let scope = block_scope(src, &recent, &key, &stack, rel_path, inherited);
+                let scope = block_scope(
+                    src,
+                    token.range.start,
+                    &recent,
+                    &key,
+                    &stack,
+                    rel_path,
+                    inherited,
+                );
                 stack.push(ScopeFrame { key, scope });
                 recent.clear();
             }
@@ -761,12 +777,16 @@ fn block_key(
 
 fn block_scope(
     src: &[u8],
+    off: u32,
     recent: &[pdxl_lexer::Token],
     key: &[u8],
     stack: &[ScopeFrame],
     rel_path: &str,
     inherited: Option<String>,
 ) -> Option<String> {
+    if let Some(scope) = scope_link_chain_scope(src, off) {
+        return Some(scope);
+    }
     let parent_keys = stack.iter().map(|frame| frame.key.as_slice());
     let context = pdxl_analysis::context::context_of_chain(
         parent_keys,
@@ -802,6 +822,68 @@ fn block_scope(
         }
     }
     inherited
+}
+
+/// Resolves a complete `prefix:data.member…` chain immediately before `off`.
+/// It powers both scope hints and scope-aware completions at block openers.
+fn scope_link_chain_scope(src: &[u8], off: u32) -> Option<String> {
+    use pdxl_lexer::TokenKind as T;
+    let scalar = |kind: T| {
+        matches!(
+            kind,
+            T::Identifier
+                | T::LiteralString
+                | T::LiteralBoolean
+                | T::LiteralDate
+                | T::MacroParam
+                | T::ScriptValue
+        )
+    };
+    let mut chain = Vec::new();
+    for token in pdxl_lexer::tokenize(src) {
+        if token.range.start >= off {
+            break;
+        }
+        if scalar(token.kind) || matches!(token.kind, T::Colon | T::Dot) {
+            chain.push(token);
+        } else if matches!(token.kind, T::Equal | T::QuestionEqual) {
+            if chain.iter().any(|token| token.kind == T::Colon) {
+                break;
+            }
+            chain.clear();
+        } else if token.kind != T::Comment {
+            chain.clear();
+        }
+    }
+    if chain.len() < 3
+        || !scalar(chain[0].kind)
+        || chain[1].kind != T::Colon
+        || !scalar(chain[2].kind)
+    {
+        return None;
+    }
+    let prefix = std::str::from_utf8(token_text(src, chain[0])).ok()?;
+    let first = pdxl_ck3::tables::SCOPE_LINKS
+        .iter()
+        .find(|link| link.name == prefix && link.requires_data && link.output_scopes.len() == 1)?;
+    let mut scope = first.output_scopes[0];
+    let mut i = 3;
+    while i < chain.len() {
+        if chain[i].kind != T::Dot || i + 1 >= chain.len() || !scalar(chain[i + 1].kind) {
+            return None;
+        }
+        let name = std::str::from_utf8(token_text(src, chain[i + 1])).ok()?;
+        let link = pdxl_ck3::tables::SCOPE_LINKS.iter().find(|link| {
+            link.name == name
+                && !link.requires_data
+                && !link.global_link
+                && link.input_scopes.contains(&scope)
+                && link.output_scopes.len() == 1
+        })?;
+        scope = link.output_scopes[0];
+        i += 2;
+    }
+    Some(scope.to_string())
 }
 
 fn token_text(src: &[u8], token: pdxl_lexer::Token) -> &[u8] {

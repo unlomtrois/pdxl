@@ -166,6 +166,26 @@ const KIND_SPECS: &[KindSpec] = &[
         ],
         aliases: &[],
     },
+    KindSpec {
+        kind: SymbolKind::Culture,
+        icon: IconHint::Object,
+        defs: Some(DefSource {
+            dir_prefix: "common/culture/cultures/",
+            shape: DefShape::TopLevel,
+        }),
+        refs: &[anywhere(RefPattern::ScopePrefix("culture"))],
+        aliases: &[],
+    },
+    KindSpec {
+        kind: SymbolKind::Faith,
+        icon: IconHint::Object,
+        defs: Some(DefSource {
+            dir_prefix: "common/religion/faiths/",
+            shape: DefShape::TopLevel,
+        }),
+        refs: &[anywhere(RefPattern::ScopePrefix("faith"))],
+        aliases: &[],
+    },
 ];
 
 /// Relative-scope references that may hold a trait at runtime;
