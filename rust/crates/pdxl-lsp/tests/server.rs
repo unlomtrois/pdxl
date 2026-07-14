@@ -854,6 +854,22 @@ fn completion_for_partially_typed_scope_prefix_filters_symbols() {
 }
 
 #[test]
+fn completion_after_scope_link_dot_offers_members() {
+    let (mut server, _rx, t) = completion_server();
+    let src = "namespace = t\nt.5 = { immediate = { title:e_test. } }\n";
+    let uri = uri_for(&t, "events/scope.txt");
+    server.did_open(uri.clone(), src.to_string());
+    let items = server.completion(&uri, pos_after(src, "title:e_test."));
+    let names = labels(&items);
+    assert!(names.contains(&"holder"));
+    assert!(names.contains(&"de_jure_liege"));
+    assert!(!names.contains(&"spouse"));
+    let holder = items.iter().find(|item| item.label == "holder").unwrap();
+    assert_eq!(holder.filter_text.as_deref(), Some("title:e_test.holder"));
+    assert!(holder.text_edit.is_some());
+}
+
+#[test]
 fn completion_in_on_action_event_list_offers_events() {
     let (server, _rx, t) = completion_server();
     let src = "my_action = { events = {  } }\n";

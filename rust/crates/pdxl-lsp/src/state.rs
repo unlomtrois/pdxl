@@ -439,6 +439,21 @@ impl ServerState {
         };
         let off = position_to_offset(&src, pos);
         let cursor = cursor_context(&src, off);
+        if let Some(member) = scope_member_context(&src, off) {
+            let mut items = crate::completion::scope_link_items(&member.scope, &member.name_prefix);
+            let range = Range::new(
+                offset_to_position(&src, member.name_start),
+                offset_to_position(&src, off),
+            );
+            for item in &mut items {
+                item.filter_text = Some(format!("{}{}", member.filter_prefix, item.label));
+                item.text_edit = Some(lsp_types::CompletionTextEdit::Edit(lsp_types::TextEdit {
+                    range,
+                    new_text: item.label.clone(),
+                }));
+            }
+            return items;
+        }
         if let Some(prefix) = cursor.scope_prefix.as_deref() {
             let name_prefix = cursor.scope_name_prefix.as_deref().unwrap_or_default();
             let mut items = crate::completion::symbol_value_items_matching(
@@ -908,6 +923,100 @@ struct CursorContext {
     scope_prefix: Option<String>,
     scope_name_prefix: Option<String>,
     scope_name_start: Option<u32>,
+}
+
+/// The `.member` suffix of a scope-link chain, including the scope reached
+/// immediately before that suffix. `title:k_france.` therefore has the
+/// `landed_title` scope and offers links such as `holder`.
+struct ScopeMemberContext {
+    scope: String,
+    name_prefix: String,
+    name_start: u32,
+    filter_prefix: String,
+}
+
+fn scope_member_context(src: &[u8], off: u32) -> Option<ScopeMemberContext> {
+    use pdxl_lexer::TokenKind as T;
+    let is_scalar = |kind: T| {
+        matches!(
+            kind,
+            T::Identifier
+                | T::LiteralString
+                | T::LiteralBoolean
+                | T::LiteralDate
+                | T::MacroParam
+                | T::ScriptValue
+        )
+    };
+    let mut chain = Vec::new();
+    for token in pdxl_lexer::tokenize(src) {
+        if token.range.start >= off {
+            break;
+        }
+        if is_scalar(token.kind) || matches!(token.kind, T::Colon | T::Dot) {
+            chain.push(token);
+        } else if token.kind != T::Comment {
+            chain.clear();
+        }
+    }
+    // `prefix:data(.link)*` must end in `.` or a partially typed member.
+    if chain.len() < 4 || !is_scalar(chain[0].kind) || chain[1].kind != T::Colon {
+        return None;
+    }
+    let mut index = 2;
+    if !is_scalar(chain[index].kind) {
+        return None;
+    }
+    let link_name = std::str::from_utf8(token_text(src, chain[0])).ok()?;
+    let link = pdxl_ck3::tables::SCOPE_LINKS.iter().find(|link| {
+        link.name == link_name && link.requires_data && link.output_scopes.len() == 1
+    })?;
+    let mut scope = link.output_scopes[0];
+    index += 1;
+    while index < chain.len() && chain[index].kind == T::Dot {
+        let dot = chain[index];
+        index += 1;
+        if index == chain.len() {
+            return Some(ScopeMemberContext {
+                scope: scope.to_string(),
+                name_prefix: String::new(),
+                name_start: dot.range.end,
+                filter_prefix: String::from_utf8(
+                    src[chain[0].range.start as usize..off as usize].to_vec(),
+                )
+                .ok()?,
+            });
+        }
+        if !is_scalar(chain[index].kind) {
+            return None;
+        }
+        // A final scalar is what the user is completing; earlier members
+        // advance the chain's scope before the next dot.
+        if index + 1 == chain.len() {
+            return Some(ScopeMemberContext {
+                scope: scope.to_string(),
+                name_prefix: std::str::from_utf8(token_text(src, chain[index]))
+                    .ok()?
+                    .to_string(),
+                name_start: chain[index].range.start,
+                filter_prefix: String::from_utf8(
+                    src[chain[0].range.start as usize..chain[index].range.start as usize].to_vec(),
+                )
+                .ok()?,
+            });
+        }
+        let name = std::str::from_utf8(token_text(src, chain[index])).ok()?;
+        let link = pdxl_ck3::tables::SCOPE_LINKS.iter().find(|link| {
+            link.name == name
+                && !link.requires_data
+                && !link.global_link
+                && link.input_scopes.contains(&scope)
+                && link.output_scopes.len() == 1
+        })?;
+        scope = link.output_scopes[0];
+        index += 1;
+    }
+    None
 }
 
 /// The enclosing brace-key chain plus the value syntax immediately before the

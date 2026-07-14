@@ -17,7 +17,7 @@ use lsp_types::{
 };
 use pdxl_analysis::context::{ClauseKind, Fallback, StructSpec};
 use pdxl_analysis::{IconHint, Schema, SymbolKind, SymbolTable};
-use pdxl_ck3::tables::{DocRow, EFFECTS, TRIGGERS};
+use pdxl_ck3::tables::{DocRow, EFFECTS, SCOPE_LINKS, TRIGGERS};
 
 /// Control keywords legal inside effect clauses (not in the doc tables:
 /// they are flow structure, not effects).
@@ -119,6 +119,31 @@ where
                 ..CompletionItem::default()
             });
         }
+    }
+    items
+}
+
+/// Members reachable with `.member` from a known CK3 scope.
+pub fn scope_link_items(scope: &str, name_prefix: &str) -> Vec<CompletionItem> {
+    let mut items = Vec::new();
+    for link in SCOPE_LINKS {
+        if link.requires_data
+            || link.global_link
+            || !link.input_scopes.contains(&scope)
+            || !link.name.starts_with(name_prefix)
+            || items
+                .iter()
+                .any(|item: &CompletionItem| item.label == link.name)
+        {
+            continue;
+        }
+        items.push(CompletionItem {
+            label: link.name.to_string(),
+            kind: Some(CompletionItemKind::PROPERTY),
+            detail: Some(format!("scope link → {}", link.output_scopes.join(", "))),
+            sort_text: Some(format!("0_{}", link.name)),
+            ..CompletionItem::default()
+        });
     }
     items
 }
