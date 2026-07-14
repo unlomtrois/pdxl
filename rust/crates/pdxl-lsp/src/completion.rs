@@ -14,7 +14,7 @@
 
 use lsp_types::{CompletionItem, CompletionItemKind, InsertTextFormat};
 use pdxl_analysis::context::{ClauseKind, Fallback, StructSpec};
-use pdxl_analysis::{SymbolKind, SymbolTable};
+use pdxl_analysis::{IconHint, Schema, SymbolKind, SymbolTable};
 use pdxl_ck3::tables::{DocRow, EFFECTS, TRIGGERS};
 
 /// Control keywords legal inside effect clauses (not in the doc tables:
@@ -80,6 +80,38 @@ pub fn items_for(ctx: ClauseKind, table: &SymbolTable) -> Vec<CompletionItem> {
         ClauseKind::Config | ClauseKind::Unknown => {}
     }
     items
+}
+
+/// Defined symbols matching a schema reference query, for value completion.
+pub fn symbol_value_items<I>(table: &SymbolTable, schema: &Schema, kinds: I) -> Vec<CompletionItem>
+where
+    I: IntoIterator<Item = SymbolKind>,
+{
+    let mut items = Vec::new();
+    for kind in kinds {
+        for name in table.names(kind) {
+            let symbol = table.lookup(kind, name).expect("name from symbol table");
+            items.push(CompletionItem {
+                label: name.to_string(),
+                kind: Some(completion_kind(schema.icon(kind))),
+                detail: Some(format!("{} · defined in {}", kind.as_str(), symbol.file)),
+                sort_text: Some(format!("0_{name}")),
+                ..CompletionItem::default()
+            });
+        }
+    }
+    items
+}
+
+fn completion_kind(icon: IconHint) -> CompletionItemKind {
+    match icon {
+        IconHint::Function => CompletionItemKind::FUNCTION,
+        IconHint::Event => CompletionItemKind::EVENT,
+        IconHint::Tag => CompletionItemKind::ENUM_MEMBER,
+        IconHint::Action => CompletionItemKind::METHOD,
+        IconHint::Object => CompletionItemKind::CLASS,
+        IconHint::Hierarchy => CompletionItemKind::ENUM,
+    }
 }
 
 /// Completion at file top level (between definitions).

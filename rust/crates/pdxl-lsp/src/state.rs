@@ -421,12 +421,40 @@ impl ServerState {
             return Vec::new();
         };
         let off = position_to_offset(&src, pos);
-        let chain = enclosing_key_chain(&src, off);
-        if chain.is_empty() {
+        let cursor = cursor_context(&src, off);
+        if let Some(prefix) = cursor.scope_prefix.as_deref() {
+            return crate::completion::symbol_value_items(
+                project.table(),
+                project.schema(),
+                project.schema().scope_prefix_kinds(prefix, &rel),
+            );
+        }
+        if let Some(key) = cursor.value_key.as_deref() {
+            return crate::completion::symbol_value_items(
+                project.table(),
+                project.schema(),
+                project.schema().value_kinds(key, &rel),
+            );
+        }
+        if let Some(key) = cursor
+            .chain
+            .last()
+            .and_then(|key| std::str::from_utf8(key).ok())
+        {
+            let items = crate::completion::symbol_value_items(
+                project.table(),
+                project.schema(),
+                project.schema().list_value_kinds(key, &rel),
+            );
+            if !items.is_empty() {
+                return items;
+            }
+        }
+        if cursor.chain.is_empty() {
             return crate::completion::top_level_items(&rel);
         }
         let ctx = pdxl_analysis::context::context_of_chain(
-            chain.iter().map(Vec::as_slice),
+            cursor.chain.iter().map(Vec::as_slice),
             &rel,
             pdxl_ck3::contexts::context_schema(),
         );
@@ -461,7 +489,16 @@ impl ServerState {
 /// from a raw token scan: push on `{` (with the key inferred from the
 /// preceding `key =` / `key = tag` tokens; empty for anonymous blocks),
 /// pop on `}`. A token containing `off` (the word being typed) is excluded.
-fn enclosing_key_chain(src: &[u8], off: u32) -> Vec<Vec<u8>> {
+struct CursorContext {
+    chain: Vec<Vec<u8>>,
+    value_key: Option<String>,
+    scope_prefix: Option<String>,
+}
+
+/// The enclosing brace-key chain plus the value syntax immediately before the
+/// cursor. The token ring deliberately resets at braces, so a `key =` from an
+/// outer block cannot leak into an inner list or block.
+fn cursor_context(src: &[u8], off: u32) -> CursorContext {
     use pdxl_lexer::TokenKind as T;
     let is_scalar = |k: T| {
         matches!(
@@ -530,7 +567,45 @@ fn enclosing_key_chain(src: &[u8], off: u32) -> Vec<Vec<u8>> {
             }
         }
     }
-    stack
+    let value_key = if recent.len() >= 2
+        && is_scalar(recent[recent.len() - 2].kind)
+        && is_op(recent[recent.len() - 1].kind)
+    {
+        std::str::from_utf8(
+            &src[recent[recent.len() - 2].range.start as usize
+                ..recent[recent.len() - 2].range.end as usize],
+        )
+        .ok()
+        .map(str::to_owned)
+    } else {
+        None
+    };
+    let prefix_token = if recent.len() >= 2
+        && is_scalar(recent[recent.len() - 2].kind)
+        && recent[recent.len() - 1].kind == T::Colon
+    {
+        Some(&recent[recent.len() - 2])
+    } else if recent.len() >= 3
+        && is_scalar(recent[recent.len() - 3].kind)
+        && recent[recent.len() - 2].kind == T::Colon
+        && is_scalar(recent[recent.len() - 1].kind)
+    {
+        Some(&recent[recent.len() - 3])
+    } else {
+        None
+    };
+    let scope_prefix = if let Some(prefix) = prefix_token {
+        std::str::from_utf8(&src[prefix.range.start as usize..prefix.range.end as usize])
+            .ok()
+            .map(str::to_owned)
+    } else {
+        None
+    };
+    CursorContext {
+        chain: stack,
+        value_key,
+        scope_prefix,
+    }
 }
 
 /// The (kind, name) of the definition name or reference spanning byte offset

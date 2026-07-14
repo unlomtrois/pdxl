@@ -558,6 +558,13 @@ fn pos_of(src: &str, needle: &str) -> Position {
     Position::new(line, col)
 }
 
+fn pos_after(src: &str, needle: &str) -> Position {
+    let off = src.find(needle).expect("needle in fixture") + needle.len();
+    let line = src[..off].matches('\n').count() as u32;
+    let col = (off - src[..off].rfind('\n').map_or(0, |i| i + 1)) as u32;
+    Position::new(line, col)
+}
+
 const COMPLETION_EVENT: &str = "namespace = t\n\
 t.1 = {\n\
 \ttrigger = { is_adult = yes }\n\
@@ -574,6 +581,29 @@ fn completion_server() -> (ServerState, Receiver<Message>, TempTree) {
     t.write(
         "common/scripted_effects/fx.txt",
         "my_scripted_fx = { add_gold = 1 }\n",
+    );
+    t.write("common/traits/t.txt", "patient = {}\n");
+    t.write("common/landed_titles/t.txt", "e_test = {}\n");
+    t.write("events/other.txt", "t.2 = {}\n");
+    t.write(
+        "events/value.txt",
+        "namespace = t\nt.3 = { immediate = { add_trait =  } }\n",
+    );
+    t.write(
+        "common/landed_titles/value.txt",
+        "e_outer = { capital =  }\n",
+    );
+    t.write(
+        "events/capital.txt",
+        "namespace = t\nt.4 = { immediate = { capital =  } }\n",
+    );
+    t.write(
+        "events/scope.txt",
+        "namespace = t\nt.5 = { immediate = { add_trait = title:e } }\n",
+    );
+    t.write(
+        "common/on_action/value.txt",
+        "my_action = { events = {  } }\n",
     );
     let (server, rx) = server_over(&t);
     (server, rx, t)
@@ -673,4 +703,59 @@ fn completion_at_file_top_level_offers_event_skeleton() {
             .unwrap()
             .contains("immediate = {")
     );
+}
+
+#[test]
+fn completion_after_reference_key_offers_only_matching_symbols() {
+    let (server, _rx, t) = completion_server();
+    let src = "namespace = t\nt.3 = { immediate = { add_trait =  } }\n";
+    let uri = uri_for(&t, "events/value.txt");
+    let items = server.completion(&uri, pos_after(src, "add_trait = "));
+    let names = labels(&items);
+    assert!(names.contains(&"patient"));
+    assert!(!names.contains(&"add_gold"));
+    let patient = items.iter().find(|i| i.label == "patient").unwrap();
+    assert_eq!(
+        patient.detail.as_deref(),
+        Some("trait · defined in common/traits/t.txt")
+    );
+}
+
+#[test]
+fn completion_after_gated_capital_offers_titles_only_in_landed_titles() {
+    let (server, _rx, t) = completion_server();
+    let src = "e_outer = { capital =  }\n";
+    let uri = uri_for(&t, "common/landed_titles/value.txt");
+    let items = server.completion(&uri, pos_after(src, "capital = "));
+    let names = labels(&items);
+    assert!(names.contains(&"e_test"));
+
+    let event_src = "namespace = t\nt.4 = { immediate = { capital =  } }\n";
+    let uri = uri_for(&t, "events/capital.txt");
+    assert!(
+        server
+            .completion(&uri, pos_after(event_src, "capital = "))
+            .is_empty()
+    );
+}
+
+#[test]
+fn completion_for_scope_prefix_offers_titles() {
+    let (server, _rx, t) = completion_server();
+    let src = "namespace = t\nt.5 = { immediate = { add_trait = title:e } }\n";
+    let uri = uri_for(&t, "events/scope.txt");
+    let items = server.completion(&uri, pos_after(src, "title:e"));
+    let names = labels(&items);
+    assert!(names.contains(&"e_test"));
+}
+
+#[test]
+fn completion_in_on_action_event_list_offers_events() {
+    let (server, _rx, t) = completion_server();
+    let src = "my_action = { events = {  } }\n";
+    let uri = uri_for(&t, "common/on_action/value.txt");
+    let items = server.completion(&uri, pos_after(src, "events = { "));
+    let names = labels(&items);
+    assert!(names.contains(&"t.2"));
+    assert!(!names.contains(&"patient"));
 }

@@ -225,6 +225,46 @@ impl Schema {
         self.icons.get(&kind).copied().unwrap_or(IconHint::Object)
     }
 
+    /// Symbol kinds referenced by a scalar value for `key` in `rel_path`.
+    /// This is a read-only query for editor features; extraction keeps using
+    /// the compiled rules directly.
+    pub fn value_kinds<'a>(
+        &'a self,
+        key: &'a str,
+        rel_path: &'a str,
+    ) -> impl Iterator<Item = SymbolKind> + 'a {
+        self.key_rules(key).into_iter().flat_map(move |rules| {
+            rules.iter().filter_map(move |rule| {
+                (rule.form == KeyForm::Value && rule.applies(rel_path)).then_some(rule.kind)
+            })
+        })
+    }
+
+    /// Symbol kinds referenced by loose or weighted list values for `key`.
+    pub fn list_value_kinds<'a>(
+        &'a self,
+        key: &'a str,
+        rel_path: &'a str,
+    ) -> impl Iterator<Item = SymbolKind> + 'a {
+        self.key_rules(key).into_iter().flat_map(move |rules| {
+            rules.iter().filter_map(move |rule| {
+                (matches!(rule.form, KeyForm::List | KeyForm::Weighted) && rule.applies(rel_path))
+                    .then_some(rule.kind)
+            })
+        })
+    }
+
+    /// Symbol kinds addressed by a configured `prefix:` scope literal.
+    pub fn scope_prefix_kinds<'a>(
+        &'a self,
+        prefix: &'a str,
+        rel_path: &'a str,
+    ) -> impl Iterator<Item = SymbolKind> + 'a {
+        self.scope_rules.iter().filter_map(move |rule| {
+            (rule.prefix == prefix && rule.applies(rel_path)).then_some(rule.kind)
+        })
+    }
+
     /// Whether a reference value should not be resolved: macro parameters
     /// (`$X$`), scope/data-function chains (`foo:bar`), relative-scope
     /// keywords, and empties (Go's `skipRefValue`).
