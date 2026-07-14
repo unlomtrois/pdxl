@@ -665,6 +665,10 @@ fn completion_server() -> (ServerState, Receiver<Message>, TempTree) {
         "common/on_action/value.txt",
         "my_action = { events = {  } }\n",
     );
+    t.write(
+        "events/scoped.txt",
+        "namespace = t\nt.6 = { type = character_event immediate = {  } }\n",
+    );
     let (server, rx) = server_over(&t);
     (server, rx, t)
 }
@@ -823,4 +827,25 @@ fn completion_in_on_action_event_list_offers_events() {
     let names = labels(&items);
     assert!(names.contains(&"t.2"));
     assert!(!names.contains(&"patient"));
+}
+
+#[test]
+fn completion_ranks_builtin_items_for_the_current_scope() {
+    let (server, _rx, t) = completion_server();
+    let src = "namespace = t\nt.6 = { type = character_event immediate = {  } }\n";
+    let uri = uri_for(&t, "events/scoped.txt");
+    let items = server.completion(&uri, pos_after(src, "immediate = { "));
+    let item = |name: &str| items.iter().find(|item| item.label == name).unwrap();
+    assert_eq!(
+        item("add_character_flag").sort_text.as_deref(),
+        Some("3_add_character_flag")
+    );
+    assert_eq!(
+        item("set_variable").sort_text.as_deref(),
+        Some("4_set_variable")
+    );
+    assert_eq!(
+        item("set_title_color").sort_text.as_deref(),
+        Some("5_set_title_color")
+    );
 }

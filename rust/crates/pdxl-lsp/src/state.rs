@@ -470,7 +470,7 @@ impl ServerState {
             &rel,
             pdxl_ck3::contexts::context_schema(),
         );
-        crate::completion::items_for(ctx, project.table())
+        crate::completion::items_for(ctx, project.table(), scope_at(&src, &rel, off).as_deref())
     }
 
     /// Whether `path` lives under the mod root; no root = everything in scope.
@@ -604,6 +604,79 @@ fn scope_hints(src: &[u8], rel_path: &str, requested: Range) -> Vec<InlayHint> {
         }
     }
     hints
+}
+
+/// Best-effort current scope at an arbitrary cursor offset. This is shared by
+/// completion today and leaves room for scope-link completion and diagnostics.
+pub(crate) fn scope_at(src: &[u8], rel_path: &str, off: u32) -> Option<String> {
+    use pdxl_lexer::TokenKind as T;
+    let is_scalar = |kind: T| {
+        matches!(
+            kind,
+            T::Identifier
+                | T::LiteralString
+                | T::LiteralBoolean
+                | T::LiteralDate
+                | T::MacroParam
+                | T::ScriptValue
+        )
+    };
+    let is_op = |kind: T| {
+        matches!(
+            kind,
+            T::Equal
+                | T::QuestionEqual
+                | T::EqualEqual
+                | T::NotEqual
+                | T::GreaterThan
+                | T::GreaterEqual
+                | T::LessThan
+                | T::LessEqual
+        )
+    };
+    let mut stack: Vec<ScopeFrame> = Vec::new();
+    let mut recent = Vec::new();
+    for token in pdxl_lexer::tokenize(src) {
+        if token.range.start >= off {
+            break;
+        }
+        let is_event_body = event_body_context(&stack, rel_path);
+        match token.kind {
+            T::LBrace => {
+                let key = block_key(src, &recent, &is_scalar, &is_op);
+                let inherited = stack.last().and_then(|frame| frame.scope.clone());
+                let scope = block_scope(src, &recent, &key, &stack, rel_path, inherited);
+                stack.push(ScopeFrame { key, scope });
+                recent.clear();
+            }
+            T::RBrace => {
+                stack.pop();
+                recent.clear();
+            }
+            T::Comment => {}
+            _ => {
+                if is_scalar(token.kind)
+                    && recent.len() >= 2
+                    && is_op(recent[recent.len() - 1].kind)
+                    && let Some(frame) = stack.last_mut()
+                {
+                    let key = token_text(src, recent[recent.len() - 2]);
+                    if key == b"scope" {
+                        frame.scope = std::str::from_utf8(token_text(src, token))
+                            .ok()
+                            .map(str::to_owned);
+                    } else if key == b"type" && is_event_body {
+                        frame.scope = event_type_scope(token_text(src, token)).map(str::to_owned);
+                    }
+                }
+                if recent.len() == 4 {
+                    recent.remove(0);
+                }
+                recent.push(token);
+            }
+        }
+    }
+    stack.last().and_then(|frame| frame.scope.clone())
 }
 
 /// CK3 event types that establish a character as the implicit root scope.

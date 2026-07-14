@@ -66,11 +66,11 @@ const DYNAMIC_DESC_KEYS: &[&str] = &[
 ];
 
 /// Completion items for a clause context.
-pub fn items_for(ctx: ClauseKind, table: &SymbolTable) -> Vec<CompletionItem> {
+pub fn items_for(ctx: ClauseKind, table: &SymbolTable, scope: Option<&str>) -> Vec<CompletionItem> {
     let mut items = Vec::new();
     match ctx {
-        ClauseKind::Effect => push_effect_items(&mut items, table),
-        ClauseKind::Trigger => push_trigger_items(&mut items, table),
+        ClauseKind::Effect => push_effect_items(&mut items, table, scope),
+        ClauseKind::Trigger => push_trigger_items(&mut items, table, scope),
         ClauseKind::ScriptValue => push_keywords(&mut items, SCRIPT_VALUE_KEYS, "script value"),
         ClauseKind::ScriptedModifier => {
             push_keywords(&mut items, SCRIPTED_MODIFIER_KEYS, "scripted modifier");
@@ -78,7 +78,7 @@ pub fn items_for(ctx: ClauseKind, table: &SymbolTable) -> Vec<CompletionItem> {
         ClauseKind::DynamicDesc => {
             push_keywords(&mut items, DYNAMIC_DESC_KEYS, "dynamic description");
         }
-        ClauseKind::Struct(spec) => push_struct_items(&mut items, spec, table),
+        ClauseKind::Struct(spec) => push_struct_items(&mut items, spec, table, scope),
         ClauseKind::Config | ClauseKind::Unknown => {}
     }
     items
@@ -147,6 +147,7 @@ fn push_struct_items(
     items: &mut Vec<CompletionItem>,
     spec: &'static StructSpec,
     table: &SymbolTable,
+    scope: Option<&str>,
 ) {
     for (key, field) in spec.fields {
         // The insert form follows the value forms the field accepts; the
@@ -169,19 +170,19 @@ fn push_struct_items(
     // The mixed-context rule: where unknown keys are inline effects or
     // triggers, offer those names too.
     match spec.fallback {
-        Fallback::Effect => push_effect_items(items, table),
-        Fallback::Trigger => push_trigger_items(items, table),
+        Fallback::Effect => push_effect_items(items, table, scope),
+        Fallback::Trigger => push_trigger_items(items, table, scope),
         Fallback::Ignore | Fallback::Deny => {}
     }
 }
 
-fn push_effect_items(items: &mut Vec<CompletionItem>, table: &SymbolTable) {
+fn push_effect_items(items: &mut Vec<CompletionItem>, table: &SymbolTable, scope: Option<&str>) {
     push_scripted(items, table, SymbolKind::ScriptedEffect, "scripted effect");
     push_keywords(items, EFFECT_CONTROL, "effect control");
-    push_doc_rows(items, EFFECTS, "effect");
+    push_doc_rows(items, EFFECTS, "effect", scope);
 }
 
-fn push_trigger_items(items: &mut Vec<CompletionItem>, table: &SymbolTable) {
+fn push_trigger_items(items: &mut Vec<CompletionItem>, table: &SymbolTable, scope: Option<&str>) {
     push_scripted(
         items,
         table,
@@ -189,7 +190,7 @@ fn push_trigger_items(items: &mut Vec<CompletionItem>, table: &SymbolTable) {
         "scripted trigger",
     );
     push_keywords(items, TRIGGER_CONTROL, "trigger control");
-    push_doc_rows(items, TRIGGERS, "trigger");
+    push_doc_rows(items, TRIGGERS, "trigger", scope);
 }
 
 fn push_scripted(
@@ -221,7 +222,12 @@ fn push_keywords(items: &mut Vec<CompletionItem>, keys: &[&str], what: &str) {
     }
 }
 
-fn push_doc_rows(items: &mut Vec<CompletionItem>, rows: &[DocRow], what: &str) {
+fn push_doc_rows(
+    items: &mut Vec<CompletionItem>,
+    rows: &[DocRow],
+    what: &str,
+    scope: Option<&str>,
+) {
     for row in rows {
         items.push(CompletionItem {
             label: row.name.to_string(),
@@ -233,9 +239,20 @@ fn push_doc_rows(items: &mut Vec<CompletionItem>, rows: &[DocRow], what: &str) {
                     value: row.description.to_string(),
                 })
             }),
-            sort_text: Some(format!("3_{}", row.name)),
+            sort_text: Some(format!("{}_{}", scope_rank(row, scope), row.name)),
             ..CompletionItem::default()
         });
+    }
+}
+
+/// Keep all documented items while a scope estimate is incomplete, but put
+/// compatible rows ahead of global (`none`) and incompatible rows.
+fn scope_rank(row: &DocRow, scope: Option<&str>) -> u8 {
+    match scope {
+        Some(scope) if row.scopes.contains(&scope) => 3,
+        Some(_) if row.scopes.contains(&"none") => 4,
+        Some(_) => 5,
+        None => 3,
     }
 }
 
