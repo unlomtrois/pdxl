@@ -23,6 +23,7 @@ use lsp_types::{
     Diagnostic, DiagnosticSeverity, Location, Position, PublishDiagnosticsParams, Range, Url,
 };
 use pdxl_analysis::RefDiag;
+use pdxl_analysis::context::ClauseKind;
 use pdxl_project::Project;
 
 use crate::position::{offset_to_position, path_to_uri, position_to_offset, uri_to_path};
@@ -360,46 +361,39 @@ impl ServerState {
             .collect()
     }
 
-    /// `textDocument/hover`: kind, name, defining file, and macro parameters
-    /// of the symbol under the cursor (definitions first, like references).
+    /// `textDocument/hover`: project symbols first, then built-in effects,
+    /// triggers, and scope links from the generated game documentation.
     pub fn hover(&self, uri: &Url, pos: Position) -> Option<lsp_types::Hover> {
         let path = uri_to_path(uri);
         let project = self.project.as_ref()?;
         let facts = project.facts_at(&path)?;
         let src = self.read_file(&path).ok()?;
         let off = position_to_offset(&src, pos);
-        let (kind, name) = symbol_at(facts, off)?;
 
-        let mut text = format!("```pdxscript\n{} {}\n```", kind.as_str(), name);
-        if let Some(symbol) = project.table().lookup(kind, name) {
-            text.push_str(&format!("\n\nDefined in `{}`", symbol.file));
-            if !symbol.params.is_empty() {
-                text.push_str("\n\nParameters: ");
-                text.push_str(
-                    &symbol
-                        .params
-                        .iter()
-                        .map(|p| format!("`${p}$`"))
-                        .collect::<Vec<_>>()
-                        .join(", "),
-                );
+        if let Some((kind, name)) = symbol_at(facts, off) {
+            let mut text = format!("```pdxscript\n{} {}\n```", kind.as_str(), name);
+            if let Some(symbol) = project.table().lookup(kind, name) {
+                text.push_str(&format!("\n\nDefined in `{}`", symbol.file));
+                if !symbol.params.is_empty() {
+                    text.push_str("\n\nParameters: ");
+                    text.push_str(
+                        &symbol
+                            .params
+                            .iter()
+                            .map(|p| format!("`${p}$`"))
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                    );
+                }
+            } else {
+                text.push_str("\n\n*(unresolved)*");
             }
-        } else {
-            text.push_str("\n\n*(unresolved)*");
+
+            let span = span_at(facts, off)?;
+            return Some(markdown_hover(&src, span, text));
         }
 
-        // Highlight the exact span the hover describes.
-        let span = span_at(facts, off)?;
-        Some(lsp_types::Hover {
-            contents: lsp_types::HoverContents::Markup(lsp_types::MarkupContent {
-                kind: lsp_types::MarkupKind::Markdown,
-                value: text,
-            }),
-            range: Some(Range {
-                start: offset_to_position(&src, span.0),
-                end: offset_to_position(&src, span.1),
-            }),
-        })
+        builtin_hover(&src, off, project.rel_at(&path)?)
     }
 
     /// `textDocument/completion`: context-aware items. The enclosing-key
@@ -483,6 +477,117 @@ impl ServerState {
     pub fn is_ready(&self) -> bool {
         self.project.is_some()
     }
+}
+
+fn markdown_hover(src: &[u8], span: (u32, u32), text: String) -> lsp_types::Hover {
+    lsp_types::Hover {
+        contents: lsp_types::HoverContents::Markup(lsp_types::MarkupContent {
+            kind: lsp_types::MarkupKind::Markdown,
+            value: text,
+        }),
+        range: Some(Range {
+            start: offset_to_position(src, span.0),
+            end: offset_to_position(src, span.1),
+        }),
+    }
+}
+
+/// Built-in documentation is intentionally a token query, not an AST query:
+/// it remains useful while the user is typing incomplete script.
+fn builtin_hover(src: &[u8], off: u32, rel_path: &str) -> Option<lsp_types::Hover> {
+    use pdxl_lexer::TokenKind as T;
+
+    let token = pdxl_lexer::tokenize(src)
+        .into_iter()
+        .find(|token| token.range.start <= off && off < token.range.end)?;
+    if !matches!(
+        token.kind,
+        T::Identifier | T::LiteralString | T::LiteralBoolean | T::LiteralDate
+    ) {
+        return None;
+    }
+    let name =
+        std::str::from_utf8(&src[token.range.start as usize..token.range.end as usize]).ok()?;
+
+    if is_scope_link_token(src, token.range.start, token.range.end) {
+        let link = pdxl_ck3::tables::SCOPE_LINKS
+            .iter()
+            .find(|link| link.name == name)?;
+        let mut text = format!("```pdxscript\nscope link {name}\n```");
+        if link.requires_data {
+            text.push_str("\n\nTakes a `:key` argument.");
+        }
+        if link.global_link {
+            text.push_str("\n\nUsable from any scope.");
+        } else {
+            text.push_str(&format!(
+                "\n\nInput scopes: {}",
+                link.input_scopes.join(", ")
+            ));
+        }
+        text.push_str(&format!(
+            "\n\nOutput scopes: {}",
+            link.output_scopes.join(", ")
+        ));
+        return Some(markdown_hover(
+            src,
+            (token.range.start, token.range.end),
+            text,
+        ));
+    }
+
+    let ctx = pdxl_analysis::context::context_of_chain(
+        cursor_context(src, off).chain.iter().map(Vec::as_slice),
+        rel_path,
+        pdxl_ck3::contexts::context_schema(),
+    );
+    let (label, row) = match ctx {
+        ClauseKind::Effect => (
+            "effect",
+            pdxl_ck3::tables::EFFECTS
+                .iter()
+                .find(|row| row.name == name)?,
+        ),
+        ClauseKind::Trigger => (
+            "trigger",
+            pdxl_ck3::tables::TRIGGERS
+                .iter()
+                .find(|row| row.name == name)?,
+        ),
+        _ => return None,
+    };
+    let mut text = format!(
+        "```pdxscript\n{label} {name}\n```\n\nSupported scopes: {}",
+        row.scopes.join(", ")
+    );
+    if !row.targets.is_empty() {
+        text.push_str(&format!(
+            "\n\nSupported targets: {}",
+            row.targets.join(", ")
+        ));
+    }
+    Some(markdown_hover(
+        src,
+        (token.range.start, token.range.end),
+        text,
+    ))
+}
+
+fn is_scope_link_token(src: &[u8], start: u32, end: u32) -> bool {
+    let tokens = pdxl_lexer::tokenize(src);
+    let Some(index) = tokens
+        .iter()
+        .position(|token| token.range.start == start && token.range.end == end)
+    else {
+        return false;
+    };
+    matches!(
+        tokens.get(index + 1).map(|token| token.kind),
+        Some(pdxl_lexer::TokenKind::Colon)
+    ) || matches!(
+        tokens.get(index.wrapping_sub(1)).map(|token| token.kind),
+        Some(pdxl_lexer::TokenKind::Dot)
+    )
 }
 
 /// The keys of the blocks enclosing byte offset `off`, outermost first,

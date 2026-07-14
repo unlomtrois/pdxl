@@ -491,6 +491,39 @@ fn hover_on_unresolved_reference_says_so() {
 }
 
 #[test]
+fn hover_shows_builtin_effect_trigger_and_scope_link_docs() {
+    let t = TempTree::new();
+    let src = "namespace = t\nt.1 = {\n\ttrigger = { is_adult = yes }\n\timmediate = { add_gold = 10 add_trait = title:e_test root.holder }\n}\n";
+    t.write("events/e.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "events/e.txt");
+
+    for (needle, expected) in [
+        (
+            "add_gold",
+            "effect add_gold\n```\n\nSupported scopes: character",
+        ),
+        (
+            "is_adult",
+            "trigger is_adult\n```\n\nSupported scopes: character",
+        ),
+        ("title", "scope link title\n```\n\nTakes a `:key` argument."),
+        (
+            "holder",
+            "scope link holder\n```\n\nInput scopes: landed_title",
+        ),
+    ] {
+        let hover = server
+            .hover(&uri, pos_of(src, needle))
+            .expect("built-in hover");
+        let lsp_types::HoverContents::Markup(markup) = hover.contents else {
+            panic!("expected markup");
+        };
+        assert!(markup.value.contains(expected), "{}", markup.value);
+    }
+}
+
+#[test]
 fn m8b_no_result_branches_are_empty() {
     let (t, server, _rx) = m8b_project();
     let uri = uri_for(&t, "common/scripted_effects/a.txt");
