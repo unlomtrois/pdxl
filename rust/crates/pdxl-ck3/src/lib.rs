@@ -7,16 +7,22 @@
 //! the analysis layer's Go oracle is retired; regressions are pinned by golden
 //! snapshots in `pdxl-parity` instead.
 //!
+//! Everything about one game concept lives in a single [`KindSpec`] row below
+//! (defs directory, reference shapes, aliases, icon) — the schema-scaling
+//! design (`rust/docs/SCHEMA-SCALING.md`); adding a kind is adding a row.
+//!
 //! Deliberately hand-written and small: deep CK3 validation is ck3-tiger's
 //! territory; this schema stays just rich enough to power editor features
 //! (go-to-definition, unresolved-reference diagnostics). Grow it incrementally,
 //! and bump [`pdxl_analysis::ANALYSIS_VERSION`] when a change alters what
 //! previously extracted facts mean.
 
-use pdxl_analysis::{DefRule, DefShape, Schema, SymbolKind};
+use pdxl_analysis::{
+    DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule, Schema, SymbolKind,
+};
 
-/// The file prefix under which list/weighted reference rules apply
-/// (Go: `OnActionDir`).
+/// The file prefix that gates the on_action list/weighted reference rules —
+/// those shapes are ambiguous elsewhere (Go: `OnActionDir`).
 pub const ON_ACTION_DIR: &str = "common/on_action/";
 
 /// Landed-title tier prefixes, as observed in vanilla + real mods: empire,
@@ -26,94 +32,137 @@ pub const ON_ACTION_DIR: &str = "common/on_action/";
 /// `cultural_names = { x = k_something }`).
 pub const TITLE_TIER_PREFIXES: &[&str] = &["e_", "k_", "d_", "c_", "b_", "h_"];
 
-/// Builds the CK3 schema. Cheap to construct; build once and share.
-pub fn schema() -> Schema {
-    Schema {
-        // Directories whose fields define symbols. All rules harvest top-level
-        // `NAME = { … }` fields except landed titles, which form a tree.
-        def_rules: vec![
-            DefRule {
-                prefix: "common/scripted_triggers/",
-                kind: SymbolKind::ScriptedTrigger,
-                shape: DefShape::TopLevel,
-            },
-            DefRule {
-                prefix: "common/scripted_effects/",
-                kind: SymbolKind::ScriptedEffect,
-                shape: DefShape::TopLevel,
-            },
-            DefRule {
-                prefix: "common/traits/",
-                kind: SymbolKind::Trait,
-                shape: DefShape::TopLevel,
-            },
-            DefRule {
-                prefix: "common/decisions/",
-                kind: SymbolKind::Decision,
-                shape: DefShape::TopLevel,
-            },
-            DefRule {
-                prefix: "common/on_action/",
-                kind: SymbolKind::OnAction,
-                shape: DefShape::TopLevel,
-            },
-            DefRule {
-                prefix: "events/",
-                kind: SymbolKind::Event,
-                shape: DefShape::TopLevel,
-            },
-            DefRule {
-                prefix: "history/characters/",
-                kind: SymbolKind::Character,
-                shape: DefShape::TopLevel,
-            },
-            DefRule {
-                prefix: "common/landed_titles/",
-                kind: SymbolKind::Title,
-                shape: DefShape::Tree {
-                    key_prefixes: TITLE_TIER_PREFIXES,
-                },
-            },
+/// An ungated reference rule (applies in every file).
+const fn anywhere(pattern: RefPattern) -> RefRule {
+    RefRule {
+        pattern,
+        gate: None,
+    }
+}
+
+/// A reference rule gated to on_action files.
+const fn in_on_action(pattern: RefPattern) -> RefRule {
+    RefRule {
+        pattern,
+        gate: Some(ON_ACTION_DIR),
+    }
+}
+
+/// One row per CK3 concept the analyzer knows about.
+const KIND_SPECS: &[KindSpec] = &[
+    KindSpec {
+        kind: SymbolKind::ScriptedTrigger,
+        icon: IconHint::Function,
+        defs: Some(DefSource {
+            dir_prefix: "common/scripted_triggers/",
+            shape: DefShape::TopLevel,
+        }),
+        refs: &[],
+        aliases: &[],
+    },
+    KindSpec {
+        kind: SymbolKind::ScriptedEffect,
+        icon: IconHint::Function,
+        defs: Some(DefSource {
+            dir_prefix: "common/scripted_effects/",
+            shape: DefShape::TopLevel,
+        }),
+        refs: &[],
+        aliases: &[],
+    },
+    KindSpec {
+        kind: SymbolKind::Trait,
+        icon: IconHint::Tag,
+        defs: Some(DefSource {
+            dir_prefix: "common/traits/",
+            shape: DefShape::TopLevel,
+        }),
+        refs: &[
+            anywhere(RefPattern::KeyValue("add_trait")),
+            anywhere(RefPattern::KeyValue("remove_trait")),
+            anywhere(RefPattern::KeyValue("has_trait")),
         ],
-        // key = value — the scalar value must resolve to the kind.
-        ref_rules: [
-            ("add_trait", SymbolKind::Trait),
-            ("remove_trait", SymbolKind::Trait),
-            ("has_trait", SymbolKind::Trait),
-            ("trigger_event", SymbolKind::Event), // scalar form: trigger_event = ns.id
-        ]
-        .into(),
-        // key = { id = X … } — X must resolve to the kind.
-        block_id_ref_rules: [("trigger_event", SymbolKind::Event)].into(),
-        // on_action lists: events = { ns.id … } (ambiguous outside on_action).
-        list_ref_rules: [
-            ("events", SymbolKind::Event),
-            ("first_valid", SymbolKind::Event),
-            ("on_actions", SymbolKind::OnAction),
-        ]
-        .into(),
-        // on_action weighted blocks: random_events = { 50 = ns.id … }.
-        weighted_ref_rules: [("random_events", SymbolKind::Event)].into(),
-        list_gate_prefix: ON_ACTION_DIR,
         // CK3 traits expose group / group_equivalence names as valid refs.
-        alias_keys: [(
-            SymbolKind::Trait,
-            &["group", "group_equivalence"] as &[&str],
-        )]
-        .into(),
-        // Relative-scope references that may hold a trait at runtime;
-        // unresolvable without scope tracking.
-        scope_keywords: [
-            "root",
-            "this",
-            "prev",
-            "prevprev",
-            "prevprevprev",
-            "prevprevprevprev",
-        ]
-        .into(),
+        aliases: &["group", "group_equivalence"],
+    },
+    KindSpec {
+        kind: SymbolKind::Decision,
+        icon: IconHint::Action,
+        defs: Some(DefSource {
+            dir_prefix: "common/decisions/",
+            shape: DefShape::TopLevel,
+        }),
+        refs: &[],
+        aliases: &[],
+    },
+    KindSpec {
+        kind: SymbolKind::OnAction,
+        icon: IconHint::Event,
+        defs: Some(DefSource {
+            dir_prefix: "common/on_action/",
+            shape: DefShape::TopLevel,
+        }),
+        refs: &[in_on_action(RefPattern::KeyList("on_actions"))],
+        aliases: &[],
+    },
+    KindSpec {
+        kind: SymbolKind::Event,
+        icon: IconHint::Event,
+        defs: Some(DefSource {
+            dir_prefix: "events/",
+            shape: DefShape::TopLevel,
+        }),
+        refs: &[
+            // Scalar form: trigger_event = ns.id.
+            anywhere(RefPattern::KeyValue("trigger_event")),
+            // Block form: trigger_event = { id = ns.id … }.
+            anywhere(RefPattern::KeyBlockId("trigger_event")),
+            // on_action lists: events = { ns.id … } (ambiguous elsewhere).
+            in_on_action(RefPattern::KeyList("events")),
+            in_on_action(RefPattern::KeyList("first_valid")),
+            // on_action weighted blocks: random_events = { 50 = ns.id … }.
+            in_on_action(RefPattern::KeyWeighted("random_events")),
+        ],
+        aliases: &[],
+    },
+    KindSpec {
+        kind: SymbolKind::Character,
+        icon: IconHint::Object,
+        defs: Some(DefSource {
+            dir_prefix: "history/characters/",
+            shape: DefShape::TopLevel,
+        }),
+        refs: &[],
+        aliases: &[],
+    },
+    KindSpec {
+        kind: SymbolKind::Title,
+        icon: IconHint::Hierarchy,
+        defs: Some(DefSource {
+            dir_prefix: "common/landed_titles/",
+            shape: DefShape::Tree {
+                key_prefixes: TITLE_TIER_PREFIXES,
+            },
+        }),
         // Self-identifying scope literals: `title:e_hre`, `title:k_x = { … }`,
         // `title:e_byzantium.holder` — anywhere, any position.
-        scope_ref_prefixes: vec![("title", SymbolKind::Title)],
-    }
+        refs: &[anywhere(RefPattern::ScopePrefix("title"))],
+        aliases: &[],
+    },
+];
+
+/// Relative-scope references that may hold a trait at runtime;
+/// unresolvable without scope tracking.
+const SCOPE_KEYWORDS: &[&str] = &[
+    "root",
+    "this",
+    "prev",
+    "prevprev",
+    "prevprevprev",
+    "prevprevprevprev",
+];
+
+/// Builds the CK3 schema. Cheap to construct; build once and share.
+pub fn schema() -> Schema {
+    Schema::new(KIND_SPECS, SCOPE_KEYWORDS)
 }

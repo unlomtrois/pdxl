@@ -29,7 +29,7 @@ mod table;
 pub use extract::extract_facts;
 pub use model::{FileFacts, Ref, Symbol, SymbolKind};
 pub use resolve::{RefDiag, merge_and_resolve, resolve_refs};
-pub use schema::{DefRule, DefShape, Schema};
+pub use schema::{DefRule, DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule, Schema};
 pub use table::{Duplicate, SymbolTable};
 
 /// Version of the fact extraction semantics **and** schema shape. A future

@@ -347,7 +347,7 @@ impl ServerState {
                 lsp_types::DocumentSymbol {
                     name: d.name.clone(),
                     detail: Some(d.kind.as_str().to_string()),
-                    kind: lsp_symbol_kind(d.kind),
+                    kind: lsp_symbol_kind(project.schema().icon(d.kind)),
                     tags: None,
                     deprecated: None,
                     // Facts carry the name span, not the block extent; both
@@ -462,14 +462,17 @@ fn span_at(facts: &pdxl_analysis::FileFacts, off: u32) -> Option<(u32, u32)> {
 }
 
 /// Presentation mapping from pdxl symbol kinds to LSP outline icons.
-fn lsp_symbol_kind(kind: pdxl_analysis::SymbolKind) -> lsp_types::SymbolKind {
-    use pdxl_analysis::SymbolKind as K;
-    match kind {
-        K::ScriptedTrigger | K::ScriptedEffect => lsp_types::SymbolKind::FUNCTION,
-        K::Event | K::OnAction => lsp_types::SymbolKind::EVENT,
-        K::Trait => lsp_types::SymbolKind::ENUM_MEMBER,
-        K::Decision => lsp_types::SymbolKind::METHOD,
-        K::Character => lsp_types::SymbolKind::OBJECT,
-        K::Title => lsp_types::SymbolKind::NAMESPACE, // hierarchical, like titles
+/// Maps the schema's neutral presentation hint onto the LSP vocabulary —
+/// the only place that knows both sides. New kinds pick an [`IconHint`] in
+/// their `KindSpec` row; this function changes only if the hint enum grows.
+fn lsp_symbol_kind(icon: pdxl_analysis::IconHint) -> lsp_types::SymbolKind {
+    use pdxl_analysis::IconHint as I;
+    match icon {
+        I::Function => lsp_types::SymbolKind::FUNCTION,
+        I::Event => lsp_types::SymbolKind::EVENT,
+        I::Tag => lsp_types::SymbolKind::ENUM_MEMBER,
+        I::Action => lsp_types::SymbolKind::METHOD,
+        I::Object => lsp_types::SymbolKind::OBJECT,
+        I::Hierarchy => lsp_types::SymbolKind::NAMESPACE, // hierarchical, like titles
     }
 }

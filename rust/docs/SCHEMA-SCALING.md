@@ -1,7 +1,8 @@
 # Schema scaling design — surviving 100 SymbolKinds
 
-Status: accepted design, phased. Phase 1 pending; Phase 2 deferred until
-kind-count or multi-game pressure is real. Raised by a design review after the
+Status: accepted design, phased. Phase 1 done (KindSpec rows + unified
+RefRule/RefPattern + per-rule gates + IconHint, behavior-identical — goldens
+unchanged); Phase 2 deferred until kind-count or multi-game pressure is real. Raised by a design review after the
 landed-titles addition ("do we add a field to DefRule per special case?").
 
 ## Diagnosis

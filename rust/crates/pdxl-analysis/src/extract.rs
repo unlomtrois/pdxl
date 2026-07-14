@@ -9,13 +9,13 @@ use std::collections::BTreeSet;
 use pdxl_ast::{NodeId, NodeKind, SyntaxTree};
 
 use crate::model::{FileFacts, Ref, Symbol, SymbolKind};
-use crate::schema::Schema;
+use crate::schema::{KeyForm, Schema};
 
 /// Walks a parsed file once, collecting its definitions, aliases, and
 /// references.
 ///
 /// `rel_path` is the FileSet overlay key — it drives the def rule and the
-/// list/weighted gating. `full_path` is the on-disk path used in reference
+/// per-rule reference gates. `full_path` is the on-disk path used in reference
 /// `loc` strings, so diagnostics point at a clickable file.
 pub fn extract_facts(
     tree: &SyntaxTree,
@@ -38,9 +38,14 @@ pub fn extract_facts(
         }
     }
 
-    let gated =
-        !schema.list_gate_prefix.is_empty() && rel_path.starts_with(schema.list_gate_prefix);
-    extract_refs(tree, tree.root(), full_path, gated, schema, &mut facts.refs);
+    extract_refs(
+        tree,
+        tree.root(),
+        rel_path,
+        full_path,
+        schema,
+        &mut facts.refs,
+    );
     facts
 }
 
@@ -83,8 +88,8 @@ fn harvest_def(
 
     // Some kinds expose extra resolvable names via direct-child fields
     // (CK3 traits: group / group_equivalence).
-    if let Some(alias_keys) = schema.alias_keys.get(&kind) {
-        for alias_key in *alias_keys {
+    if let Some(alias_keys) = schema.alias_keys(kind) {
+        for alias_key in alias_keys {
             if let Some(name) = direct_field_value(tree, value_id, alias_key)
                 && !name.is_empty()
             {
@@ -152,12 +157,12 @@ fn harvest_nested_defs(
 }
 
 /// Recursively collects references from the subtree rooted at `node_id`.
-/// `gated` enables list/weighted forms (on_action files only in CK3).
+/// `rel_path` drives per-rule gates; `path` labels the extracted refs.
 fn extract_refs(
     tree: &SyntaxTree,
     node_id: NodeId,
+    rel_path: &str,
     path: &str,
-    gated: bool,
     schema: &Schema,
     refs: &mut Vec<Ref>,
 ) {
@@ -166,17 +171,17 @@ fn extract_refs(
         let children = tree.child_ids(node_id);
         if children.len() == 2 {
             let key = tree.node_text(children[0]);
-            extract_field_refs(tree, key, children[1], path, gated, schema, refs);
+            extract_field_refs(tree, key, children[1], rel_path, path, schema, refs);
         }
     }
     // Self-identifying scope literals (`title:<name>[.chain]`) can appear in
     // ANY scalar position — value, key, or list item — so every scalar in the
     // tree is scanned, not just known-key values.
     if node.kind == NodeKind::Scalar {
-        scan_prefix_refs(tree, node_id, path, schema, refs);
+        scan_prefix_refs(tree, node_id, rel_path, path, schema, refs);
     }
     for child in tree.children(node_id) {
-        extract_refs(tree, child, path, gated, schema, refs);
+        extract_refs(tree, child, rel_path, path, schema, refs);
     }
 }
 
@@ -187,14 +192,20 @@ fn extract_refs(
 fn scan_prefix_refs(
     tree: &SyntaxTree,
     node_id: NodeId,
+    rel_path: &str,
     path: &str,
     schema: &Schema,
     refs: &mut Vec<Ref>,
 ) {
     let text = tree.node_text(node_id);
-    for (prefix, kind) in &schema.scope_ref_prefixes {
+    for rule in schema.scope_rules() {
+        let prefix = rule.prefix;
         let plen = prefix.len();
-        if text.len() <= plen + 1 || !text.starts_with(prefix.as_bytes()) || text[plen] != b':' {
+        if !rule.applies(rel_path)
+            || text.len() <= plen + 1
+            || !text.starts_with(prefix.as_bytes())
+            || text[plen] != b':'
+        {
             continue;
         }
         let name_start = plen + 1;
@@ -212,7 +223,7 @@ fn scan_prefix_refs(
         let end = node.range.start + name_end as u32;
         let (line, col) = pdxl_src::line_col(tree.source(), start);
         refs.push(Ref {
-            kind: *kind,
+            kind: rule.kind,
             name: name.into_owned(),
             file: path.to_string(),
             start,
@@ -223,49 +234,57 @@ fn scan_prefix_refs(
     }
 }
 
-/// Collects references from a single `key = value` field.
+/// Collects references from a single `key = value` field, applying every
+/// key-triggered rule (in schema declaration order) whose gate admits the
+/// file and whose form matches the value's node kind.
 fn extract_field_refs(
     tree: &SyntaxTree,
     key: &[u8],
     value_id: NodeId,
+    rel_path: &str,
     path: &str,
-    gated: bool,
     schema: &Schema,
     refs: &mut Vec<Ref>,
 ) {
     let Ok(key) = std::str::from_utf8(key) else {
         return; // rule keys are ASCII; a non-UTF-8 key matches nothing
     };
+    let Some(rules) = schema.key_rules(key) else {
+        return;
+    };
     let value = tree.node(value_id);
 
-    // Scalar form: key = value.
-    if let Some(&kind) = schema.ref_rules.get(key)
-        && value.kind == NodeKind::Scalar
-    {
-        append_ref(tree, kind, value_id, path, schema, refs);
-    }
-    // Block form carrying an id: key = { id = value … }.
-    if let Some(&kind) = schema.block_id_ref_rules.get(key)
-        && value.kind == NodeKind::Block
-        && let Some(id_node) = direct_field_node(tree, value_id, "id")
-        && tree.node(id_node).kind == NodeKind::Scalar
-    {
-        append_ref(tree, kind, id_node, path, schema, refs);
-    }
-    if !gated || value.kind != NodeKind::Block {
-        return;
-    }
-    // List form: key = { item item … } — loose scalar items.
-    if let Some(&kind) = schema.list_ref_rules.get(key) {
-        for item in tree.children(value_id) {
-            if tree.node(item).kind == NodeKind::Scalar {
-                append_ref(tree, kind, item, path, schema, refs);
-            }
+    for rule in rules {
+        if !rule.applies(rel_path) {
+            continue;
         }
-    }
-    // Weighted form: key = { WEIGHT = id … } — only numeric-keyed entries.
-    if let Some(&kind) = schema.weighted_ref_rules.get(key) {
-        extract_weighted_refs(tree, kind, value_id, path, schema, refs);
+        match rule.form {
+            // Scalar form: key = value.
+            KeyForm::Value if value.kind == NodeKind::Scalar => {
+                append_ref(tree, rule.kind, value_id, path, schema, refs);
+            }
+            // Block form carrying an id: key = { id = value … }.
+            KeyForm::BlockId if value.kind == NodeKind::Block => {
+                if let Some(id_node) = direct_field_node(tree, value_id, "id")
+                    && tree.node(id_node).kind == NodeKind::Scalar
+                {
+                    append_ref(tree, rule.kind, id_node, path, schema, refs);
+                }
+            }
+            // List form: key = { item item … } — loose scalar items.
+            KeyForm::List if value.kind == NodeKind::Block => {
+                for item in tree.children(value_id) {
+                    if tree.node(item).kind == NodeKind::Scalar {
+                        append_ref(tree, rule.kind, item, path, schema, refs);
+                    }
+                }
+            }
+            // Weighted form: key = { WEIGHT = id … } — numeric-keyed entries.
+            KeyForm::Weighted if value.kind == NodeKind::Block => {
+                extract_weighted_refs(tree, rule.kind, value_id, path, schema, refs);
+            }
+            _ => {}
+        }
     }
 }
 

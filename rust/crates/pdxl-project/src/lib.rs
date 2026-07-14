@@ -148,6 +148,11 @@ impl Project {
         Ok(p)
     }
 
+    /// The schema this project was built with (e.g. for presentation hints).
+    pub fn schema(&self) -> &Schema {
+        &self.schema
+    }
+
     /// Recomputes the table and diagnostics from the in-memory facts.
     fn rebuild(&mut self) {
         let rels: Vec<&str> = self.order.iter().map(|k| k.rel.as_str()).collect();

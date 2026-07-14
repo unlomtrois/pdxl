@@ -229,8 +229,9 @@ bash ../scripts/parity.sh                                # Go tests + Rust tests
 
 - Bump `pdxl_analysis::ANALYSIS_VERSION` whenever schema/extraction semantics
   change; `pdxl_ast::SYNTAX_VERSION` for lexer/parser/tree changes (cache keys).
-- Schema growth: rules are data in `pdxl-ck3` (`DefShape`, `scope_ref_prefixes`);
-  shapes needing *logic* get bespoke extractors, not new fields —
+- Schema growth: one `KindSpec` row per game concept in `pdxl-ck3`
+  (defs dir + `RefPattern` rules + gates + icon); shapes needing *logic* get
+  bespoke extractors, not new pattern variants —
   see `rust/docs/SCHEMA-SCALING.md` before extending the schema.
 - Edition 2024: let-chains are used; clippy runs with `-D warnings`.
 - `Stats.shadowed` is always 0 (preserved Go bug, documented in the M3 report).
