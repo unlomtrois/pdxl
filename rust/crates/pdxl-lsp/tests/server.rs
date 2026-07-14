@@ -835,6 +835,9 @@ fn completion_immediately_after_scope_prefix_offers_titles() {
     let names = labels(&items);
     assert!(names.contains(&"e_test"));
     assert!(names.contains(&"k_testshire"));
+    let title = items.iter().find(|item| item.label == "e_test").unwrap();
+    assert_eq!(title.filter_text.as_deref(), Some("title:e_test"));
+    assert!(title.text_edit.is_some());
 }
 
 #[test]

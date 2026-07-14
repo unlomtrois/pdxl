@@ -441,12 +441,28 @@ impl ServerState {
         let cursor = cursor_context(&src, off);
         if let Some(prefix) = cursor.scope_prefix.as_deref() {
             let name_prefix = cursor.scope_name_prefix.as_deref().unwrap_or_default();
-            let items = crate::completion::symbol_value_items_matching(
+            let mut items = crate::completion::symbol_value_items_matching(
                 project.table(),
                 project.schema(),
                 project.schema().scope_prefix_kinds(prefix, &rel),
                 name_prefix,
             );
+            // VS Code filters completion candidates using the whole
+            // `title:` expression, while the label itself is only the symbol
+            // name. Make that filter text explicit, and edit just the name
+            // suffix so accepting `k_france` preserves `title:`.
+            let suffix_start = cursor.scope_name_start.unwrap_or(off);
+            let suffix_range = Range::new(
+                offset_to_position(&src, suffix_start),
+                offset_to_position(&src, off),
+            );
+            for item in &mut items {
+                item.filter_text = Some(format!("{prefix}:{}", item.label));
+                item.text_edit = Some(lsp_types::CompletionTextEdit::Edit(lsp_types::TextEdit {
+                    range: suffix_range,
+                    new_text: item.label.clone(),
+                }));
+            }
             log_info!(
                 "scope completion: prefix={prefix:?} name_prefix={name_prefix:?} path={rel} items={}",
                 items.len()
@@ -891,6 +907,7 @@ struct CursorContext {
     value_key: Option<String>,
     scope_prefix: Option<String>,
     scope_name_prefix: Option<String>,
+    scope_name_start: Option<u32>,
 }
 
 /// The enclosing brace-key chain plus the value syntax immediately before the
@@ -1013,11 +1030,26 @@ fn cursor_context(src: &[u8], off: u32) -> CursorContext {
     } else {
         None
     };
+    let scope_name_start = if recent.len() >= 3
+        && is_scalar(recent[recent.len() - 3].kind)
+        && recent[recent.len() - 2].kind == T::Colon
+        && is_scalar(recent[recent.len() - 1].kind)
+    {
+        Some(recent[recent.len() - 1].range.start)
+    } else if recent.len() >= 2
+        && is_scalar(recent[recent.len() - 2].kind)
+        && recent[recent.len() - 1].kind == T::Colon
+    {
+        Some(recent[recent.len() - 1].range.end)
+    } else {
+        None
+    };
     CursorContext {
         chain: stack,
         value_key,
         scope_prefix,
         scope_name_prefix,
+        scope_name_start,
     }
 }
 
