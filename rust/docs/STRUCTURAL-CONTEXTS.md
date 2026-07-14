@@ -1,6 +1,8 @@
 # Structural contexts — what clause is legal *here*?
 
-Status: design draft (from the events deep-dive, 2026-07). Companion to
+Status: implemented (engine `pdxl_analysis::context`, CK3 specs
+`pdxl_ck3::contexts`, tests `pdxl-ck3/tests/contexts.rs`); layer 3 (dynamic
+scope) still future. Design from the events deep-dive, 2026-07. Companion to
 `SCHEMA-SCALING.md` (symbol kinds) and the generated tables in
 `pdxl-ck3/src/tables/` (effects / triggers / scope links / scope types).
 

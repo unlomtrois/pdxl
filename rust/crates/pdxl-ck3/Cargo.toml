@@ -11,6 +11,7 @@ description = "CK3 rules for pdxl-analysis: definition directories, reference ke
 pdxl-analysis.workspace = true
 
 [dev-dependencies]
+pdxl-ast.workspace = true
 pdxl-parser.workspace = true
 
 [lints.rust]

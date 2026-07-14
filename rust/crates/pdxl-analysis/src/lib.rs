@@ -20,6 +20,7 @@
 //! are cheap to re-extract (one allocation-light tree walk), and the cold-path
 //! benchmark decides whether a facts cache ever earns its complexity.
 
+pub mod context;
 mod extract;
 mod model;
 mod resolve;
