@@ -826,6 +826,18 @@ fn completion_for_scope_prefix_offers_titles() {
 }
 
 #[test]
+fn completion_immediately_after_scope_prefix_offers_titles() {
+    let (mut server, _rx, t) = completion_server();
+    let src = "namespace = t\nt.5 = { immediate = { add_trait = title: } }\n";
+    let uri = uri_for(&t, "events/scope.txt");
+    server.did_open(uri.clone(), src.to_string());
+    let items = server.completion(&uri, pos_after(src, "title:"));
+    let names = labels(&items);
+    assert!(names.contains(&"e_test"));
+    assert!(names.contains(&"k_testshire"));
+}
+
+#[test]
 fn completion_for_partially_typed_scope_prefix_filters_symbols() {
     let (mut server, _rx, t) = completion_server();
     let src = "namespace = t\nt.5 = { immediate = { add_trait = title:k_ } }\n";
