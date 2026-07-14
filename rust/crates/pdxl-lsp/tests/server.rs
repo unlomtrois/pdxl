@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use crossbeam_channel::{Receiver, unbounded};
 use lsp_server::Message;
-use lsp_types::{Position, PublishDiagnosticsParams, Url};
+use lsp_types::{InlayHintLabel, Position, PublishDiagnosticsParams, Range, Url};
 use pdxl_lsp::{Event, ServerState, build_project};
 use pdxl_testutil::TempTree;
 
@@ -521,6 +521,32 @@ fn hover_shows_builtin_effect_trigger_and_scope_link_docs() {
         };
         assert!(markup.value.contains(expected), "{}", markup.value);
     }
+}
+
+#[test]
+fn inlay_hints_show_best_effort_scope_at_block_openers() {
+    let t = TempTree::new();
+    let src = "namespace = t\nt.1 = {\n\tscope = character\n\timmediate = { add_gold = 10 }\n\ttrigger = { any_child = { is_adult = yes } }\n\ttitle:e_test = { add_gold = 5 }\n}\n";
+    t.write("events/e.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "events/e.txt");
+    let hints = server.inlay_hints(&uri, Range::new(Position::new(0, 0), Position::new(99, 0)));
+    let labels: Vec<&str> = hints
+        .iter()
+        .filter_map(|hint| match &hint.label {
+            InlayHintLabel::String(label) => Some(label.as_str()),
+            InlayHintLabel::LabelParts(_) => None,
+        })
+        .collect();
+    assert_eq!(
+        labels,
+        [
+            ": character",
+            ": character",
+            ": character",
+            ": landed_title"
+        ]
+    );
 }
 
 #[test]

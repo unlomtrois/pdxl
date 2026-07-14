@@ -88,6 +88,12 @@ pub fn run_stdio(opts: Options) -> Result<(), Box<dyn std::error::Error + Sync +
         references_provider: Some(OneOf::Left(true)),
         document_symbol_provider: Some(OneOf::Left(true)),
         hover_provider: Some(lsp_types::HoverProviderCapability::Simple(true)),
+        inlay_hint_provider: Some(OneOf::Right(
+            lsp_types::InlayHintServerCapabilities::Options(lsp_types::InlayHintOptions {
+                resolve_provider: Some(false),
+                work_done_progress_options: Default::default(),
+            }),
+        )),
         ..ServerCapabilities::default()
     };
     // `initialize` must answer fast (clients time out); the project build is
@@ -275,6 +281,20 @@ fn handle_request(server: &mut ServerState, out: &Sender<Message>, req: lsp_serv
                     );
                     Response::new_ok(req.id, hover)
                 }
+                Err(e) => Response::new_err(
+                    req.id,
+                    lsp_server::ErrorCode::InvalidParams as i32,
+                    e.to_string(),
+                ),
+            };
+            let _ = out.send(Message::Response(resp));
+        }
+        lsp_types::request::InlayHintRequest::METHOD => {
+            let resp = match serde_json::from_value::<lsp_types::InlayHintParams>(req.params) {
+                Ok(params) => Response::new_ok(
+                    req.id,
+                    server.inlay_hints(&params.text_document.uri, params.range),
+                ),
                 Err(e) => Response::new_err(
                     req.id,
                     lsp_server::ErrorCode::InvalidParams as i32,

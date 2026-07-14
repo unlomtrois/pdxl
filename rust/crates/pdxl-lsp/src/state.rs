@@ -20,7 +20,8 @@ use crossbeam_channel::Sender;
 use lsp_server::{Message, Notification};
 use lsp_types::notification::{Notification as _, PublishDiagnostics};
 use lsp_types::{
-    Diagnostic, DiagnosticSeverity, Location, Position, PublishDiagnosticsParams, Range, Url,
+    Diagnostic, DiagnosticSeverity, InlayHint, InlayHintKind, InlayHintTooltip, Location, Position,
+    PublishDiagnosticsParams, Range, Url,
 };
 use pdxl_analysis::RefDiag;
 use pdxl_analysis::context::ClauseKind;
@@ -396,6 +397,23 @@ impl ServerState {
         builtin_hover(&src, off, project.rel_at(&path)?)
     }
 
+    /// `textDocument/inlayHint`: lightweight dynamic-scope annotations at
+    /// block openers. This is an editor query only; facts and diagnostics are
+    /// deliberately unchanged.
+    pub fn inlay_hints(&self, uri: &Url, range: Range) -> Vec<InlayHint> {
+        let path = uri_to_path(uri);
+        let Some(project) = &self.project else {
+            return Vec::new();
+        };
+        let Some(rel_path) = project.rel_at(&path) else {
+            return Vec::new();
+        };
+        let Ok(src) = self.read_file(&path) else {
+            return Vec::new();
+        };
+        scope_hints(&src, rel_path, range)
+    }
+
     /// `textDocument/completion`: context-aware items. The enclosing-key
     /// chain is derived from the raw token stream (brace stack up to the
     /// cursor) rather than the parsed tree — parser node ranges cover keys
@@ -490,6 +508,170 @@ fn markdown_hover(src: &[u8], span: (u32, u32), text: String) -> lsp_types::Hove
             end: offset_to_position(src, span.1),
         }),
     }
+}
+
+#[derive(Clone, Default)]
+struct ScopeFrame {
+    key: Vec<u8>,
+    scope: Option<String>,
+}
+
+/// Folds explicit scope declarations plus documented iterator and scope-link
+/// transitions over raw tokens. As with completion, raw tokens keep this
+/// useful inside incomplete blocks.
+fn scope_hints(src: &[u8], rel_path: &str, requested: Range) -> Vec<InlayHint> {
+    use pdxl_lexer::TokenKind as T;
+    let is_scalar = |kind: T| {
+        matches!(
+            kind,
+            T::Identifier
+                | T::LiteralString
+                | T::LiteralBoolean
+                | T::LiteralDate
+                | T::MacroParam
+                | T::ScriptValue
+        )
+    };
+    let is_op = |kind: T| {
+        matches!(
+            kind,
+            T::Equal
+                | T::QuestionEqual
+                | T::EqualEqual
+                | T::NotEqual
+                | T::GreaterThan
+                | T::GreaterEqual
+                | T::LessThan
+                | T::LessEqual
+        )
+    };
+    let mut stack: Vec<ScopeFrame> = Vec::new();
+    let mut recent = Vec::new();
+    let mut hints = Vec::new();
+
+    for token in pdxl_lexer::tokenize(src) {
+        match token.kind {
+            T::LBrace => {
+                let key = block_key(src, &recent, &is_scalar, &is_op);
+                let parent_scope = stack.last().and_then(|frame| frame.scope.clone());
+                let scope = block_scope(src, &recent, &key, &stack, rel_path, parent_scope);
+                if let Some(scope) = &scope {
+                    let position = offset_to_position(src, token.range.end);
+                    if position_in_range(position, requested) {
+                        hints.push(InlayHint {
+                            position,
+                            label: format!(": {scope}").into(),
+                            kind: Some(InlayHintKind::TYPE),
+                            text_edits: None,
+                            tooltip: Some(InlayHintTooltip::String(
+                                "Current CK3 scope type (best effort)".into(),
+                            )),
+                            padding_left: Some(true),
+                            padding_right: None,
+                            data: None,
+                        });
+                    }
+                }
+                stack.push(ScopeFrame { key, scope });
+                recent.clear();
+            }
+            T::RBrace => {
+                stack.pop();
+                recent.clear();
+            }
+            T::Comment => {}
+            _ => {
+                if is_scalar(token.kind)
+                    && recent.len() >= 2
+                    && token_text(src, recent[recent.len() - 2]) == b"scope"
+                    && is_op(recent[recent.len() - 1].kind)
+                    && let Some(frame) = stack.last_mut()
+                {
+                    frame.scope = std::str::from_utf8(token_text(src, token))
+                        .ok()
+                        .map(str::to_owned);
+                }
+                if recent.len() == 4 {
+                    recent.remove(0);
+                }
+                recent.push(token);
+            }
+        }
+    }
+    hints
+}
+
+fn block_key(
+    src: &[u8],
+    recent: &[pdxl_lexer::Token],
+    is_scalar: &impl Fn(pdxl_lexer::TokenKind) -> bool,
+    is_op: &impl Fn(pdxl_lexer::TokenKind) -> bool,
+) -> Vec<u8> {
+    let n = recent.len();
+    if n >= 2 && is_scalar(recent[n - 2].kind) && is_op(recent[n - 1].kind) {
+        token_text(src, recent[n - 2]).to_vec()
+    } else if n >= 3
+        && is_scalar(recent[n - 3].kind)
+        && is_op(recent[n - 2].kind)
+        && is_scalar(recent[n - 1].kind)
+    {
+        token_text(src, recent[n - 3]).to_vec()
+    } else {
+        Vec::new()
+    }
+}
+
+fn block_scope(
+    src: &[u8],
+    recent: &[pdxl_lexer::Token],
+    key: &[u8],
+    stack: &[ScopeFrame],
+    rel_path: &str,
+    inherited: Option<String>,
+) -> Option<String> {
+    let parent_keys = stack.iter().map(|frame| frame.key.as_slice());
+    let context = pdxl_analysis::context::context_of_chain(
+        parent_keys,
+        rel_path,
+        pdxl_ck3::contexts::context_schema(),
+    );
+    let key = std::str::from_utf8(key).ok()?;
+    let rows = match context {
+        ClauseKind::Effect => pdxl_ck3::tables::EFFECTS,
+        ClauseKind::Trigger => pdxl_ck3::tables::TRIGGERS,
+        _ => &[],
+    };
+    if let Some(row) = rows.iter().find(|row| row.name == key)
+        && row.targets.len() == 1
+    {
+        return Some(row.targets[0].to_string());
+    }
+    let n = recent.len();
+    if n >= 4
+        && token_text(src, recent[n - 3]) == b":"
+        && recent[n - 4].kind == pdxl_lexer::TokenKind::Identifier
+    {
+        let link_name = std::str::from_utf8(token_text(src, recent[n - 4])).ok()?;
+        if let Some(link) = pdxl_ck3::tables::SCOPE_LINKS.iter().find(|link| {
+            link.name == link_name
+                && (link.global_link
+                    || inherited
+                        .as_deref()
+                        .is_some_and(|scope| link.input_scopes.contains(&scope)))
+        }) && link.output_scopes.len() == 1
+        {
+            return Some(link.output_scopes[0].to_string());
+        }
+    }
+    inherited
+}
+
+fn token_text(src: &[u8], token: pdxl_lexer::Token) -> &[u8] {
+    &src[token.range.start as usize..token.range.end as usize]
+}
+
+fn position_in_range(position: Position, range: Range) -> bool {
+    position >= range.start && position <= range.end
 }
 
 /// Built-in documentation is intentionally a token query, not an AST query:
