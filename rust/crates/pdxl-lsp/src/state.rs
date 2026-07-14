@@ -840,6 +840,7 @@ fn scope_link_chain_scope(src: &[u8], off: u32) -> Option<String> {
         )
     };
     let mut chain = Vec::new();
+    let mut completed = Vec::new();
     for token in pdxl_lexer::tokenize(src) {
         if token.range.start >= off {
             break;
@@ -848,13 +849,18 @@ fn scope_link_chain_scope(src: &[u8], off: u32) -> Option<String> {
             chain.push(token);
         } else if matches!(token.kind, T::Equal | T::QuestionEqual) {
             if chain.iter().any(|token| token.kind == T::Colon) {
-                break;
+                completed = std::mem::take(&mut chain);
             }
             chain.clear();
         } else if token.kind != T::Comment {
             chain.clear();
         }
     }
+    let chain = if completed.is_empty() {
+        chain
+    } else {
+        completed
+    };
     if chain.len() < 3
         || !scalar(chain[0].kind)
         || chain[1].kind != T::Colon

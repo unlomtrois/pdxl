@@ -526,7 +526,7 @@ fn hover_shows_builtin_effect_trigger_and_scope_link_docs() {
 #[test]
 fn inlay_hints_show_best_effort_scope_at_block_openers() {
     let t = TempTree::new();
-    let src = "namespace = t\nt.1 = {\n\ttype = character_event\n\timmediate = { add_gold = 10 }\n\toption = { name = t.1.a add_gold = 5 }\n\ttrigger = { any_child = { is_adult = yes } }\n\ttitle:e_test = { add_gold = 5 }\n}\n";
+    let src = "namespace = t\nt.1 = {\n\ttype = character_event\n\timmediate = { add_gold = 10 }\n\toption = { name = t.1.a add_gold = 5 }\n\ttrigger = { any_child = { is_adult = yes } }\n\ttitle:e_test = { add_gold = 5 }\n\ttitle:e_test.faith = { add_gold = 5 }\n}\n";
     t.write("events/e.txt", src);
     let (server, _rx) = server_over(&t);
     let uri = uri_for(&t, "events/e.txt");
@@ -545,7 +545,8 @@ fn inlay_hints_show_best_effort_scope_at_block_openers() {
             ": character",
             ": character",
             ": character",
-            ": landed_title"
+            ": landed_title",
+            ": faith"
         ]
     );
 }
