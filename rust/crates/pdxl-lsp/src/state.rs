@@ -23,8 +23,8 @@ use lsp_types::{
     Diagnostic, DiagnosticSeverity, InlayHint, InlayHintKind, InlayHintTooltip, Location, Position,
     PublishDiagnosticsParams, Range, Url,
 };
-use pdxl_analysis::RefDiag;
 use pdxl_analysis::context::ClauseKind;
+use pdxl_analysis::{RefDiag, SymbolKind};
 use pdxl_project::Project;
 
 use crate::position::{offset_to_position, path_to_uri, position_to_offset, uri_to_path};
@@ -90,8 +90,13 @@ impl ServerState {
         }
         self.project = Some(project);
         log_info!(
-            "project ready: {} symbols, {} diagnostics, {} open docs",
+            "project ready: {} symbols ({} titles), {} diagnostics, {} open docs",
             self.project.as_ref().unwrap().table().total(),
+            self.project
+                .as_ref()
+                .unwrap()
+                .table()
+                .count(SymbolKind::Title),
             self.project.as_ref().unwrap().diags().len(),
             self.docs.len()
         );
@@ -435,12 +440,18 @@ impl ServerState {
         let off = position_to_offset(&src, pos);
         let cursor = cursor_context(&src, off);
         if let Some(prefix) = cursor.scope_prefix.as_deref() {
-            return crate::completion::symbol_value_items_matching(
+            let name_prefix = cursor.scope_name_prefix.as_deref().unwrap_or_default();
+            let items = crate::completion::symbol_value_items_matching(
                 project.table(),
                 project.schema(),
                 project.schema().scope_prefix_kinds(prefix, &rel),
-                cursor.scope_name_prefix.as_deref().unwrap_or_default(),
+                name_prefix,
             );
+            log_info!(
+                "scope completion: prefix={prefix:?} name_prefix={name_prefix:?} path={rel} items={}",
+                items.len()
+            );
+            return items;
         }
         if let Some(key) = cursor.value_key.as_deref() {
             return crate::completion::symbol_value_items(
