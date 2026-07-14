@@ -49,6 +49,7 @@ fn tables_are_sorted_unique_and_plausibly_sized() {
 fn known_rows_survive_regeneration() {
     let add_gold = EFFECTS.iter().find(|r| r.name == "add_gold").unwrap();
     assert_eq!(add_gold.scopes, ["character"]);
+    assert_eq!(add_gold.description, "adds gold to a character");
 
     let has_trait = TRIGGERS.iter().find(|r| r.name == "has_trait").unwrap();
     assert_eq!(has_trait.scopes, ["character"]);

@@ -17,6 +17,8 @@
 #[derive(Clone, Copy, Debug)]
 pub struct DocRow {
     pub name: &'static str,
+    /// Human-readable usage notes from the game's documentation dump.
+    pub description: &'static str,
     /// `Supported Scopes:` verbatim (`"none"` = no scope requirement).
     pub scopes: &'static [&'static str],
     /// `Supported Targets:` — for `any_*` iterators, the element scope.

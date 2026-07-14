@@ -501,11 +501,11 @@ fn hover_shows_builtin_effect_trigger_and_scope_link_docs() {
     for (needle, expected) in [
         (
             "add_gold",
-            "effect add_gold\n```\n\nSupported scopes: character",
+            "effect add_gold\n```\n\nSupported scopes: character\n\nadds gold to a character",
         ),
         (
             "is_adult",
-            "trigger is_adult\n```\n\nSupported scopes: character",
+            "trigger is_adult\n```\n\nSupported scopes: character\n\nIs the scope character adult?",
         ),
         ("title", "scope link title\n```\n\nTakes a `:key` argument."),
         (
@@ -666,6 +666,11 @@ fn completion_in_effect_block_offers_effects_and_scripted() {
         add_gold.detail.as_deref(),
         Some("effect · scopes: character")
     );
+    let Some(lsp_types::Documentation::MarkupContent(documentation)) = &add_gold.documentation
+    else {
+        panic!("effect completion has documentation");
+    };
+    assert_eq!(documentation.value, "adds gold to a character");
 }
 
 #[test]

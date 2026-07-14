@@ -21,6 +21,9 @@
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DocEntry {
     pub name: String,
+    /// Free-form documentation between the name line and the supported
+    /// scope/target fields, preserved for LSP completion and hover.
+    pub description: String,
     /// `Supported Scopes:` values, comma-split, verbatim (may be `none`).
     pub scopes: Vec<String>,
     /// `Supported Targets:` values (iterator element scopes), comma-split.
@@ -102,12 +105,16 @@ pub fn parse_doc_log(text: &str) -> Vec<DocEntry> {
         let mut lines = stanza.lines();
         let Some(first) = lines.next() else { continue };
         // The name may stand alone or be `name - description`.
-        let name = first.split(" - ").next().unwrap_or(first).trim();
+        let (name, first_description) = first
+            .split_once(" - ")
+            .map_or((first, ""), |(name, description)| (name, description));
+        let name = name.trim();
         if !is_script_name(name) {
             continue;
         }
         let mut entry = DocEntry {
             name: name.to_string(),
+            description: first_description.trim().to_string(),
             scopes: Vec::new(),
             targets: Vec::new(),
         };
@@ -116,6 +123,11 @@ pub fn parse_doc_log(text: &str) -> Vec<DocEntry> {
                 entry.scopes = split_values(v);
             } else if let Some(v) = field_value(line, "Supported Targets:") {
                 entry.targets = split_values(v);
+            } else if !line.trim().is_empty() {
+                if !entry.description.is_empty() {
+                    entry.description.push('\n');
+                }
+                entry.description.push_str(line.trim_end());
             }
         }
         // Every real entry documents its scopes; nameless prose that happens
@@ -265,11 +277,15 @@ mod tests {
             vec![
                 DocEntry {
                     name: "add_gold".into(),
+                    description: "adds gold to a character".into(),
                     scopes: vec!["character".into()],
                     targets: vec![],
                 },
                 DocEntry {
                     name: "marry".into(),
+                    description:
+                        "character, artifact scopes for the test\nMulti-line description continues"
+                            .into(),
                     scopes: vec!["character".into(), "artifact".into()],
                     targets: vec!["character".into()],
                 },

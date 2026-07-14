@@ -12,7 +12,9 @@
 //! first (most specific), control keywords next, the big built-in tables
 //! last — clients filter as the user types either way.
 
-use lsp_types::{CompletionItem, CompletionItemKind, InsertTextFormat};
+use lsp_types::{
+    CompletionItem, CompletionItemKind, Documentation, InsertTextFormat, MarkupContent, MarkupKind,
+};
 use pdxl_analysis::context::{ClauseKind, Fallback, StructSpec};
 use pdxl_analysis::{IconHint, Schema, SymbolKind, SymbolTable};
 use pdxl_ck3::tables::{DocRow, EFFECTS, TRIGGERS};
@@ -225,6 +227,12 @@ fn push_doc_rows(items: &mut Vec<CompletionItem>, rows: &[DocRow], what: &str) {
             label: row.name.to_string(),
             kind: Some(CompletionItemKind::FUNCTION),
             detail: Some(format!("{what} · scopes: {}", row.scopes.join(", "))),
+            documentation: (!row.description.is_empty()).then(|| {
+                Documentation::MarkupContent(MarkupContent {
+                    kind: MarkupKind::Markdown,
+                    value: row.description.to_string(),
+                })
+            }),
             sort_text: Some(format!("3_{}", row.name)),
             ..CompletionItem::default()
         });

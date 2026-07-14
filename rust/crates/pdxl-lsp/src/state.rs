@@ -560,6 +560,9 @@ fn builtin_hover(src: &[u8], off: u32, rel_path: &str) -> Option<lsp_types::Hove
         "```pdxscript\n{label} {name}\n```\n\nSupported scopes: {}",
         row.scopes.join(", ")
     );
+    if !row.description.is_empty() {
+        text.push_str(&format!("\n\n{}", row.description));
+    }
     if !row.targets.is_empty() {
         text.push_str(&format!(
             "\n\nSupported targets: {}",

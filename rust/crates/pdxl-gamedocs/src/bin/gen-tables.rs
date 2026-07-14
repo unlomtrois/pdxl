@@ -125,8 +125,9 @@ fn write_doc_table(
     for row in rows {
         let _ = writeln!(
             s,
-            "    DocRow {{ name: {:?}, scopes: {}, targets: {} }},",
+            "    DocRow {{ name: {:?}, description: {:?}, scopes: {}, targets: {} }},",
             row.name,
+            row.description,
             str_slice(&row.scopes),
             str_slice(&row.targets)
         );
