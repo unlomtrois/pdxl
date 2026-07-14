@@ -550,6 +550,7 @@ fn scope_hints(src: &[u8], rel_path: &str, requested: Range) -> Vec<InlayHint> {
     let mut hints = Vec::new();
 
     for token in pdxl_lexer::tokenize(src) {
+        let is_event_body = event_body_context(&stack, rel_path);
         match token.kind {
             T::LBrace => {
                 let key = block_key(src, &recent, &is_scalar, &is_op);
@@ -583,13 +584,17 @@ fn scope_hints(src: &[u8], rel_path: &str, requested: Range) -> Vec<InlayHint> {
             _ => {
                 if is_scalar(token.kind)
                     && recent.len() >= 2
-                    && token_text(src, recent[recent.len() - 2]) == b"scope"
                     && is_op(recent[recent.len() - 1].kind)
                     && let Some(frame) = stack.last_mut()
                 {
-                    frame.scope = std::str::from_utf8(token_text(src, token))
-                        .ok()
-                        .map(str::to_owned);
+                    let key = token_text(src, recent[recent.len() - 2]);
+                    if key == b"scope" {
+                        frame.scope = std::str::from_utf8(token_text(src, token))
+                            .ok()
+                            .map(str::to_owned);
+                    } else if key == b"type" && is_event_body {
+                        frame.scope = event_type_scope(token_text(src, token)).map(str::to_owned);
+                    }
                 }
                 if recent.len() == 4 {
                     recent.remove(0);
@@ -599,6 +604,23 @@ fn scope_hints(src: &[u8], rel_path: &str, requested: Range) -> Vec<InlayHint> {
         }
     }
     hints
+}
+
+/// CK3 event types that establish a character as the implicit root scope.
+/// Other event types stay unknown until their scope semantics are documented.
+fn event_type_scope(value: &[u8]) -> Option<&'static str> {
+    matches!(value, b"character_event" | b"letter_event").then_some("character")
+}
+
+fn event_body_context(stack: &[ScopeFrame], rel_path: &str) -> bool {
+    matches!(
+        pdxl_analysis::context::context_of_chain(
+            stack.iter().map(|frame| frame.key.as_slice()),
+            rel_path,
+            pdxl_ck3::contexts::context_schema(),
+        ),
+        ClauseKind::Struct(spec) if spec.name == "event"
+    )
 }
 
 fn block_key(
