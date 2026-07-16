@@ -298,9 +298,9 @@ fn extract_field_refs(
             KeyForm::Value if value.kind == NodeKind::Scalar => {
                 append_ref(tree, rule.kind, value_id, path, schema, refs);
             }
-            // Block form carrying an id: key = { id = value … }.
-            KeyForm::BlockId if value.kind == NodeKind::Block => {
-                if let Some(id_node) = direct_field_node(tree, value_id, "id")
+            // Block form carrying a named field: key = { field = value … }.
+            KeyForm::BlockField(field) if value.kind == NodeKind::Block => {
+                if let Some(id_node) = direct_field_node(tree, value_id, field)
                     && tree.node(id_node).kind == NodeKind::Scalar
                 {
                     append_ref(tree, rule.kind, id_node, path, schema, refs);

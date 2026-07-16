@@ -377,3 +377,56 @@ fn capital_outside_landed_titles_is_not_a_ref() {
         ref_names(&f)
     );
 }
+
+// ── full on_action reference set (ANALYSIS_VERSION 5) ───────────────────────
+
+#[test]
+fn on_action_fire_lists_fallback_and_weighted() {
+    let f = extract(
+        "my_oa = {\n\
+         \tfirst_valid_on_action = { oa_a oa_b }\n\
+         \trandom_on_actions = { 100 = oa_c 50 = 0 chance = 10 }\n\
+         \tfallback = oa_d\n\
+         }\n",
+        "common/on_action/oa.txt",
+    );
+    assert_eq!(ref_names(&f), vec!["oa_a", "oa_b", "oa_c", "oa_d"]);
+    assert!(f.refs.iter().all(|r| r.kind == SymbolKind::OnAction));
+}
+
+#[test]
+fn on_action_rules_are_gated_to_on_action_files() {
+    // `fallback = yes` on an event option must not become an on_action ref;
+    // neither may list keys outside common/on_action/.
+    let f = extract(
+        "ns.1 = {\n\
+         \toption = { name = a fallback = yes }\n\
+         \tfirst_valid_on_action = { oa_a }\n\
+         }\n",
+        "events/e.txt",
+    );
+    assert!(
+        f.refs.iter().all(|r| r.kind != SymbolKind::OnAction),
+        "gated rules fired outside on_action: {:?}",
+        ref_names(&f)
+    );
+}
+
+#[test]
+fn trigger_event_block_can_fire_an_on_action_anywhere() {
+    let f = extract(
+        "e = {\n\
+         \ttrigger_event = { on_action = my_oa }\n\
+         \ttrigger_event = { id = ns.1 }\n\
+         }\n",
+        "common/scripted_effects/e.txt",
+    );
+    let oa = f
+        .refs
+        .iter()
+        .find(|r| r.name == "my_oa")
+        .expect("on_action ref");
+    assert_eq!(oa.kind, SymbolKind::OnAction);
+    let ev = f.refs.iter().find(|r| r.name == "ns.1").expect("event ref");
+    assert_eq!(ev.kind, SymbolKind::Event);
+}

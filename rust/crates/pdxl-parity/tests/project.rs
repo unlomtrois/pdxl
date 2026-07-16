@@ -69,7 +69,7 @@ fn project_scenarios_match_goldens() {
     a.write("events/ev.txt", "namespace = t\nt.1 = { }\n");
     a.write(
         "common/on_action/oa.txt",
-        "real_oa = { }\nmy_oa = {\n\tevents = { t.1 t.9 }\n\tfirst_valid = { t.1 }\n\trandom_events = { 100 = t.1  50 = t.8  chance_to_happen = 10  0 = 0 }\n\ton_actions = { real_oa missing_oa }\n}\n",
+        "real_oa = { }\nmy_oa = {\n\tevents = { t.1 t.9 }\n\tfirst_valid = { t.1 }\n\trandom_events = { 100 = t.1  50 = t.8  chance_to_happen = 10  0 = 0 }\n\ton_actions = { real_oa missing_oa }\n\tfirst_valid_on_action = { real_oa }\n\trandom_on_actions = { 100 = real_oa  50 = gone_oa  25 = 0 }\n\tfallback = real_oa\n\teffect = {\n\t\ttrigger_event = { on_action = real_oa }\n\t\ttrigger_event = { on_action = phantom_oa }\n\t}\n}\n",
     );
     check_golden("resolution", &scenario_dump(&[(&a, FileKind::Mod)]));
 

@@ -109,7 +109,17 @@ const KIND_SPECS: &[KindSpec] = &[
             dir_prefix: "common/on_action/",
             shape: DefShape::TopLevel,
         }),
-        refs: &[in_on_action(RefPattern::KeyList("on_actions"))],
+        refs: &[
+            // Fire lists inside on_action files (`_on_actions.info`).
+            in_on_action(RefPattern::KeyList("on_actions")),
+            in_on_action(RefPattern::KeyList("first_valid_on_action")),
+            in_on_action(RefPattern::KeyWeighted("random_on_actions")),
+            // `fallback = another_on_action` — runs if nothing else fired.
+            in_on_action(RefPattern::KeyValue("fallback")),
+            // Script can fire an on_action from anywhere:
+            // trigger_event = { on_action = X }.
+            anywhere(RefPattern::KeyBlockField("trigger_event", "on_action")),
+        ],
         aliases: &[],
     },
     KindSpec {
@@ -123,7 +133,7 @@ const KIND_SPECS: &[KindSpec] = &[
             // Scalar form: trigger_event = ns.id.
             anywhere(RefPattern::KeyValue("trigger_event")),
             // Block form: trigger_event = { id = ns.id … }.
-            anywhere(RefPattern::KeyBlockId("trigger_event")),
+            anywhere(RefPattern::KeyBlockField("trigger_event", "id")),
             // on_action lists: events = { ns.id … } (ambiguous elsewhere).
             in_on_action(RefPattern::KeyList("events")),
             in_on_action(RefPattern::KeyList("first_valid")),

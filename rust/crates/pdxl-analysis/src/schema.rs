@@ -77,8 +77,9 @@ pub struct DefSource {
 pub enum RefPattern {
     /// `key = X` — the scalar value resolves to the kind.
     KeyValue(&'static str),
-    /// `key = { id = X … }` — the block's `id` scalar resolves to the kind.
-    KeyBlockId(&'static str),
+    /// `key = { field = X … }` — the block's named-field scalar resolves to
+    /// the kind (`trigger_event = { id = X }`, `trigger_event = { on_action = X }`).
+    KeyBlockField(&'static str, &'static str),
     /// `key = { X Y … }` — loose scalar items each resolve to the kind.
     KeyList(&'static str),
     /// `key = { WEIGHT = X … }` — numeric-keyed values resolve to the kind.
@@ -136,7 +137,8 @@ pub(crate) struct KeyRule {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum KeyForm {
     Value,
-    BlockId,
+    /// The named direct-child field of the value block carries the reference.
+    BlockField(&'static str),
     List,
     Weighted,
 }
@@ -193,7 +195,7 @@ impl Schema {
             for rule in spec.refs {
                 let (key, form) = match rule.pattern {
                     RefPattern::KeyValue(k) => (k, KeyForm::Value),
-                    RefPattern::KeyBlockId(k) => (k, KeyForm::BlockId),
+                    RefPattern::KeyBlockField(k, field) => (k, KeyForm::BlockField(field)),
                     RefPattern::KeyList(k) => (k, KeyForm::List),
                     RefPattern::KeyWeighted(k) => (k, KeyForm::Weighted),
                     RefPattern::ScopePrefix(prefix) => {

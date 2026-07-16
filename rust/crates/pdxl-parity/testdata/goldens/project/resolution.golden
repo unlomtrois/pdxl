@@ -6,6 +6,8 @@
 {"file":"<root0>/common/on_action/oa.txt","start":40,"end":43,"loc":"<root0>/common/on_action/oa.txt:3:17","msg":"unknown event \"t.9\""},
 {"file":"<root0>/common/on_action/oa.txt","start":104,"end":107,"loc":"<root0>/common/on_action/oa.txt:5:36","msg":"unknown event \"t.8\""},
 {"file":"<root0>/common/on_action/oa.txt","start":164,"end":174,"loc":"<root0>/common/on_action/oa.txt:6:25","msg":"unknown on_action \"missing_oa\""},
+{"file":"<root0>/common/on_action/oa.txt","start":257,"end":264,"loc":"<root0>/common/on_action/oa.txt:8:44","msg":"unknown on_action \"gone_oa\""},
+{"file":"<root0>/common/on_action/oa.txt","start":381,"end":391,"loc":"<root0>/common/on_action/oa.txt:12:33","msg":"unknown on_action \"phantom_oa\""},
 {"file":"<root0>/common/scripted_effects/e.txt","start":76,"end":80,"loc":"<root0>/common/scripted_effects/e.txt:4:14","msg":"unknown trait \"nope\""}
 ]
 }
