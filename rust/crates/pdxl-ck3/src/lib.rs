@@ -180,8 +180,10 @@ const KIND_SPECS: &[KindSpec] = &[
         kind: SymbolKind::Faith,
         icon: IconHint::Object,
         defs: Some(DefSource {
-            dir_prefix: "common/religion/faiths/",
-            shape: DefShape::TopLevel,
+            dir_prefix: "common/religion/religion_types/",
+            shape: DefShape::ChildrenOf {
+                containers: &["faiths"],
+            },
         }),
         refs: &[anywhere(RefPattern::ScopePrefix("faith"))],
         aliases: &[],

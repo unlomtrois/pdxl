@@ -57,6 +57,9 @@ pub enum DefShape {
     Tree {
         key_prefixes: &'static [&'static str],
     },
+    /// Definitions are the direct block-valued children of named container
+    /// blocks found anywhere in the file (CK3 faiths inside `faiths = {}`).
+    ChildrenOf { containers: &'static [&'static str] },
 }
 
 /// Where a kind's definitions come from: files under `dir_prefix` (a

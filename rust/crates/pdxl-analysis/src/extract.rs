@@ -34,6 +34,9 @@ pub fn extract_facts(
                 crate::schema::DefShape::Tree { key_prefixes } => {
                     harvest_nested_defs(tree, node, key_prefixes, rule.kind, rel_path, &mut facts)
                 }
+                crate::schema::DefShape::ChildrenOf { containers } => harvest_container_defs(
+                    tree, node, containers, rule.kind, rel_path, schema, &mut facts,
+                ),
             }
         }
     }
@@ -47,6 +50,38 @@ pub fn extract_facts(
         &mut facts.refs,
     );
     facts
+}
+
+fn harvest_container_defs(
+    tree: &SyntaxTree,
+    node_id: NodeId,
+    containers: &[&str],
+    kind: SymbolKind,
+    rel_path: &str,
+    schema: &Schema,
+    facts: &mut FileFacts,
+) {
+    let node = tree.node(node_id);
+    if node.kind == NodeKind::Field {
+        let children = tree.child_ids(node_id);
+        if children.len() == 2
+            && containers
+                .iter()
+                .any(|name| tree.node_text(children[0]) == name.as_bytes())
+            && matches!(
+                tree.node(children[1]).kind,
+                NodeKind::Block | NodeKind::TaggedBlock
+            )
+        {
+            for child in tree.children(children[1]) {
+                harvest_def(tree, child, kind, rel_path, schema, facts);
+            }
+            return;
+        }
+    }
+    for child in tree.children(node_id) {
+        harvest_container_defs(tree, child, containers, kind, rel_path, schema, facts);
+    }
 }
 
 /// Records the definition (and any aliases) for a single top-level node, if it

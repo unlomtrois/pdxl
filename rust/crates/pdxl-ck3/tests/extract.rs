@@ -46,6 +46,16 @@ fn collects_multiple_triggers() {
 }
 
 #[test]
+fn collects_faiths_nested_under_religion_type() {
+    let f = extract(
+        "religion_fire = { faiths = { sun_spirituality = { } fire_lord_cult = { } } }\n",
+        "common/religion/religion_types/fire.txt",
+    );
+    assert_eq!(def_names(&f), vec!["sun_spirituality", "fire_lord_cult"]);
+    assert!(f.defs.iter().all(|d| d.kind == SymbolKind::Faith));
+}
+
+#[test]
 fn collects_characters_including_dotted_ids() {
     let f = extract(
         "145665 = { name = \"Foo\" }\nbohemia.1 = { name = \"Bar\" }\n",

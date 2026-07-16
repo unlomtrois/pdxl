@@ -645,7 +645,10 @@ fn completion_server() -> (ServerState, Receiver<Message>, TempTree) {
     );
     t.write("common/traits/t.txt", "patient = {}\n");
     t.write("common/culture/cultures/t.txt", "abe_culture = {}\n");
-    t.write("common/religion/faiths/t.txt", "abe_faith = {}\n");
+    t.write(
+        "common/religion/religion_types/t.txt",
+        "abe_religion = { faiths = { abe_faith = {} } }\n",
+    );
     t.write(
         "common/landed_titles/t.txt",
         "e_test = {}\nk_testshire = {}\nk_kingdom = {}\n",
