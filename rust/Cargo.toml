@@ -27,6 +27,11 @@ members = [
     "crates/pdxl-parity",   # dump formats, dump binaries, Go differential tests
 ]
 
+# Full debuginfo dominated a multi-GiB target/; line tables keep file:line in
+# backtraces, which is all this project uses. Flip back temporarily for gdb.
+[profile.dev]
+debug = "line-tables-only"
+
 [workspace.package]
 edition = "2024"
 license = "MIT"
