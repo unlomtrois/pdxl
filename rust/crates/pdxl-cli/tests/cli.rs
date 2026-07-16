@@ -273,3 +273,69 @@ fn lsp_handshake_declares_capabilities_at_the_right_nesting() {
     let _ = proc.kill();
     let _ = proc.wait(); // reap the child (clippy: zombie_processes)
 }
+
+// ── fmt ─────────────────────────────────────────────────────────────────────
+
+#[test]
+fn fmt_prints_formatted_output_to_stdout() {
+    let t = TempTree::new();
+    t.write("a.txt", "a = { b = 1 c = { d = 2 } }\n");
+    let file = t.child("a.txt");
+    let out = run_rust(&repo_root(), &["fmt", &file.to_string_lossy()]);
+    assert!(out.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        "a = {\n\tb = 1\n\tc = {\n\t\td = 2\n\t}\n}\n"
+    );
+}
+
+#[test]
+fn fmt_check_exits_nonzero_and_lists_unformatted() {
+    let t = TempTree::new();
+    t.write("dense.txt", "a = { b = 1 }\n");
+    t.write("clean.txt", "a = {\n\tb = 1\n}\n");
+    let dense = t.child("dense.txt");
+    let clean = t.child("clean.txt");
+    let out = run_rust(
+        &repo_root(),
+        &[
+            "fmt",
+            "--check",
+            &dense.to_string_lossy(),
+            &clean.to_string_lossy(),
+        ],
+    );
+    assert!(!out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("dense.txt") && !stdout.contains("clean.txt"));
+
+    let out = run_rust(&repo_root(), &["fmt", "--check", &clean.to_string_lossy()]);
+    assert!(out.status.success());
+    assert!(out.stdout.is_empty());
+}
+
+#[test]
+fn fmt_write_rewrites_in_place_and_parse_errors_refuse() {
+    let t = TempTree::new();
+    t.write("a.txt", "a = { b = 1 }  # keep me\n");
+    t.write("broken.txt", "a = {\n");
+    let a = t.child("a.txt");
+    let broken = t.child("broken.txt");
+    let out = run_rust(
+        &repo_root(),
+        &[
+            "fmt",
+            "--write",
+            &a.to_string_lossy(),
+            &broken.to_string_lossy(),
+        ],
+    );
+    // broken.txt makes the run fail, but a.txt is still rewritten.
+    assert!(!out.status.success());
+    assert_eq!(
+        std::fs::read_to_string(&a).unwrap(),
+        "a = {\n\tb = 1\n} # keep me\n"
+    );
+    assert_eq!(std::fs::read_to_string(&broken).unwrap(), "a = {\n");
+    assert!(String::from_utf8_lossy(&out.stderr).contains("parse errors"));
+}

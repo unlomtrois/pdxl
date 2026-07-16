@@ -9,6 +9,7 @@
 //! - `parse --json` is not ported (its shape is Go's internal struct encoding).
 
 mod check;
+mod fmt;
 mod lex;
 mod parse;
 
@@ -40,6 +41,18 @@ enum Command {
         /// output AST as a labelled node tree
         #[arg(long)]
         tree: bool,
+    },
+    /// Format Paradox scripting files (expand-every-block style)
+    Fmt {
+        /// files to format
+        #[arg(required = true)]
+        files: Vec<String>,
+        /// rewrite files in place instead of printing to stdout
+        #[arg(long, short = 'w', conflicts_with = "check")]
+        write: bool,
+        /// list unformatted files and exit non-zero (CI mode)
+        #[arg(long)]
+        check: bool,
     },
     /// Run the language server over stdio (diagnostics + go-to-definition)
     Lsp {
@@ -79,6 +92,11 @@ fn main() -> ExitCode {
             show_pos,
         } => lex::run(&file, tags, show_pos),
         Command::Parse { file, tree } => parse::run(&file, tree),
+        Command::Fmt {
+            files,
+            write,
+            check,
+        } => fmt::run(&files, write, check),
         Command::Check {
             file,
             game,

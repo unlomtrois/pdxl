@@ -60,8 +60,11 @@ pdxl-ck3        CK3 schema: def dirs, ref keys, skips      (dep: analysis)
 pdxl-project    FileSet walk → analyze; incremental updates (dep: analysis,
                                                              fileset, parser, path,
                                                              cache [opt-in])
+pdxl-fmt        PDXScript formatter (token+trivia based,    (dep: src, lexer,
+                comment-preserving, re-lex verified)         parser)
 pdxl-lsp        language server: diagnostics + definition   (dep: project, ck3,
-                                                             lsp-server, lsp-types)
+                                                             fmt, lsp-server,
+                                                             lsp-types)
 pdxl-cli        the `pdxl` binary: lex/parse/check/lsp      (dep: most of the above,
                                                              clap)
 pdxl-mcp        MCP server: agent-facing CK3 queries        (dep: ck3, rmcp)

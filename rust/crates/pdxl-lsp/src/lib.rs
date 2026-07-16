@@ -90,6 +90,7 @@ pub fn run_stdio(opts: Options) -> Result<(), Box<dyn std::error::Error + Sync +
             ..lsp_types::CompletionOptions::default()
         }),
         definition_provider: Some(OneOf::Left(true)),
+        document_formatting_provider: Some(OneOf::Left(true)),
         references_provider: Some(OneOf::Left(true)),
         document_symbol_provider: Some(OneOf::Left(true)),
         hover_provider: Some(lsp_types::HoverProviderCapability::Simple(true)),
@@ -275,6 +276,21 @@ fn handle_request(server: &mut ServerState, out: &Sender<Message>, req: lsp_serv
                     e.to_string(),
                 ),
             };
+            let _ = out.send(Message::Response(resp));
+        }
+        lsp_types::request::Formatting::METHOD => {
+            let resp =
+                match serde_json::from_value::<lsp_types::DocumentFormattingParams>(req.params) {
+                    Ok(params) => {
+                        let edits = server.formatting(&params.text_document.uri);
+                        Response::new_ok(req.id, edits)
+                    }
+                    Err(e) => Response::new_err(
+                        req.id,
+                        lsp_server::ErrorCode::InvalidParams as i32,
+                        e.to_string(),
+                    ),
+                };
             let _ = out.send(Message::Response(resp));
         }
         lsp_types::request::HoverRequest::METHOD => {

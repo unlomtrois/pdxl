@@ -17,7 +17,8 @@ members = [
     "crates/pdxl-ck3",      # CK3 schema: def dirs, ref keys, skip lists
     "crates/pdxl-project",  # whole-project analysis + incremental updates
     # user-facing
-    "crates/pdxl-cli",      # the pdxl binary: lex / parse / check / lsp
+    "crates/pdxl-fmt",      # PDXScript formatter (token+trivia based, comment-preserving)
+    "crates/pdxl-cli",      # the pdxl binary: lex / parse / check / fmt / lsp
     "crates/pdxl-lsp",      # the language server (M8a: sync, diagnostics, definition)
     "crates/pdxl-mcp",      # MCP server for agent-facing semantic queries
     # dev tooling
@@ -48,6 +49,7 @@ pdxl-fileset = { path = "crates/pdxl-fileset" }
 pdxl-moddesc = { path = "crates/pdxl-moddesc" }
 pdxl-cache = { path = "crates/pdxl-cache" }
 pdxl-analysis = { path = "crates/pdxl-analysis" }
+pdxl-fmt = { path = "crates/pdxl-fmt" }
 pdxl-ck3 = { path = "crates/pdxl-ck3" }
 pdxl-project = { path = "crates/pdxl-project" }
 pdxl-lsp = { path = "crates/pdxl-lsp" }

@@ -10,6 +10,7 @@ description = "The pdxl command-line tool (Rust port): lex, parse, check."
 [dependencies]
 pdxl-lexer.workspace = true
 pdxl-parser.workspace = true
+pdxl-fmt.workspace = true
 pdxl-src.workspace = true
 pdxl-path.workspace = true
 pdxl-fileset.workspace = true

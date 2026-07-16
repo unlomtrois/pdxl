@@ -516,6 +516,27 @@ impl ServerState {
         crate::completion::items_for(ctx, project.table(), scope_at(&src, &rel, off).as_deref())
     }
 
+    /// `textDocument/formatting`: one whole-document edit, or an empty list
+    /// when already formatted. Files with parse errors return `None` — the
+    /// formatter refuses error-recovered trees, and diagnostics already mark
+    /// the syntax errors. Client tab options are ignored: PDXScript style
+    /// here is always tabs.
+    pub fn formatting(&self, uri: &Url) -> Option<Vec<lsp_types::TextEdit>> {
+        let path = uri_to_path(uri);
+        let src = self.read_file(&path).ok()?;
+        let formatted = pdxl_fmt::format(&path.to_string_lossy(), &src).ok()?;
+        if formatted.as_bytes() == src.as_slice() {
+            return Some(Vec::new());
+        }
+        Some(vec![lsp_types::TextEdit {
+            range: Range {
+                start: Position::new(0, 0),
+                end: offset_to_position(&src, src.len() as u32),
+            },
+            new_text: formatted,
+        }])
+    }
+
     /// Whether `path` lives under the mod root; no root = everything in scope.
     fn under_mod_root(&self, path: &Path) -> bool {
         let Some(root) = &self.mod_root else {

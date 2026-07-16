@@ -949,3 +949,39 @@ fn completion_filters_effects_in_a_known_title_scope() {
     );
     assert!(!names.contains(&"add_character_flag"));
 }
+
+// ── formatting ──────────────────────────────────────────────────────────────
+
+#[test]
+fn formatting_returns_whole_document_edit() {
+    let t = TempTree::new();
+    t.write(
+        "events/e.txt",
+        "namespace = t\nt.1 = { immediate = { add_gold = 5 } }\n",
+    );
+    let (mut server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "events/e.txt");
+    // Format the open buffer, not disk.
+    server.did_open(
+        uri.clone(),
+        "t.1 = { trigger = { is_adult = yes } }\n".to_string(),
+    );
+    let edits = server.formatting(&uri).expect("edits");
+    assert_eq!(edits.len(), 1);
+    assert_eq!(
+        edits[0].new_text,
+        "t.1 = {\n\ttrigger = {\n\t\tis_adult = yes\n\t}\n}\n"
+    );
+    assert_eq!(edits[0].range.start, Position::new(0, 0));
+}
+
+#[test]
+fn formatting_already_formatted_returns_empty_and_broken_returns_none() {
+    let t = TempTree::new();
+    t.write("events/e.txt", "namespace = t\n");
+    let (mut server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "events/e.txt");
+    assert_eq!(server.formatting(&uri), Some(vec![]));
+    server.did_open(uri.clone(), "t.1 = {\n".to_string());
+    assert_eq!(server.formatting(&uri), None);
+}

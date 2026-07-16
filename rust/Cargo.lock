@@ -708,6 +708,7 @@ dependencies = [
  "pdxl-analysis",
  "pdxl-ck3",
  "pdxl-fileset",
+ "pdxl-fmt",
  "pdxl-lexer",
  "pdxl-lsp",
  "pdxl-moddesc",
@@ -725,6 +726,15 @@ version = "0.1.0"
 dependencies = [
  "pdxl-path",
  "pdxl-testutil",
+]
+
+[[package]]
+name = "pdxl-fmt"
+version = "0.1.0"
+dependencies = [
+ "pdxl-lexer",
+ "pdxl-parser",
+ "pdxl-src",
 ]
 
 [[package]]
@@ -748,6 +758,7 @@ dependencies = [
  "pdxl-analysis",
  "pdxl-ck3",
  "pdxl-fileset",
+ "pdxl-fmt",
  "pdxl-lexer",
  "pdxl-path",
  "pdxl-project",
