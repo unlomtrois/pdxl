@@ -1064,3 +1064,21 @@ fn inlay_hints_show_loc_text_for_resolved_keys() {
     };
     assert!(full.ends_with("drill manuals."));
 }
+
+#[test]
+fn references_work_from_inside_a_loc_yml() {
+    let t = TempTree::new();
+    let yml = "\u{feff}l_english:\n my.1.t: \"A Title\"\n";
+    t.write("localization/english/my_l_english.yml", yml);
+    t.write(
+        "events/my.txt",
+        "namespace = my\nmy.1 = {\n\ttitle = my.1.t\n}\n",
+    );
+    let (server, _rx) = server_over(&t);
+    let yml_uri = uri_for(&t, "localization/english/my_l_english.yml");
+
+    // Cursor on the KEY inside the yml (line 1, col 1 — after the space).
+    let refs = server.references(&yml_uri, Position::new(1, 1), false);
+    assert_eq!(refs.len(), 1, "{refs:?}");
+    assert!(refs[0].uri.path().ends_with("events/my.txt"));
+}

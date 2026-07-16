@@ -41,7 +41,12 @@ export function activate(context: vscode.ExtensionContext): void {
   };
 
   const clientOptions: LanguageClientOptions = {
-    documentSelector: [{ scheme: "file", pattern: "**/*.txt" }],
+    documentSelector: [
+      { scheme: "file", pattern: "**/*.txt" },
+      // Localization files: find-references / hover on loc keys from the yml
+      // side. Narrow pattern — random workspace .yml (CI configs) stays out.
+      { scheme: "file", pattern: "**/localization/**/*.yml" },
+    ],
     initializationOptions: { gamePath },
     // Surface server stderr (slog) in the "pdxl (server)" output channel.
     outputChannelName: "pdxl (server)",
