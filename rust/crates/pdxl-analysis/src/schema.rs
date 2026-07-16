@@ -34,6 +34,8 @@ pub enum IconHint {
     Object,
     /// A node in a containment hierarchy (landed titles).
     Hierarchy,
+    /// A piece of text (localization keys).
+    Text,
 }
 
 /// How definitions are shaped inside a directory's files.
@@ -77,6 +79,11 @@ pub struct DefSource {
 pub enum RefPattern {
     /// `key = X` — the scalar value resolves to the kind.
     KeyValue(&'static str),
+    /// `parent = { key = X … }` — like [`RefPattern::KeyValue`], but only
+    /// when the field sits directly inside a block opened by `parent`
+    /// (CK3: `name` is a loc key inside `option`, a variable-list name in
+    /// list effects).
+    KeyValueUnder(&'static str, &'static str),
     /// `key = { field = X … }` — the block's named-field scalar resolves to
     /// the kind (`trigger_event = { id = X }`, `trigger_event = { on_action = X }`).
     KeyBlockField(&'static str, &'static str),
@@ -137,6 +144,8 @@ pub(crate) struct KeyRule {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum KeyForm {
     Value,
+    /// Scalar value, only when the enclosing block's field key matches.
+    ValueUnder(&'static str),
     /// The named direct-child field of the value block carries the reference.
     BlockField(&'static str),
     List,
@@ -195,6 +204,7 @@ impl Schema {
             for rule in spec.refs {
                 let (key, form) = match rule.pattern {
                     RefPattern::KeyValue(k) => (k, KeyForm::Value),
+                    RefPattern::KeyValueUnder(parent, k) => (k, KeyForm::ValueUnder(parent)),
                     RefPattern::KeyBlockField(k, field) => (k, KeyForm::BlockField(field)),
                     RefPattern::KeyList(k) => (k, KeyForm::List),
                     RefPattern::KeyWeighted(k) => (k, KeyForm::Weighted),
@@ -274,10 +284,14 @@ impl Schema {
     /// (`$X$`), scope/data-function chains (`foo:bar`), relative-scope
     /// keywords, and empties (Go's `skipRefValue`).
     pub fn skip_ref_value(&self, val: &str) -> bool {
-        if val.is_empty() || val.contains(['$', ':']) {
+        if val.is_empty() || val.contains(['$', ':']) || val.starts_with('[') {
+            // `[...]` values are inline datafunction text, not names.
             return true;
         }
-        self.scope_keywords.contains(val)
+        // A scope keyword — bare (`has_trait = prev`) or heading a chain
+        // (`title = root.primary_title`) — is runtime navigation, not a name.
+        let first_segment = val.split('.').next().unwrap_or(val);
+        self.scope_keywords.contains(first_segment)
     }
 
     pub(crate) fn key_rules(&self, key: &str) -> Option<&[KeyRule]> {

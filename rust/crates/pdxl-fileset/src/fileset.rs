@@ -84,6 +84,9 @@ pub struct FileSet {
     replaced: usize,
     ignore_dirs: HashSet<String>,
     ignore_files: HashSet<String>,
+    /// When set, `localization/<lang>/**/*.yml` files also join the overlay
+    /// (opt-in; default scanning is `.txt`-only for Go parity).
+    localization_language: Option<String>,
 }
 
 impl FileSet {
@@ -108,6 +111,15 @@ impl FileSet {
     /// Registers directory prefixes fully replaced by the mod. Vanilla/DLC files
     /// under one of these prefixes are dropped during [`add`](Self::add). Call
     /// before adding vanilla roots.
+    /// Opts localization files into the scan: `localization/<language>/**/*.yml`
+    /// entries join the overlay with normal shadowing. Call before [`add`].
+    /// Off by default — plain scans stay `.txt`-only (Go parity).
+    ///
+    /// [`add`]: FileSet::add
+    pub fn set_localization_language(&mut self, language: &str) {
+        self.localization_language = Some(language.to_lowercase());
+    }
+
     pub fn set_replace_paths<I, P>(&mut self, paths: I)
     where
         I: IntoIterator<Item = P>,
@@ -184,8 +196,22 @@ impl FileSet {
         Ok(())
     }
 
-    /// Considers a single file for registration: `.txt` only, honoring the file
-    /// ignore set, keyed by its normalized relative path.
+    /// Whether `rel` is a localization file for the opted-in language.
+    fn is_localization_file(&self, rel: &str) -> bool {
+        let Some(lang) = &self.localization_language else {
+            return false;
+        };
+        let key = normalize_key(rel);
+        key.ends_with(".yml")
+            && key
+                .strip_prefix("localization/")
+                .and_then(|r| r.strip_prefix(lang.as_str()))
+                .is_some_and(|r| r.starts_with('/'))
+    }
+
+    /// Considers a single file for registration: `.txt` only (plus opted-in
+    /// localization `.yml`), honoring the file ignore set, keyed by its
+    /// normalized relative path.
     fn visit_file(
         &mut self,
         _full_path: &Path,
@@ -194,7 +220,7 @@ impl FileSet {
         name: &str,
         kind: FileKind,
     ) {
-        if !has_txt_ext(name) {
+        if !has_txt_ext(name) && !self.is_localization_file(rel) {
             return;
         }
         if self.ignore_files.contains(&to_lower(name)) {

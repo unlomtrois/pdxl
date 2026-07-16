@@ -365,3 +365,31 @@ fn deterministic_across_repeated_scans() {
     // And it must be lexical by component.
     assert_eq!(order1, vec!["a/first.txt", "m/mid.txt", "z/last.txt"]);
 }
+
+#[test]
+fn localization_yml_opt_in() {
+    let t = TempTree::new();
+    t.write("localization/english/a_l_english.yml", "l_english:\n");
+    t.write("localization/russian/a_l_russian.yml", "l_russian:\n");
+    t.write("localization/english/notes.txt", ""); // .txt always scans
+    t.write("common/traits/x.txt", "");
+
+    // Default: .txt only — yml never enters the overlay (Go parity).
+    let mut s = FileSet::new();
+    s.add(&t.path, FileKind::Vanilla).unwrap();
+    assert!(s.resolve("localization/english/a_l_english.yml").is_none());
+
+    // Opted in: only the chosen language's yml joins, with shadowing.
+    let m = TempTree::new();
+    m.write("localization/english/a_l_english.yml", "l_english: # mod\n");
+    let mut s = FileSet::new();
+    s.set_localization_language("English");
+    s.add(&t.path, FileKind::Vanilla).unwrap();
+    s.add(&m.path, FileKind::Mod).unwrap();
+    let e = s
+        .resolve("localization/english/a_l_english.yml")
+        .expect("yml scanned");
+    assert_eq!(e.kind, FileKind::Mod, "mod loc shadows vanilla loc");
+    assert!(s.resolve("localization/russian/a_l_russian.yml").is_none());
+    validate_fileset(&s).unwrap();
+}

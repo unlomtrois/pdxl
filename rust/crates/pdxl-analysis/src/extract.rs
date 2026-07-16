@@ -46,6 +46,7 @@ pub fn extract_facts(
         tree.root(),
         rel_path,
         full_path,
+        b"",
         schema,
         &mut facts.refs,
     );
@@ -198,6 +199,7 @@ fn extract_refs(
     node_id: NodeId,
     rel_path: &str,
     path: &str,
+    parent_key: &[u8],
     schema: &Schema,
     refs: &mut Vec<Ref>,
 ) {
@@ -206,7 +208,22 @@ fn extract_refs(
         let children = tree.child_ids(node_id);
         if children.len() == 2 {
             let key = tree.node_text(children[0]);
-            extract_field_refs(tree, key, children[1], rel_path, path, schema, refs);
+            extract_field_refs(
+                tree,
+                key,
+                children[1],
+                rel_path,
+                path,
+                parent_key,
+                schema,
+                refs,
+            );
+            // The key itself is a scalar position (scope literals like
+            // `title:k_x = { … }` appear as keys); the value's subtree gets
+            // this field's key as its parent.
+            extract_refs(tree, children[0], rel_path, path, parent_key, schema, refs);
+            extract_refs(tree, children[1], rel_path, path, key, schema, refs);
+            return;
         }
     }
     // Self-identifying scope literals (`title:<name>[.chain]`) can appear in
@@ -216,7 +233,7 @@ fn extract_refs(
         scan_prefix_refs(tree, node_id, rel_path, path, schema, refs);
     }
     for child in tree.children(node_id) {
-        extract_refs(tree, child, rel_path, path, schema, refs);
+        extract_refs(tree, child, rel_path, path, parent_key, schema, refs);
     }
 }
 
@@ -272,12 +289,14 @@ fn scan_prefix_refs(
 /// Collects references from a single `key = value` field, applying every
 /// key-triggered rule (in schema declaration order) whose gate admits the
 /// file and whose form matches the value's node kind.
+#[allow(clippy::too_many_arguments)]
 fn extract_field_refs(
     tree: &SyntaxTree,
     key: &[u8],
     value_id: NodeId,
     rel_path: &str,
     path: &str,
+    parent_key: &[u8],
     schema: &Schema,
     refs: &mut Vec<Ref>,
 ) {
@@ -297,6 +316,12 @@ fn extract_field_refs(
             // Scalar form: key = value.
             KeyForm::Value if value.kind == NodeKind::Scalar => {
                 append_ref(tree, rule.kind, value_id, path, schema, refs);
+            }
+            // Scalar form constrained to a parent block: option = { name = X }.
+            KeyForm::ValueUnder(parent) if value.kind == NodeKind::Scalar => {
+                if parent_key == parent.as_bytes() {
+                    append_ref(tree, rule.kind, value_id, path, schema, refs);
+                }
             }
             // Block form carrying a named field: key = { field = value … }.
             KeyForm::BlockField(field) if value.kind == NodeKind::Block => {

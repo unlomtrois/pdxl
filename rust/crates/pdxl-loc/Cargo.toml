@@ -1,0 +1,11 @@
+[package]
+name = "pdxl-loc"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Parser for Paradox localization .yml files (l_<lang> headers, key:version \"text\" entries) — the loc-key symbol source for pdxl-analysis."
+
+[lints.rust]
+unsafe_code = "forbid"

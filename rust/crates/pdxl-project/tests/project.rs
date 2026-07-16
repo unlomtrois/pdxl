@@ -310,3 +310,31 @@ fn analyze_with_cache_matches_uncached() {
         assert_eq!(cold_table.count(kind), warm_table.count(kind), "{kind:?}");
     }
 }
+
+#[test]
+fn localization_keys_resolve_event_text_refs() {
+    let t = TempTree::new();
+    t.write(
+        "localization/english/my_events_l_english.yml",
+        "\u{FEFF}l_english:\n my.1.t: \"A Title\"\n my.1.a: \"An option\"\n",
+    );
+    t.write(
+        "events/my.txt",
+        "namespace = my\nmy.1 = {\n\ttitle = my.1.t\n\toption = { name = my.1.a }\n\toption = { name = my.1.missing }\n}\n",
+    );
+    // The fileset() helper doesn't opt into localization; build one that does.
+    let mut fs = pdxl_fileset::FileSet::new();
+    fs.set_localization_language(pdxl_project::DEFAULT_LOC_LANGUAGE);
+    fs.add(&t.path, pdxl_fileset::FileKind::Mod).unwrap();
+    let (table, diags) = analyze(&fs, &pdxl_ck3::schema()).expect("analyze");
+    assert_eq!(table.count(pdxl_analysis::SymbolKind::LocKey), 2);
+    let missing: Vec<&str> = diags.iter().map(|d| d.msg.as_str()).collect();
+    assert_eq!(missing.len(), 1, "{missing:?}");
+    assert!(missing[0].contains("unknown loc_key \"my.1.missing\""));
+
+    // Definitions carry the yml rel path + key offsets (goto-def target).
+    let sym = table
+        .lookup(pdxl_analysis::SymbolKind::LocKey, "my.1.t")
+        .expect("loc symbol");
+    assert_eq!(sym.file, "localization/english/my_events_l_english.yml");
+}

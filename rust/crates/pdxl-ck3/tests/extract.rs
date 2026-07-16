@@ -430,3 +430,48 @@ fn trigger_event_block_can_fire_an_on_action_anywhere() {
     let ev = f.refs.iter().find(|r| r.name == "ns.1").expect("event ref");
     assert_eq!(ev.kind, SymbolKind::Event);
 }
+
+// ── localization-key references (ANALYSIS_VERSION 6) ────────────────────────
+
+#[test]
+fn event_text_fields_are_loc_refs() {
+    let f = extract(
+        "ns.1 = {\n\
+         \ttitle = ns.1.t\n\
+         \tdesc = {\n\t\tfirst_valid = {\n\t\t\ttriggered_desc = {\n\t\t\t\tdesc = ns.1.desc_alt\n\t\t\t}\n\t\t}\n\t}\n\
+         \toption = { name = ns.1.a custom_tooltip = ns.1.a.tt }\n\
+         }\n",
+        "events/e.txt",
+    );
+    let loc: Vec<&str> = f
+        .refs
+        .iter()
+        .filter(|r| r.kind == SymbolKind::LocKey)
+        .map(|r| r.name.as_str())
+        .collect();
+    // Scalar forms extracted at any depth; the desc BLOCK itself is not a ref.
+    assert_eq!(loc, vec!["ns.1.t", "ns.1.desc_alt", "ns.1.a", "ns.1.a.tt"]);
+}
+
+#[test]
+fn loc_ref_rules_are_gated_by_directory() {
+    // `desc`/`name` mean other things outside events/ and decisions/.
+    let f = extract(
+        "v = {\n\tdesc = some_svalue_desc\n\tname = whatever\n}\n",
+        "common/script_values/v.txt",
+    );
+    assert!(f.refs.iter().all(|r| r.kind != SymbolKind::LocKey));
+
+    // …while decisions expose their own text fields.
+    let f = extract(
+        "d = {\n\tselection_tooltip = d.tooltip\n\tconfirm_text = d.confirm\n}\n",
+        "common/decisions/d.txt",
+    );
+    let loc: Vec<&str> = f
+        .refs
+        .iter()
+        .filter(|r| r.kind == SymbolKind::LocKey)
+        .map(|r| r.name.as_str())
+        .collect();
+    assert_eq!(loc, vec!["d.tooltip", "d.confirm"]);
+}

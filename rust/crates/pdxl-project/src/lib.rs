@@ -38,6 +38,10 @@ use pdxl_analysis::{
 };
 use pdxl_fileset::FileSet;
 
+/// The localization language consumers opt the FileSet into
+/// (`set_localization_language`) for loc-key symbols.
+pub const DEFAULT_LOC_LANGUAGE: &str = "english";
+
 /// Identifies a project file by both its FileSet `rel_path` (drives the def
 /// rule and stable duplicate ordering) and its on-disk full path.
 #[derive(Clone, Debug)]
@@ -81,8 +85,13 @@ fn gather_facts(
     let mut facts = HashMap::new();
     fs.try_for_each(|entry| -> io::Result<()> {
         let full = entry.full_path.to_string_lossy().into_owned();
-        let tree = obtain_tree(&entry.full_path, &full, cache)?;
-        let f = extract_facts(&tree, &entry.rel_path, &full, schema);
+        let f = if entry.rel_path.ends_with(".yml") {
+            let src = std::fs::read(&entry.full_path)?;
+            loc_facts(&src, &entry.rel_path)
+        } else {
+            let tree = obtain_tree(&entry.full_path, &full, cache)?;
+            extract_facts(&tree, &entry.rel_path, &full, schema)
+        };
         order.push(FileKey {
             rel: entry.rel_path.clone(),
             full: entry.full_path.clone(),
@@ -91,6 +100,28 @@ fn gather_facts(
         Ok(())
     })?;
     Ok((order, facts))
+}
+
+/// Extracts loc-key definitions from a localization `.yml` file (routed by
+/// extension: those entries only exist when the FileSet was opted in via
+/// `set_localization_language`). Files without an `l_<lang>:` header yield
+/// empty facts.
+fn loc_facts(src: &[u8], rel_path: &str) -> FileFacts {
+    let mut facts = FileFacts::default();
+    let Some(loc) = pdxl_loc::parse(src) else {
+        return facts;
+    };
+    for e in loc.entries {
+        facts.defs.push(pdxl_analysis::Symbol {
+            name: e.key,
+            kind: SymbolKind::LocKey,
+            file: rel_path.to_string(),
+            offset: e.key_start,
+            end_offset: e.key_end,
+            params: Vec::new(),
+        });
+    }
+    facts
 }
 
 /// Returns the syntax tree for a file: a cache hit when possible, otherwise a
@@ -201,9 +232,13 @@ impl Project {
     }
 
     fn replace_facts(&mut self, key: &FileKey, src: Vec<u8>) {
-        let full = key.full.to_string_lossy().into_owned();
-        let parsed = pdxl_parser::parse(full.clone(), src);
-        let facts = extract_facts(parsed.tree(), &key.rel, &full, &self.schema);
+        let facts = if key.rel.ends_with(".yml") {
+            loc_facts(&src, &key.rel)
+        } else {
+            let full = key.full.to_string_lossy().into_owned();
+            let parsed = pdxl_parser::parse(full.clone(), src);
+            extract_facts(parsed.tree(), &key.rel, &full, &self.schema)
+        };
         self.facts.insert(key.rel.clone(), facts);
         self.rebuild();
     }

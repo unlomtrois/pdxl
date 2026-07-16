@@ -379,6 +379,12 @@ impl ServerState {
         if let Some((kind, name)) = symbol_at(facts, off) {
             let mut text = format!("```pdxscript\n{} {}\n```", kind.as_str(), name);
             if let Some(symbol) = project.table().lookup(kind, name) {
+                // Loc keys carry their user-visible text — show it.
+                if kind == SymbolKind::LocKey
+                    && let Some(loc_text) = self.loc_text(project, symbol)
+                {
+                    text.push_str(&format!("\n\n> {loc_text}"));
+                }
                 text.push_str(&format!("\n\nDefined in `{}`", symbol.file));
                 if !symbol.params.is_empty() {
                     text.push_str("\n\nParameters: ");
@@ -400,6 +406,22 @@ impl ServerState {
         }
 
         builtin_hover(&src, off, project.rel_at(&path)?)
+    }
+
+    /// The localized text of a loc-key symbol, re-read from its defining
+    /// `.yml` (symbols store name+location only; the text lives on disk and
+    /// one line-scan per hover is cheap).
+    fn loc_text(&self, project: &Project, symbol: &pdxl_analysis::Symbol) -> Option<String> {
+        let full = project.rel_to_full(&symbol.file)?;
+        let src = self.read_file(full).ok()?;
+        let line_end = src[symbol.offset as usize..]
+            .iter()
+            .position(|&b| b == b'\n')
+            .map_or(src.len(), |p| symbol.offset as usize + p);
+        let line = String::from_utf8_lossy(&src[symbol.offset as usize..line_end]);
+        let open = line.find('"')?;
+        let close = line.rfind('"')?;
+        (close > open).then(|| line[open + 1..close].to_string())
     }
 
     /// `textDocument/inlayHint`: lightweight dynamic-scope annotations at
@@ -1319,5 +1341,6 @@ fn lsp_symbol_kind(icon: pdxl_analysis::IconHint) -> lsp_types::SymbolKind {
         I::Action => lsp_types::SymbolKind::METHOD,
         I::Object => lsp_types::SymbolKind::OBJECT,
         I::Hierarchy => lsp_types::SymbolKind::NAMESPACE, // hierarchical, like titles
+        I::Text => lsp_types::SymbolKind::STRING,
     }
 }

@@ -14,7 +14,8 @@ members = [
     "crates/pdxl-cache",    # two-level parse cache (in-memory LRU + disk)
     # semantic analysis
     "crates/pdxl-analysis", # per-file fact extraction (game-agnostic engine)
-    "crates/pdxl-ck3",      # CK3 schema: def dirs, ref keys, skip lists
+    "crates/pdxl-ck3",      # CK3 schema rows + generated doc tables + structural contexts
+    "crates/pdxl-loc",      # Paradox localization .yml parser
     "crates/pdxl-project",  # whole-project analysis + incremental updates
     # user-facing
     "crates/pdxl-fmt",      # PDXScript formatter (token+trivia based, comment-preserving)
@@ -50,6 +51,7 @@ pdxl-moddesc = { path = "crates/pdxl-moddesc" }
 pdxl-cache = { path = "crates/pdxl-cache" }
 pdxl-analysis = { path = "crates/pdxl-analysis" }
 pdxl-fmt = { path = "crates/pdxl-fmt" }
+pdxl-loc = { path = "crates/pdxl-loc" }
 pdxl-ck3 = { path = "crates/pdxl-ck3" }
 pdxl-project = { path = "crates/pdxl-project" }
 pdxl-lsp = { path = "crates/pdxl-lsp" }

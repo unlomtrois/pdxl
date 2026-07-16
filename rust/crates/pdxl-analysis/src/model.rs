@@ -23,11 +23,14 @@ pub enum SymbolKind {
     Title = 7,
     Culture = 8,
     Faith = 9,
+    /// Localization keys (`localization/<lang>/**/*.yml`). Defined outside
+    /// PDXScript entirely; extracted by `pdxl-loc`, not the schema engine.
+    LocKey = 10,
 }
 
 impl SymbolKind {
     /// Every kind, in discriminant order (stable iteration for reports).
-    pub const ALL: [SymbolKind; 10] = [
+    pub const ALL: [SymbolKind; 11] = [
         SymbolKind::ScriptedTrigger,
         SymbolKind::ScriptedEffect,
         SymbolKind::Trait,
@@ -38,6 +41,7 @@ impl SymbolKind {
         SymbolKind::Title,
         SymbolKind::Culture,
         SymbolKind::Faith,
+        SymbolKind::LocKey,
     ];
 
     /// The report name, identical to Go's `SymbolKind.String()`.
@@ -53,6 +57,7 @@ impl SymbolKind {
             SymbolKind::Title => "title",
             SymbolKind::Culture => "culture",
             SymbolKind::Faith => "faith",
+            SymbolKind::LocKey => "loc_key",
         }
     }
 }

@@ -985,3 +985,35 @@ fn formatting_already_formatted_returns_empty_and_broken_returns_none() {
     server.did_open(uri.clone(), "t.1 = {\n".to_string());
     assert_eq!(server.formatting(&uri), None);
 }
+
+// ── localization ────────────────────────────────────────────────────────────
+
+#[test]
+fn loc_key_goto_definition_and_hover_text() {
+    let t = TempTree::new();
+    t.write(
+        "localization/english/my_l_english.yml",
+        "\u{feff}l_english:\n my.1.a: \"Hold the line\"\n",
+    );
+    let src = "namespace = my\nmy.1 = {\n\toption = { name = my.1.a }\n}\n";
+    t.write("events/my.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "events/my.txt");
+    let pos = pos_of(src, "my.1.a }"); // the ref, not the def line
+
+    // Go-to-definition lands on the key inside the yml.
+    let loc = server.definition(&uri, pos).expect("definition");
+    assert!(
+        loc.uri.path().ends_with("my_l_english.yml"),
+        "definition target: {}",
+        loc.uri
+    );
+
+    // Hover shows the localized text.
+    let hover = server.hover(&uri, pos).expect("hover");
+    let lsp_types::HoverContents::Markup(m) = hover.contents else {
+        panic!("markup expected")
+    };
+    assert!(m.value.contains("loc_key my.1.a"), "{}", m.value);
+    assert!(m.value.contains("> Hold the line"), "{}", m.value);
+}

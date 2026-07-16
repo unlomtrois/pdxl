@@ -749,6 +749,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "pdxl-loc"
+version = "0.1.0"
+
+[[package]]
 name = "pdxl-lsp"
 version = "0.1.0"
 dependencies = [
@@ -825,6 +829,7 @@ dependencies = [
  "pdxl-cache",
  "pdxl-ck3",
  "pdxl-fileset",
+ "pdxl-loc",
  "pdxl-parser",
  "pdxl-path",
  "pdxl-testutil",

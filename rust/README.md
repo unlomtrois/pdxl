@@ -60,6 +60,7 @@ pdxl-ck3        CK3 schema: def dirs, ref keys, skips      (dep: analysis)
 pdxl-project    FileSet walk → analyze; incremental updates (dep: analysis,
                                                              fileset, parser, path,
                                                              cache [opt-in])
+pdxl-loc        Paradox localization .yml parser           (no deps)
 pdxl-fmt        PDXScript formatter (token+trivia based,    (dep: src, lexer,
                 comment-preserving, re-lex verified)         parser)
 pdxl-lsp        language server: diagnostics + definition   (dep: project, ck3,

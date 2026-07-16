@@ -66,6 +66,7 @@ const IGNORE_FILES: &[&str] = &[
 pub fn build_project(game: Option<&str>, mod_dir: Option<&str>) -> std::io::Result<Project> {
     let mut fs = FileSet::new();
     fs.set_ignore(IGNORE_DIRS, IGNORE_FILES);
+    fs.set_localization_language(pdxl_project::DEFAULT_LOC_LANGUAGE);
     if let Some(game) = game {
         fs.add(game, FileKind::Vanilla)?;
     }

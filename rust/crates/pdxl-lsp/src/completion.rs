@@ -156,6 +156,7 @@ fn completion_kind(icon: IconHint) -> CompletionItemKind {
         IconHint::Action => CompletionItemKind::METHOD,
         IconHint::Object => CompletionItemKind::CLASS,
         IconHint::Hierarchy => CompletionItemKind::ENUM,
+        IconHint::Text => CompletionItemKind::TEXT,
     }
 }
 

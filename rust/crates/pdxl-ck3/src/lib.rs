@@ -198,7 +198,67 @@ const KIND_SPECS: &[KindSpec] = &[
         refs: &[anywhere(RefPattern::ScopePrefix("faith"))],
         aliases: &[],
     },
+    LOC_KEY_SPEC,
 ];
+
+/// Localization keys are referenced by the text-bearing fields of events
+/// and decisions. Gated per directory: `desc` means a script value
+/// description elsewhere, `name` a portrait target, etc. `custom_tooltip`'s
+/// scalar form is a loc key in any script file.
+const LOC_KEY_SPEC: KindSpec = KindSpec {
+    kind: SymbolKind::LocKey,
+    icon: IconHint::Text,
+    // Defined in localization/<lang>/**/*.yml — outside PDXScript; the
+    // project layer extracts them via pdxl-loc, so no DefSource here.
+    defs: None,
+    refs: &[
+        RefRule {
+            pattern: RefPattern::KeyValue("title"),
+            gate: Some("events/"),
+        },
+        RefRule {
+            pattern: RefPattern::KeyValue("desc"),
+            gate: Some("events/"),
+        },
+        RefRule {
+            pattern: RefPattern::KeyValue("opening"),
+            gate: Some("events/"),
+        },
+        // `name` is a loc key only directly inside an option (elsewhere it
+        // names variable lists etc.); `text` only inside a gated name block
+        // or a custom_tooltip block.
+        RefRule {
+            pattern: RefPattern::KeyValueUnder("option", "name"),
+            gate: Some("events/"),
+        },
+        RefRule {
+            pattern: RefPattern::KeyValueUnder("name", "text"),
+            gate: Some("events/"),
+        },
+        RefRule {
+            pattern: RefPattern::KeyValueUnder("custom_tooltip", "text"),
+            gate: None,
+        },
+        RefRule {
+            pattern: RefPattern::KeyValue("title"),
+            gate: Some("common/decisions/"),
+        },
+        RefRule {
+            pattern: RefPattern::KeyValue("desc"),
+            gate: Some("common/decisions/"),
+        },
+        RefRule {
+            pattern: RefPattern::KeyValue("selection_tooltip"),
+            gate: Some("common/decisions/"),
+        },
+        RefRule {
+            pattern: RefPattern::KeyValue("confirm_text"),
+            gate: Some("common/decisions/"),
+        },
+        anywhere(RefPattern::KeyValue("custom_tooltip")),
+    ],
+    aliases: &[],
+};
 
 /// Relative-scope references that may hold a trait at runtime;
 /// unresolvable without scope tracking.
