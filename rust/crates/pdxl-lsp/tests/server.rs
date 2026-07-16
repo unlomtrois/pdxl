@@ -1017,3 +1017,50 @@ fn loc_key_goto_definition_and_hover_text() {
     assert!(m.value.contains("loc_key my.1.a"), "{}", m.value);
     assert!(m.value.contains("> Hold the line"), "{}", m.value);
 }
+
+#[test]
+fn inlay_hints_show_loc_text_for_resolved_keys() {
+    let t = TempTree::new();
+    let long_text = "A common soldier offers a correction to the officers' maneuver. It contradicts the drill manuals.";
+    t.write(
+        "localization/english/my_l_english.yml",
+        &format!("\u{feff}l_english:\n my.1.desc: \"{long_text}\"\n my.1.t: \"Short\"\n"),
+    );
+    let src = "namespace = my\nmy.1 = {\n\ttitle = my.1.t\n\tdesc = my.1.desc\n\topening = my.1.gone\n}\n";
+    t.write("events/my.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "events/my.txt");
+
+    let whole = lsp_types::Range::new(Position::new(0, 0), Position::new(20, 0));
+    let hints = server.inlay_hints(&uri, whole);
+    let labels: Vec<String> = hints
+        .iter()
+        .filter_map(|h| match &h.label {
+            lsp_types::InlayHintLabel::String(s) => Some(s.clone()),
+            _ => None,
+        })
+        .collect();
+    // Short text shows whole; long text truncates with an ellipsis and keeps
+    // the full text in the tooltip; unresolved keys get no hint.
+    assert!(labels.iter().any(|l| l == "Short"), "{labels:?}");
+    let truncated = labels
+        .iter()
+        .find(|l| l.starts_with("A common soldier"))
+        .expect("desc hint");
+    assert!(truncated.ends_with('…'), "{truncated}");
+    assert!(truncated.chars().count() <= 73);
+    assert!(!labels.iter().any(|l| l.contains("gone")));
+
+    // The desc hint sits at the end of its value.
+    let desc_hint = hints
+        .iter()
+        .find(|h| matches!(&h.label, lsp_types::InlayHintLabel::String(s) if s.starts_with("A common")))
+        .unwrap();
+    let value_start = pos_of(src, "my.1.desc\n");
+    let value_end = Position::new(value_start.line, value_start.character + 9); // "my.1.desc"
+    assert_eq!(desc_hint.position, value_end);
+    let Some(lsp_types::InlayHintTooltip::String(full)) = &desc_hint.tooltip else {
+        panic!("tooltip expected");
+    };
+    assert!(full.ends_with("drill manuals."));
+}

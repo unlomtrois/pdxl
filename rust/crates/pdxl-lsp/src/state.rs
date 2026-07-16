@@ -438,7 +438,54 @@ impl ServerState {
         let Ok(src) = self.read_file(&path) else {
             return Vec::new();
         };
-        scope_hints(&src, rel_path, range)
+        let mut hints = scope_hints(&src, rel_path, range);
+        hints.extend(self.loc_text_hints(project, &path, &src, range));
+        hints
+    }
+
+    /// Loc-text inlay hints: every resolved loc-key reference in `range`
+    /// gets its localized text appended after the value (truncated; the
+    /// full text rides in the hint tooltip).
+    fn loc_text_hints(
+        &self,
+        project: &Project,
+        path: &Path,
+        src: &[u8],
+        range: Range,
+    ) -> Vec<InlayHint> {
+        const MAX_HINT_CHARS: usize = 72;
+        let Some(facts) = project.facts_at(path) else {
+            return Vec::new();
+        };
+        let start = position_to_offset(src, range.start);
+        let end = position_to_offset(src, range.end);
+        let mut hints = Vec::new();
+        for r in &facts.refs {
+            if r.kind != SymbolKind::LocKey || r.start < start || r.end > end {
+                continue;
+            }
+            let Some(symbol) = project.table().lookup(r.kind, &r.name) else {
+                continue; // unresolved keys already get a diagnostic
+            };
+            let Some(text) = self.loc_text(project, symbol) else {
+                continue;
+            };
+            let mut label: String = text.chars().take(MAX_HINT_CHARS).collect();
+            if label.len() < text.len() {
+                label.push('…');
+            }
+            hints.push(InlayHint {
+                position: offset_to_position(src, r.end),
+                label: lsp_types::InlayHintLabel::String(label),
+                kind: None, // free-form text, neither Type nor Parameter
+                text_edits: None,
+                tooltip: Some(InlayHintTooltip::String(text)),
+                padding_left: Some(true),
+                padding_right: None,
+                data: None,
+            });
+        }
+        hints
     }
 
     /// `textDocument/completion`: context-aware items. The enclosing-key
