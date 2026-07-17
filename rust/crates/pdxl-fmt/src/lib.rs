@@ -210,6 +210,24 @@ mod tests {
     }
 
     #[test]
+    fn typed_definitions_keep_keyword_and_name_on_one_line() {
+        assert_eq!(
+            fmt("scripted_effect T4N_boost = { add_gold = 5 }\n"),
+            "scripted_effect T4N_boost = {\n\tadd_gold = 5\n}\n"
+        );
+        // …while adjacent completed fields still split (expand-every-block)…
+        assert_eq!(
+            fmt("random_events = { 100 = t.1 50 = t.2 }\n"),
+            "random_events = {\n\t100 = t.1\n\t50 = t.2\n}\n"
+        );
+        // …and a field right after a closing brace starts its own line.
+        assert_eq!(
+            fmt("o = { t = { x = yes } add_gold = 5 }\n"),
+            "o = {\n\tt = {\n\t\tx = yes\n\t}\n\tadd_gold = 5\n}\n"
+        );
+    }
+
+    #[test]
     fn parse_errors_are_refused() {
         let err = format("bad.txt", b"a = {\n").unwrap_err();
         assert!(matches!(err, FmtError::ParseDiagnostics(_)));

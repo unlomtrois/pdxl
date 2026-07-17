@@ -53,6 +53,7 @@ pub(crate) fn emit(items: &[Item<'_>], opts: &Options) -> String {
         depth: 0,
         line_open: false,
         after_operator: false,
+        line_is_bare_scalar: false,
     };
     let mut i = 0;
     while i < items.len() {
@@ -69,6 +70,11 @@ struct Emitter {
     /// The last emitted token was an operator — the next token is its value
     /// and continues the line with the space the operator already provided.
     after_operator: bool,
+    /// The open line consists of exactly one bare scalar so far. Only then
+    /// may a following `key =` join it — the typed-definition shape
+    /// (`scripted_effect NAME = { … }`). A completed `k = v` or a `}` line
+    /// never absorbs the next entry.
+    line_is_bare_scalar: bool,
 }
 
 impl Emitter {
@@ -101,10 +107,15 @@ impl Emitter {
                 self.push_text(it.text);
                 self.push_str(" ");
                 self.after_operator = true;
+                self.line_is_bare_scalar = false;
                 i + 1
             }
             _ => {
-                self.scalar(it);
+                let next_is_op = items
+                    .get(i + 1)
+                    .and_then(Item::token)
+                    .is_some_and(is_operator);
+                self.scalar(it, next_is_op);
                 i + 1
             }
         }
@@ -171,7 +182,7 @@ impl Emitter {
         }
     }
 
-    fn scalar(&mut self, it: &Item<'_>) {
+    fn scalar(&mut self, it: &Item<'_>, next_is_op: bool) {
         if self.after_operator {
             self.push_text(it.text);
             self.after_operator = false;
@@ -182,12 +193,21 @@ impl Emitter {
                 self.push_text(it.text);
                 return;
             }
+            // Typed definition: a bare keyword so far, and this scalar is
+            // the `NAME` of a following `= { … }` — keep the line.
+            if self.line_is_bare_scalar && next_is_op {
+                self.push_str(" ");
+                self.push_text(it.text);
+                self.line_is_bare_scalar = false;
+                return;
+            }
             // A non-glued scalar on an open line starts a new entry.
             self.close_line();
         }
         self.blank_line_if(it.nl_before);
         self.start_line();
         self.push_text(it.text);
+        self.line_is_bare_scalar = true;
     }
 
     fn comment(&mut self, it: &Item<'_>) {
@@ -217,6 +237,7 @@ impl Emitter {
         }
         self.line_open = true;
         self.after_operator = false;
+        self.line_is_bare_scalar = false;
     }
 
     fn close_line(&mut self) {
