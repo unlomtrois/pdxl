@@ -387,6 +387,77 @@ static ON_ACTION: StructSpec = StructSpec {
     fallback: Fallback::Deny,
 };
 
+// ── laws (`_laws.info`) ─────────────────────────────────────────────────────
+
+/// `triggered_flag = { trigger = { … } flag = … }` on a law.
+static TRIGGERED_FLAG: StructSpec = StructSpec {
+    name: "triggered_flag",
+    fields: &[("trigger", block(Trigger)), ("flag", scalar(Setting))],
+    fallback: Fallback::Deny,
+};
+
+/// A law's `succession = { … }` rules (all enum/key/bool settings).
+static SUCCESSION: StructSpec = StructSpec {
+    name: "succession",
+    fields: &[
+        ("order_of_succession", scalar(Setting)),
+        ("title_division", scalar(Setting)),
+        ("traversal_order", scalar(Setting)),
+        ("rank", scalar(Setting)),
+        ("pool_character_config", scalar(Setting)),
+        ("election_type", scalar(Setting)),
+        ("appointment_type", scalar(Setting)),
+        ("gender_law", scalar(Setting)),
+        ("faith", scalar(Setting)),
+        ("create_primary_tier_titles", scalar(Setting)),
+        ("primary_heir_minimum_share", scalar(Setting)),
+        ("exclude_rulers", scalar(Setting)),
+        ("limit_to_courtiers", scalar(Setting)),
+    ],
+    fallback: Fallback::Deny,
+};
+
+/// A single law inside a law group.
+static LAW: StructSpec = StructSpec {
+    name: "law",
+    fields: &[
+        ("can_keep", block(Trigger)),
+        ("can_have", block(Trigger)),
+        ("can_pass", block(Trigger)),
+        ("should_start_with", block(Trigger)),
+        ("can_title_have", block(Trigger)),
+        ("can_realm_have", block(Trigger)),
+        ("should_show_for_title", block(Trigger)),
+        ("pass_cost", block(ClauseKind::Struct(&COST))),
+        ("revoke_cost", block(ClauseKind::Struct(&COST))),
+        // A character-modifier block (`tag = value` pairs); tags are the
+        // modifiers.log domain, not modeled as a context here.
+        ("modifier", block(ClauseKind::Struct(&OPAQUE))),
+        ("flag", scalar(Setting)),
+        ("triggered_flag", block(ClauseKind::Struct(&TRIGGERED_FLAG))),
+        ("shown_in_encyclopedia", scalar(Setting)),
+        ("on_pass", block(Effect)),
+        ("on_after_pass", block(Effect)),
+        ("on_revoke", block(Effect)),
+        ("succession", block(ClauseKind::Struct(&SUCCESSION))),
+        ("ai_will_do", block(ScriptValue)),
+    ],
+    fallback: Fallback::Deny,
+};
+
+/// A top-level law group; its arbitrarily-named block children are laws.
+static LAW_GROUP: StructSpec = StructSpec {
+    name: "law_group",
+    fields: &[
+        ("default", scalar(Setting)),
+        ("cumulative", scalar(Setting)),
+        ("flag", scalar(Setting)),
+        ("is_treasury_budget_group", scalar(Setting)),
+        ("can_change_law_group", block(Trigger)),
+    ],
+    fallback: Fallback::Struct(&LAW),
+};
+
 // ── the directory table ─────────────────────────────────────────────────────
 
 static CONTEXTS: ContextSchema = ContextSchema {
@@ -398,6 +469,7 @@ static CONTEXTS: ContextSchema = ContextSchema {
         ("common/scripted_triggers/", Trigger),
         ("common/script_values/", ScriptValue),
         ("common/scripted_modifiers/", ScriptedModifier),
+        ("common/laws/", ClauseKind::Struct(&LAW_GROUP)),
     ],
 };
 

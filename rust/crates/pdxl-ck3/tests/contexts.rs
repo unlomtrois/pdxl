@@ -265,6 +265,12 @@ fn pick_spec(name: &str) -> &'static pdxl_analysis::context::StructSpec {
             return None;
         }
         seen.push(spec.name);
+        // Follow field blocks and the struct fallback (law group → law).
+        if let pdxl_analysis::context::Fallback::Struct(inner) = spec.fallback
+            && let found @ Some(_) = find(&ClauseKind::Struct(inner), name, seen)
+        {
+            return found;
+        }
         spec.fields
             .iter()
             .filter_map(|(_, f)| f.block.as_ref())
@@ -275,4 +281,55 @@ fn pick_spec(name: &str) -> &'static pdxl_analysis::context::StructSpec {
         .iter()
         .find_map(|(_, k)| find(k, name, &mut Vec::new()))
         .unwrap_or_else(|| panic!("spec {name:?} not reachable"))
+}
+
+// ── laws (`_laws.info`) ─────────────────────────────────────────────────────
+
+const LAW_SRC: &str = r#"crown_authority = {
+	default = crown_authority_1
+	cumulative = yes
+	can_change_law_group = { always = yes }
+	crown_authority_0 = {
+		can_keep = { has_trait = brave }
+		can_pass = { is_adult = yes }
+		on_pass = { add_gold = 5 }
+		pass_cost = { gold = 50 }
+		modifier = { some_opinion = 10 }
+		succession = { order_of_succession = inheritance }
+		triggered_flag = { trigger = { is_ruler = yes } flag = x }
+		ai_will_do = { value = 10 }
+	}
+}
+"#;
+
+#[test]
+fn law_group_and_law_field_contexts() {
+    let f = |needle| ctx_of(LAW_SRC, "common/laws/00_realm.txt", needle);
+    // A law name (unknown group key) opens the law struct; its fields sit
+    // in the law struct context.
+    assert_eq!(
+        f("crown_authority_0"),
+        ClauseKind::Struct(pick_spec("law_group"))
+    );
+    assert_eq!(f("can_keep"), ClauseKind::Struct(pick_spec("law")));
+    // Group attributes report the law-group context.
+    assert_eq!(f("default"), ClauseKind::Struct(pick_spec("law_group")));
+    // can_change_law_group is a trigger block.
+    assert_eq!(f("always"), ClauseKind::Trigger);
+}
+
+#[test]
+fn law_trigger_effect_value_blocks() {
+    let f = |needle| ctx_of(LAW_SRC, "common/laws/00_realm.txt", needle);
+    assert_eq!(f("has_trait"), ClauseKind::Trigger); // can_keep
+    assert_eq!(f("is_adult"), ClauseKind::Trigger); // can_pass
+    assert_eq!(f("add_gold"), ClauseKind::Effect); // on_pass
+    assert_eq!(f("value"), ClauseKind::ScriptValue); // ai_will_do
+    assert_eq!(f("is_ruler"), ClauseKind::Trigger); // triggered_flag.trigger
+    // Nested structs: cost / succession keys report their own struct.
+    assert_eq!(f("gold"), ClauseKind::Struct(pick_spec("cost")));
+    assert_eq!(
+        f("order_of_succession"),
+        ClauseKind::Struct(pick_spec("succession"))
+    );
 }

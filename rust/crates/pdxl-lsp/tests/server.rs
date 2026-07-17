@@ -682,6 +682,10 @@ fn completion_server() -> (ServerState, Receiver<Message>, TempTree) {
         "events/title-scoped.txt",
         "namespace = t\nt.7 = { type = character_event immediate = { title:e_test = {  } } }\n",
     );
+    t.write(
+        "common/laws/law.txt",
+        "crown_authority = {\n\tdefault = crown_authority_1\n\tcrown_authority_0 = {  }\n}\n",
+    );
     let (server, rx) = server_over(&t);
     (server, rx, t)
 }
@@ -1081,4 +1085,37 @@ fn references_work_from_inside_a_loc_yml() {
     let refs = server.references(&yml_uri, Position::new(1, 1), false);
     assert_eq!(refs.len(), 1, "{refs:?}");
     assert!(refs[0].uri.path().ends_with("events/my.txt"));
+}
+
+#[test]
+fn completion_inside_a_law_offers_law_fields() {
+    let (server, _rx, t) = completion_server();
+    let uri = uri_for(&t, "common/laws/law.txt");
+    let src = std::fs::read_to_string(t.child("common/laws/law.txt")).unwrap();
+    // Cursor inside `crown_authority_0 = {  }`.
+    let pos = pos_of(&src, "  }");
+    let items = server.completion(&uri, pos);
+    let names = labels(&items);
+    assert!(names.contains(&"can_keep"), "{names:?}");
+    assert!(names.contains(&"on_pass"));
+    assert!(names.contains(&"ai_will_do"));
+    assert!(names.contains(&"succession"));
+    // A law body is a strict struct — no builtin effect/trigger names.
+    assert!(!names.contains(&"add_gold"), "{names:?}");
+}
+
+#[test]
+fn completion_inside_a_law_group_offers_attributes_only() {
+    let (server, _rx, t) = completion_server();
+    let uri = uri_for(&t, "common/laws/law.txt");
+    let src = std::fs::read_to_string(t.child("common/laws/law.txt")).unwrap();
+    // Cursor right after the group's `default = crown_authority_1` line — in
+    // the group body, before the law. Use the newline after that line.
+    let pos = pos_of(&src, "\n\tcrown_authority_0");
+    let items = server.completion(&uri, pos);
+    let names = labels(&items);
+    assert!(names.contains(&"cumulative"), "{names:?}");
+    assert!(names.contains(&"can_change_law_group"));
+    // The struct-fallback (a new law name) injects no effect/trigger names.
+    assert!(!names.contains(&"can_keep"));
 }
