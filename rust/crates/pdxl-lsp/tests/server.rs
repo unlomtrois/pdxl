@@ -1119,3 +1119,47 @@ fn completion_inside_a_law_group_offers_attributes_only() {
     // The struct-fallback (a new law name) injects no effect/trigger names.
     assert!(!names.contains(&"can_keep"));
 }
+
+#[test]
+fn law_fields_get_documented_root_scope_hints() {
+    let t = TempTree::new();
+    let src = "crown_authority = {\n\
+        \tcrown_authority_0 = {\n\
+        \t\tcan_keep = { has_trait = brave }\n\
+        \t\tcan_title_have = { tier = tier_kingdom }\n\
+        \t\ton_pass = { add_gold = 5 }\n\
+        \t}\n\
+        }\n";
+    t.write("common/laws/law.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/laws/law.txt");
+    let whole = Range::new(Position::new(0, 0), Position::new(20, 0));
+    let hints = server.inlay_hints(&uri, whole);
+    let labels: Vec<String> = hints
+        .iter()
+        .filter_map(|h| match &h.label {
+            InlayHintLabel::String(s) => Some(s.trim().to_string()),
+            _ => None,
+        })
+        .collect();
+    // can_keep / on_pass run in character scope; can_title_have in title.
+    assert!(labels.iter().any(|l| l == ": character"), "{labels:?}");
+    assert!(labels.iter().any(|l| l == ": landed_title"), "{labels:?}");
+}
+
+#[test]
+fn hover_on_a_law_field_key_describes_it() {
+    let t = TempTree::new();
+    let src = "crown_authority = {\n\tcrown_authority_0 = {\n\t\tcan_keep = { }\n\t}\n}\n";
+    t.write("common/laws/law.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/laws/law.txt");
+    let pos = pos_of(src, "can_keep");
+    let hover = server.hover(&uri, pos).expect("hover");
+    let lsp_types::HoverContents::Markup(m) = hover.contents else {
+        panic!("markup expected")
+    };
+    assert!(m.value.contains("law field can_keep"), "{}", m.value);
+    assert!(m.value.contains("a trigger block"), "{}", m.value);
+    assert!(m.value.contains("Root scope: `character`"), "{}", m.value);
+}

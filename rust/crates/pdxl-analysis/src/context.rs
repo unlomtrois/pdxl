@@ -75,6 +75,11 @@ pub enum ScalarKind {
 pub struct FieldSpec {
     pub scalar: Option<ScalarKind>,
     pub block: Option<ClauseKind>,
+    /// The CK3 scope type the block's contents run in, when a definition's
+    /// shape establishes a fixed root scope its script can't otherwise infer
+    /// (law `can_keep` → `character`, `can_title_have` → `title`). `None`
+    /// leaves the scope to the normal inference (event type, iterators, …).
+    pub scope: Option<&'static str>,
 }
 
 /// A block-valued field.
@@ -82,6 +87,16 @@ pub const fn block(kind: ClauseKind) -> FieldSpec {
     FieldSpec {
         scalar: None,
         block: Some(kind),
+        scope: None,
+    }
+}
+
+/// A block-valued field whose contents run in a fixed CK3 scope type.
+pub const fn block_scoped(kind: ClauseKind, scope: &'static str) -> FieldSpec {
+    FieldSpec {
+        scalar: None,
+        block: Some(kind),
+        scope: Some(scope),
     }
 }
 
@@ -90,6 +105,7 @@ pub const fn scalar(kind: ScalarKind) -> FieldSpec {
     FieldSpec {
         scalar: Some(kind),
         block: None,
+        scope: None,
     }
 }
 
@@ -98,6 +114,7 @@ pub const fn scalar_or_block(s: ScalarKind, b: ClauseKind) -> FieldSpec {
     FieldSpec {
         scalar: Some(s),
         block: Some(b),
+        scope: None,
     }
 }
 
@@ -110,7 +127,8 @@ pub struct StructSpec {
 }
 
 impl StructSpec {
-    fn field(&self, key: &str) -> Option<&FieldSpec> {
+    /// The field spec for `key`, if this struct declares it.
+    pub fn field(&self, key: &str) -> Option<&FieldSpec> {
         self.fields.iter().find(|(k, _)| *k == key).map(|(_, f)| f)
     }
 }

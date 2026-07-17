@@ -884,6 +884,14 @@ fn block_scope(
         pdxl_ck3::contexts::context_schema(),
     );
     let key = std::str::from_utf8(key).ok()?;
+    // A structural field can pin a fixed root scope its script can't infer
+    // (law `can_keep` → character, `can_title_have` → landed_title).
+    if let ClauseKind::Struct(spec) = context
+        && let Some(field) = spec.field(key)
+        && let Some(scope) = field.scope
+    {
+        return Some(scope.to_string());
+    }
     let rows = match context {
         ClauseKind::Effect => pdxl_ck3::tables::EFFECTS,
         ClauseKind::Trigger => pdxl_ck3::tables::TRIGGERS,
@@ -992,6 +1000,19 @@ fn position_in_range(position: Position, range: Range) -> bool {
 
 /// Built-in documentation is intentionally a token query, not an AST query:
 /// it remains useful while the user is typing incomplete script.
+/// Human-readable name of the clause a structural field opens.
+fn clause_label(kind: ClauseKind) -> String {
+    match kind {
+        ClauseKind::Effect => "an effect block".to_string(),
+        ClauseKind::Trigger => "a trigger block".to_string(),
+        ClauseKind::ScriptValue => "a script value".to_string(),
+        ClauseKind::ScriptedModifier => "a weighted modifier block".to_string(),
+        ClauseKind::DynamicDesc => "a dynamic description".to_string(),
+        ClauseKind::Struct(s) => format!("a `{}` block", s.name),
+        ClauseKind::Config | ClauseKind::Unknown => "a value".to_string(),
+    }
+}
+
 fn builtin_hover(src: &[u8], off: u32, rel_path: &str) -> Option<lsp_types::Hover> {
     use pdxl_lexer::TokenKind as T;
 
@@ -1039,6 +1060,24 @@ fn builtin_hover(src: &[u8], off: u32, rel_path: &str) -> Option<lsp_types::Hove
         rel_path,
         pdxl_ck3::contexts::context_schema(),
     );
+    // A structural field key (law `can_keep`, event `immediate`, …): describe
+    // the clause it opens and the root scope, if pinned.
+    if let ClauseKind::Struct(spec) = ctx
+        && let Some(field) = spec.field(name)
+    {
+        let mut text = format!("```pdxscript\n{} field {name}\n```", spec.name);
+        if let Some(kind) = field.block {
+            text.push_str(&format!("\n\nContains: {}", clause_label(kind)));
+        }
+        if let Some(scope) = field.scope {
+            text.push_str(&format!("\n\nRoot scope: `{scope}`"));
+        }
+        return Some(markdown_hover(
+            src,
+            (token.range.start, token.range.end),
+            text,
+        ));
+    }
     let (label, row) = match ctx {
         ClauseKind::Effect => (
             "effect",

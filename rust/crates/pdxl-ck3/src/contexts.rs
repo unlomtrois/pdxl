@@ -9,7 +9,8 @@
 //! forking, per-context key meaning).
 
 use pdxl_analysis::context::{
-    ClauseKind, ContextSchema, Fallback, ScalarKind, StructSpec, block, scalar, scalar_or_block,
+    ClauseKind, ContextSchema, Fallback, ScalarKind, StructSpec, block, block_scoped, scalar,
+    scalar_or_block,
 };
 
 use ClauseKind::{DynamicDesc, Effect, ScriptValue, ScriptedModifier, Trigger};
@@ -392,7 +393,10 @@ static ON_ACTION: StructSpec = StructSpec {
 /// `triggered_flag = { trigger = { … } flag = … }` on a law.
 static TRIGGERED_FLAG: StructSpec = StructSpec {
     name: "triggered_flag",
-    fields: &[("trigger", block(Trigger)), ("flag", scalar(Setting))],
+    fields: &[
+        ("trigger", block_scoped(Trigger, "character")),
+        ("flag", scalar(Setting)),
+    ],
     fallback: Fallback::Deny,
 };
 
@@ -417,30 +421,40 @@ static SUCCESSION: StructSpec = StructSpec {
     fallback: Fallback::Deny,
 };
 
-/// A single law inside a law group.
+/// A single law inside a law group. Root scopes are per `_laws.info`: the
+/// ruler (`character`) for most fields, the `title` for the title checks.
 static LAW: StructSpec = StructSpec {
     name: "law",
     fields: &[
-        ("can_keep", block(Trigger)),
-        ("can_have", block(Trigger)),
-        ("can_pass", block(Trigger)),
-        ("should_start_with", block(Trigger)),
-        ("can_title_have", block(Trigger)),
-        ("can_realm_have", block(Trigger)),
-        ("should_show_for_title", block(Trigger)),
-        ("pass_cost", block(ClauseKind::Struct(&COST))),
-        ("revoke_cost", block(ClauseKind::Struct(&COST))),
+        ("can_keep", block_scoped(Trigger, "character")),
+        ("can_have", block_scoped(Trigger, "character")),
+        ("can_pass", block_scoped(Trigger, "character")),
+        ("should_start_with", block_scoped(Trigger, "character")),
+        ("can_title_have", block_scoped(Trigger, "landed_title")),
+        ("can_realm_have", block_scoped(Trigger, "character")),
+        (
+            "should_show_for_title",
+            block_scoped(Trigger, "landed_title"),
+        ),
+        (
+            "pass_cost",
+            block_scoped(ClauseKind::Struct(&COST), "character"),
+        ),
+        (
+            "revoke_cost",
+            block_scoped(ClauseKind::Struct(&COST), "character"),
+        ),
         // A character-modifier block (`tag = value` pairs); tags are the
         // modifiers.log domain, not modeled as a context here.
         ("modifier", block(ClauseKind::Struct(&OPAQUE))),
         ("flag", scalar(Setting)),
         ("triggered_flag", block(ClauseKind::Struct(&TRIGGERED_FLAG))),
         ("shown_in_encyclopedia", scalar(Setting)),
-        ("on_pass", block(Effect)),
-        ("on_after_pass", block(Effect)),
-        ("on_revoke", block(Effect)),
+        ("on_pass", block_scoped(Effect, "character")),
+        ("on_after_pass", block_scoped(Effect, "character")),
+        ("on_revoke", block_scoped(Effect, "character")),
         ("succession", block(ClauseKind::Struct(&SUCCESSION))),
-        ("ai_will_do", block(ScriptValue)),
+        ("ai_will_do", block_scoped(ScriptValue, "character")),
     ],
     fallback: Fallback::Deny,
 };
