@@ -1028,19 +1028,6 @@ fn clause_suffix(ctx: ClauseKind) -> Option<&'static str> {
     }
 }
 
-/// Human-readable name of the clause a structural field opens.
-fn clause_label(kind: ClauseKind) -> String {
-    match kind {
-        ClauseKind::Effect => "an effect block".to_string(),
-        ClauseKind::Trigger => "a trigger block".to_string(),
-        ClauseKind::ScriptValue => "a script value".to_string(),
-        ClauseKind::ScriptedModifier => "a weighted modifier block".to_string(),
-        ClauseKind::DynamicDesc => "a dynamic description".to_string(),
-        ClauseKind::Struct(s) => format!("a `{}` block", s.name),
-        ClauseKind::Config | ClauseKind::Unknown => "a value".to_string(),
-    }
-}
-
 fn builtin_hover(src: &[u8], off: u32, rel_path: &str) -> Option<lsp_types::Hover> {
     use pdxl_lexer::TokenKind as T;
 
@@ -1094,11 +1081,22 @@ fn builtin_hover(src: &[u8], off: u32, rel_path: &str) -> Option<lsp_types::Hove
         && let Some(field) = spec.field(name)
     {
         let mut text = format!("```pdxscript\n{} field {name}\n```", spec.name);
-        if let Some(kind) = field.block {
-            text.push_str(&format!("\n\nContains: {}", clause_label(kind)));
+        // A compact type line (clause it opens + fixed scope), then the
+        // distilled `_*.info` documentation when we have it.
+        let mut tags = Vec::new();
+        if let Some(kind) = field.block
+            && let Some(short) = clause_suffix(kind)
+        {
+            tags.push(short.to_string());
         }
         if let Some(scope) = field.scope {
-            text.push_str(&format!("\n\nRoot scope: `{scope}`"));
+            tags.push(format!("root scope `{scope}`"));
+        }
+        if !tags.is_empty() {
+            text.push_str(&format!("\n\n*{}*", tags.join(" · ")));
+        }
+        if let Some(doc) = field.doc {
+            text.push_str(&format!("\n\n{doc}"));
         }
         return Some(markdown_hover(
             src,

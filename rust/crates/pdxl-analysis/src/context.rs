@@ -80,6 +80,9 @@ pub struct FieldSpec {
     /// (law `can_keep` → `character`, `can_title_have` → `title`). `None`
     /// leaves the scope to the normal inference (event type, iterators, …).
     pub scope: Option<&'static str>,
+    /// Human documentation for this field, distilled from the game's
+    /// `_*.info` docs; surfaced on hover. `None` when undocumented.
+    pub doc: Option<&'static str>,
 }
 
 /// A block-valued field.
@@ -88,6 +91,7 @@ pub const fn block(kind: ClauseKind) -> FieldSpec {
         scalar: None,
         block: Some(kind),
         scope: None,
+        doc: None,
     }
 }
 
@@ -97,6 +101,7 @@ pub const fn block_scoped(kind: ClauseKind, scope: &'static str) -> FieldSpec {
         scalar: None,
         block: Some(kind),
         scope: Some(scope),
+        doc: None,
     }
 }
 
@@ -106,6 +111,7 @@ pub const fn scalar(kind: ScalarKind) -> FieldSpec {
         scalar: Some(kind),
         block: None,
         scope: None,
+        doc: None,
     }
 }
 
@@ -115,6 +121,19 @@ pub const fn scalar_or_block(s: ScalarKind, b: ClauseKind) -> FieldSpec {
         scalar: Some(s),
         block: Some(b),
         scope: None,
+        doc: None,
+    }
+}
+
+impl FieldSpec {
+    /// Attaches hover documentation to a field spec (chainable in `const`).
+    pub const fn doc(self, doc: &'static str) -> FieldSpec {
+        FieldSpec {
+            scalar: self.scalar,
+            block: self.block,
+            scope: self.scope,
+            doc: Some(doc),
+        }
     }
 }
 

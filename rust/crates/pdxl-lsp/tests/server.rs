@@ -1171,6 +1171,15 @@ fn hover_on_a_law_field_key_describes_it() {
         panic!("markup expected")
     };
     assert!(m.value.contains("law field can_keep"), "{}", m.value);
-    assert!(m.value.contains("a trigger block"), "{}", m.value);
-    assert!(m.value.contains("Root scope: `character`"), "{}", m.value);
+    // Compact type line + the distilled _laws.info documentation.
+    assert!(
+        m.value.contains("*trigger · root scope `character`*"),
+        "{}",
+        m.value
+    );
+    assert!(
+        m.value.contains("Requirements for keeping the law"),
+        "{}",
+        m.value
+    );
 }
