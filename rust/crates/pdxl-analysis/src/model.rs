@@ -26,11 +26,13 @@ pub enum SymbolKind {
     /// Localization keys (`localization/<lang>/**/*.yml`). Defined outside
     /// PDXScript entirely; extracted by `pdxl-loc`, not the schema engine.
     LocKey = 10,
+    /// Realm/title laws (`common/laws/`): block children of law groups.
+    Law = 11,
 }
 
 impl SymbolKind {
     /// Every kind, in discriminant order (stable iteration for reports).
-    pub const ALL: [SymbolKind; 11] = [
+    pub const ALL: [SymbolKind; 12] = [
         SymbolKind::ScriptedTrigger,
         SymbolKind::ScriptedEffect,
         SymbolKind::Trait,
@@ -42,6 +44,7 @@ impl SymbolKind {
         SymbolKind::Culture,
         SymbolKind::Faith,
         SymbolKind::LocKey,
+        SymbolKind::Law,
     ];
 
     /// The report name, identical to Go's `SymbolKind.String()`.
@@ -58,6 +61,7 @@ impl SymbolKind {
             SymbolKind::Culture => "culture",
             SymbolKind::Faith => "faith",
             SymbolKind::LocKey => "loc_key",
+            SymbolKind::Law => "law",
         }
     }
 }

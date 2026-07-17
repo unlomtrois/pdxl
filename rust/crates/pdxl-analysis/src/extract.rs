@@ -37,6 +37,9 @@ pub fn extract_facts(
                 crate::schema::DefShape::ChildrenOf { containers } => harvest_container_defs(
                     tree, node, containers, rule.kind, rel_path, schema, &mut facts,
                 ),
+                crate::schema::DefShape::GroupedBlocks { exclude } => harvest_grouped_defs(
+                    tree, node, exclude, rule.kind, rel_path, schema, &mut facts,
+                ),
             }
         }
     }
@@ -82,6 +85,58 @@ fn harvest_container_defs(
     }
     for child in tree.children(node_id) {
         harvest_container_defs(tree, child, containers, kind, rel_path, schema, facts);
+    }
+}
+
+/// Harvests definitions that are the block-valued children of a top-level
+/// group block, excluding named group attributes. `node_id` is a top-level
+/// item; if it is `GROUP = { … }`, each block-valued child whose key is not
+/// in `exclude` is a definition (CK3 laws inside law groups).
+fn harvest_grouped_defs(
+    tree: &SyntaxTree,
+    node_id: NodeId,
+    exclude: &[&str],
+    kind: SymbolKind,
+    rel_path: &str,
+    schema: &Schema,
+    facts: &mut FileFacts,
+) {
+    let node = tree.node(node_id);
+    if node.kind != NodeKind::Field {
+        return;
+    }
+    let children = tree.child_ids(node_id);
+    if children.len() != 2 {
+        return;
+    }
+    let group_body = children[1];
+    if !matches!(
+        tree.node(group_body).kind,
+        NodeKind::Block | NodeKind::TaggedBlock
+    ) {
+        return;
+    }
+    for child in tree.children(group_body) {
+        let c = tree.node(child);
+        if c.kind != NodeKind::Field {
+            continue;
+        }
+        let kids = tree.child_ids(child);
+        if kids.len() != 2 {
+            continue;
+        }
+        // Only block-valued children that aren't excluded group attributes.
+        if !matches!(
+            tree.node(kids[1]).kind,
+            NodeKind::Block | NodeKind::TaggedBlock
+        ) {
+            continue;
+        }
+        let key = tree.node_text(kids[0]);
+        if exclude.iter().any(|e| key == e.as_bytes()) {
+            continue;
+        }
+        harvest_def(tree, child, kind, rel_path, schema, facts);
     }
 }
 

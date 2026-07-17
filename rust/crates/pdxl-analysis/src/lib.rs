@@ -37,4 +37,4 @@ pub use table::{Duplicate, SymbolTable};
 /// facts cache must embed this in its keys (alongside content hash and
 /// rel_path) and treat mismatches as misses; bump it whenever extraction rules
 /// or the [`FileFacts`] model change meaning.
-pub const ANALYSIS_VERSION: u32 = 6; // 6: loc-key symbols + text-field refs; 5: full on_action refs (fire lists, fallback, trigger_event on_action); 4: nested faith defs; 3: gated capital→title refs; 2: landed titles
+pub const ANALYSIS_VERSION: u32 = 7; // 7: laws (grouped-block defs + realm-law refs); 6: loc-key symbols + text-field refs; 5: full on_action refs; 4: nested faith defs; 3: gated capital→title refs; 2: landed titles

@@ -1,6 +1,6 @@
 {
 "version":1,
-"counts":{"scripted_trigger":0,"scripted_effect":1,"trait":3,"event":1,"decision":0,"on_action":2,"character":0,"title":0,"culture":0,"faith":0,"loc_key":0,"total":7},
+"counts":{"scripted_trigger":0,"scripted_effect":1,"trait":3,"event":1,"decision":0,"on_action":2,"character":0,"title":0,"culture":0,"faith":0,"loc_key":0,"law":0,"total":7},
 "duplicates":[],
 "unresolved":[
 {"file":"<root0>/common/on_action/oa.txt","start":40,"end":43,"loc":"<root0>/common/on_action/oa.txt:3:17","msg":"unknown event \"t.9\""},

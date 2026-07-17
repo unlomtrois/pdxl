@@ -62,6 +62,13 @@ pub enum DefShape {
     /// Definitions are the direct block-valued children of named container
     /// blocks found anywhere in the file (CK3 faiths inside `faiths = {}`).
     ChildrenOf { containers: &'static [&'static str] },
+    /// Definitions are the block-valued children of every **top-level**
+    /// block, minus the named block-valued attributes of that outer block.
+    /// CK3 laws: top-level law groups whose block children are laws, except
+    /// group attributes like `can_change_law_group`. (Scalar attributes —
+    /// `default`, `flag`, `@vars` — are excluded for free by the block
+    /// check.)
+    GroupedBlocks { exclude: &'static [&'static str] },
 }
 
 /// Where a kind's definitions come from: files under `dir_prefix` (a

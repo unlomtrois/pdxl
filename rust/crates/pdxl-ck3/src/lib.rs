@@ -32,6 +32,10 @@ pub const ON_ACTION_DIR: &str = "common/on_action/";
 /// `capital = c_x` attribute unambiguously names a title.
 pub const LANDED_TITLES_DIR: &str = "common/landed_titles/";
 
+/// Where realm/title laws are defined; also gates the in-group
+/// `default = law_name` reference.
+pub const LAWS_DIR: &str = "common/laws/";
+
 /// Landed-title tier prefixes, as observed in vanilla + real mods: empire,
 /// kingdom, duchy, county, barony, and the hegemony tier (`h_china`, …).
 /// A key in `common/landed_titles/` is a title definition iff it starts with
@@ -196,6 +200,31 @@ const KIND_SPECS: &[KindSpec] = &[
             },
         }),
         refs: &[anywhere(RefPattern::ScopePrefix("faith"))],
+        aliases: &[],
+    },
+    KindSpec {
+        kind: SymbolKind::Law,
+        icon: IconHint::Tag,
+        defs: Some(DefSource {
+            dir_prefix: LAWS_DIR,
+            // Top-level law groups; their block children are laws, minus the
+            // one block-valued group attribute.
+            shape: DefShape::GroupedBlocks {
+                exclude: &["can_change_law_group"],
+            },
+        }),
+        refs: &[
+            anywhere(RefPattern::KeyValue("has_realm_law")),
+            anywhere(RefPattern::KeyValue("add_realm_law")),
+            anywhere(RefPattern::KeyValue("add_realm_law_skip_effects")),
+            anywhere(RefPattern::KeyValue("remove_realm_law")),
+            // A group's `default = law_name` names a law in that group.
+            // Gated: `default` means other things outside laws files.
+            RefRule {
+                pattern: RefPattern::KeyValue("default"),
+                gate: Some(LAWS_DIR),
+            },
+        ],
         aliases: &[],
     },
     LOC_KEY_SPEC,

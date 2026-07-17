@@ -475,3 +475,73 @@ fn loc_ref_rules_are_gated_by_directory() {
         .collect();
     assert_eq!(loc, vec!["d.tooltip", "d.confirm"]);
 }
+
+// ── laws (ANALYSIS_VERSION 7) ───────────────────────────────────────────────
+
+#[test]
+fn law_group_children_are_laws_minus_attributes() {
+    let f = extract(
+        "@cooldown = 20\n\
+         crown_authority = {\n\
+         \tdefault = crown_authority_1\n\
+         \tcumulative = yes\n\
+         \tflag = realm_law\n\
+         \tcan_change_law_group = { always = yes }\n\
+         \tcrown_authority_0 = { modifier = { x = 1 } }\n\
+         \tcrown_authority_1 = { }\n\
+         }\n",
+        "common/laws/00_realm_laws.txt",
+    );
+    // Laws are the block children; scalar attrs and can_change_law_group and
+    // the @var are excluded. The group itself is not a symbol.
+    assert_eq!(
+        def_names(&f),
+        vec!["crown_authority_0", "crown_authority_1"]
+    );
+    assert!(f.defs.iter().all(|s| s.kind == SymbolKind::Law));
+}
+
+#[test]
+fn realm_law_references_and_gated_default() {
+    let f = extract(
+        "e = {\n\
+         \thas_realm_law = crown_authority_2\n\
+         \tadd_realm_law = crown_authority_1\n\
+         \tadd_realm_law_skip_effects = tribal_authority_0\n\
+         \tremove_realm_law = x_law\n\
+         \thas_realm_law_flag = uses_crown_authority\n\
+         \thas_realm_law_in_group = crown_authority\n\
+         }\n",
+        "common/scripted_effects/e.txt",
+    );
+    let laws: Vec<&str> = f
+        .refs
+        .iter()
+        .filter(|r| r.kind == SymbolKind::Law)
+        .map(|r| r.name.as_str())
+        .collect();
+    // Exact-key rules: the _flag / _in_group variants are NOT law refs.
+    assert_eq!(
+        laws,
+        vec![
+            "crown_authority_2",
+            "crown_authority_1",
+            "tribal_authority_0",
+            "x_law"
+        ]
+    );
+
+    // `default = law_name` resolves only inside common/laws/…
+    let f = extract(
+        "grp = { default = the_law the_law = { } }\n",
+        "common/laws/00_realm_laws.txt",
+    );
+    assert!(
+        f.refs
+            .iter()
+            .any(|r| r.kind == SymbolKind::Law && r.name == "the_law")
+    );
+    // …not elsewhere (`default` means other things).
+    let f = extract("d = { default = something }\n", "common/decisions/d.txt");
+    assert!(f.refs.iter().all(|r| r.kind != SymbolKind::Law));
+}
