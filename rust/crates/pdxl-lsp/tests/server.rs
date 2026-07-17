@@ -541,12 +541,12 @@ fn inlay_hints_show_best_effort_scope_at_block_openers() {
     assert_eq!(
         labels,
         [
-            ": character",
-            ": character",
-            ": character",
-            ": character",
-            ": landed_title",
-            ": faith"
+            ": character (effect)",  // immediate
+            ": character",           // option (a struct, not a clause)
+            ": character (trigger)", // trigger
+            ": character (trigger)", // any_child inside the trigger
+            ": landed_title",        // title:e_test — scope known, clause not
+            ": faith"                // title:e_test.faith
         ]
     );
 }
@@ -1142,9 +1142,20 @@ fn law_fields_get_documented_root_scope_hints() {
             _ => None,
         })
         .collect();
-    // can_keep / on_pass run in character scope; can_title_have in title.
-    assert!(labels.iter().any(|l| l == ": character"), "{labels:?}");
-    assert!(labels.iter().any(|l| l == ": landed_title"), "{labels:?}");
+    // Scope AND clause kind: can_keep is a character trigger, on_pass a
+    // character effect, can_title_have a landed_title trigger.
+    assert!(
+        labels.iter().any(|l| l == ": character (trigger)"),
+        "{labels:?}"
+    );
+    assert!(
+        labels.iter().any(|l| l == ": character (effect)"),
+        "{labels:?}"
+    );
+    assert!(
+        labels.iter().any(|l| l == ": landed_title (trigger)"),
+        "{labels:?}"
+    );
 }
 
 #[test]

@@ -700,9 +700,25 @@ fn scope_hints(src: &[u8], rel_path: &str, requested: Range) -> Vec<InlayHint> {
                 if let Some(scope) = &scope {
                     let position = offset_to_position(src, token.range.end);
                     if position_in_range(position, requested) {
+                        // Append the clause kind of this block's contents:
+                        // `: character (trigger)`, `: landed_title (effect)`.
+                        let label = {
+                            let mut chain: Vec<&[u8]> =
+                                stack.iter().map(|f| f.key.as_slice()).collect();
+                            chain.push(&key);
+                            let clause = pdxl_analysis::context::context_of_chain(
+                                chain,
+                                rel_path,
+                                pdxl_ck3::contexts::context_schema(),
+                            );
+                            match clause_suffix(clause) {
+                                Some(c) => format!(": {scope} ({c})"),
+                                None => format!(": {scope}"),
+                            }
+                        };
                         hints.push(InlayHint {
                             position,
-                            label: format!(": {scope}").into(),
+                            label: label.into(),
                             kind: Some(InlayHintKind::TYPE),
                             text_edits: None,
                             tooltip: Some(InlayHintTooltip::String(
@@ -1000,6 +1016,18 @@ fn position_in_range(position: Position, range: Range) -> bool {
 
 /// Built-in documentation is intentionally a token query, not an AST query:
 /// it remains useful while the user is typing incomplete script.
+/// Short clause-kind tag for scope inlay hints (`character (trigger)`), or
+/// `None` for non-clause blocks (structs, config) where a tag adds no value.
+fn clause_suffix(ctx: ClauseKind) -> Option<&'static str> {
+    match ctx {
+        ClauseKind::Effect => Some("effect"),
+        ClauseKind::Trigger => Some("trigger"),
+        ClauseKind::ScriptValue => Some("value"),
+        ClauseKind::ScriptedModifier => Some("modifier"),
+        _ => None,
+    }
+}
+
 /// Human-readable name of the clause a structural field opens.
 fn clause_label(kind: ClauseKind) -> String {
     match kind {
