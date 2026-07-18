@@ -83,6 +83,9 @@ impl Entity for EventBackground {
                 "override_background",
                 "reference",
             )),
+            // The scalar shorthand `override_background = X`. Path values
+            // (`"gfx/…dds"`) are skipped by skip_ref_value's `/` rule.
+            anywhere(RefPattern::KeyValue("override_background")),
         ],
         aliases: &[],
     }];

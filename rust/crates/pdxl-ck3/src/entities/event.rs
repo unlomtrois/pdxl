@@ -201,8 +201,10 @@ static EVENT: StructSpec = StructSpec {
         ("widget", block(ClauseKind::Struct(&WIDGET))),
         ("option", block(ClauseKind::Struct(&OPTION))),
         (
+            // Scalar shorthand `override_background = key` or the full
+            // `{ trigger reference … }` asset block.
             "override_background",
-            block(ClauseKind::Struct(&TRIGGERED_ASSET)),
+            scalar_or_block(Setting, ClauseKind::Struct(&TRIGGERED_ASSET)),
         ),
         (
             "override_transition",
