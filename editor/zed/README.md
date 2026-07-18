@@ -53,13 +53,15 @@ language in `settings.json`:
 ```json
 {
   "languages": {
-    "PDXScript": { "semantic_tokens": "combined" }
+    "PDXScript": { "semantic_tokens": "full" }
   }
 }
 ```
 
-`"combined"` layers the server tokens over tree-sitter (recommended);
-`"full"` uses only the server tokens.
+`"full"` makes the server tokens the only color source (recommended — the
+bundled tree-sitter grammar is weak at highlighting and is used only for
+structure: indentation, folding, bracket matching). Use `"combined"` if you
+want the grammar's coloring layered underneath the server tokens.
 
 ## Settings
 
