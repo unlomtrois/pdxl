@@ -14,6 +14,7 @@ pdxl-loc.workspace = true
 pdxl-parser.workspace = true
 pdxl-path.workspace = true
 pdxl-cache.workspace = true
+rayon.workspace = true
 
 [dev-dependencies]
 pdxl-ck3.workspace = true

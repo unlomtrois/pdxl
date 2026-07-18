@@ -81,6 +81,14 @@ fn gather_facts(
     schema: &Schema,
     cache: Option<&pdxl_cache::Store>,
 ) -> io::Result<(Vec<FileKey>, HashMap<String, FileFacts>)> {
+    // Fast path: with no cache, every winning file is independent — read,
+    // parse, and extract are pure per file — so fan them out across cores.
+    // Order is preserved (rayon's indexed collect keeps input order), which
+    // duplicate detection in `merge_and_resolve` depends on. The cached path
+    // stays sequential (the Store is shared mutable state).
+    if cache.is_none() {
+        return gather_facts_parallel(fs, schema);
+    }
     let mut order = Vec::new();
     let mut facts = HashMap::new();
     fs.try_for_each(|entry| -> io::Result<()> {
@@ -99,6 +107,49 @@ fn gather_facts(
         facts.insert(entry.rel_path.clone(), f);
         Ok(())
     })?;
+    Ok((order, facts))
+}
+
+/// Data-parallel [`gather_facts`] for the no-cache path: one rayon task per
+/// winning file, each doing the pure read → parse → extract pipeline, then a
+/// single sequential fold that rebuilds `order` (FileSet insertion order) and
+/// the facts map. Only the stateless extraction is parallel; the merge and
+/// resolve downstream stay sequential.
+fn gather_facts_parallel(
+    fs: &FileSet,
+    schema: &Schema,
+) -> io::Result<(Vec<FileKey>, HashMap<String, FileFacts>)> {
+    use rayon::prelude::*;
+
+    let entries: Vec<&pdxl_fileset::FileEntry> = fs.iter().collect();
+    let results: Vec<(FileKey, FileFacts)> = entries
+        .par_iter()
+        .map(|entry| -> io::Result<(FileKey, FileFacts)> {
+            let full = entry.full_path.to_string_lossy().into_owned();
+            let f = if entry.rel_path.ends_with(".yml") {
+                let src = std::fs::read(&entry.full_path)?;
+                loc_facts(&src, &entry.rel_path)
+            } else {
+                let src = std::fs::read(&entry.full_path)?;
+                let (tree, _) = pdxl_parser::parse(full.clone(), src).into_parts();
+                extract_facts(&tree, &entry.rel_path, &full, schema)
+            };
+            Ok((
+                FileKey {
+                    rel: entry.rel_path.clone(),
+                    full: entry.full_path.clone(),
+                },
+                f,
+            ))
+        })
+        .collect::<io::Result<Vec<_>>>()?;
+
+    let mut order = Vec::with_capacity(results.len());
+    let mut facts = HashMap::with_capacity(results.len());
+    for (key, f) in results {
+        facts.insert(key.rel.clone(), f);
+        order.push(key);
+    }
     Ok((order, facts))
 }
 
