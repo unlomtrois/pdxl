@@ -28,11 +28,13 @@ pub enum SymbolKind {
     LocKey = 10,
     /// Realm/title laws (`common/laws/`): block children of law groups.
     Law = 11,
+    /// Schemes (`common/schemes/scheme_types/`): top-level scheme definitions.
+    Scheme = 12,
 }
 
 impl SymbolKind {
     /// Every kind, in discriminant order (stable iteration for reports).
-    pub const ALL: [SymbolKind; 12] = [
+    pub const ALL: [SymbolKind; 13] = [
         SymbolKind::ScriptedTrigger,
         SymbolKind::ScriptedEffect,
         SymbolKind::Trait,
@@ -45,6 +47,7 @@ impl SymbolKind {
         SymbolKind::Faith,
         SymbolKind::LocKey,
         SymbolKind::Law,
+        SymbolKind::Scheme,
     ];
 
     /// The report name, identical to Go's `SymbolKind.String()`.
@@ -62,6 +65,7 @@ impl SymbolKind {
             SymbolKind::Faith => "faith",
             SymbolKind::LocKey => "loc_key",
             SymbolKind::Law => "law",
+            SymbolKind::Scheme => "scheme",
         }
     }
 }

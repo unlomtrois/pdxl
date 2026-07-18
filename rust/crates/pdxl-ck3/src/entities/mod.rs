@@ -28,6 +28,7 @@ mod faith;
 mod law;
 mod loc;
 mod on_action;
+mod scheme;
 mod scripted;
 mod title;
 mod traits;
@@ -73,5 +74,6 @@ registry!(
     culture::Culture,
     faith::Faith,
     law::Law,
+    scheme::Scheme,
     loc::Loc,
 );
