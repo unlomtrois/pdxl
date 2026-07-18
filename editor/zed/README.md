@@ -70,5 +70,5 @@ Under `lsp.pdxl` in Zed `settings.json`:
 | Key | Purpose | Default |
 |-----|---------|---------|
 | `binary.path` | path to the `pdxl` executable | `pdxl` on `PATH` |
-| `binary.arguments` | server arguments | `["lsp", "--log-level", "info"]` |
+| `binary.arguments` | server arguments (must include the `lsp` subcommand) | `["lsp", "--log-level", "info"]` |
 | `initialization_options.gamePath` | vanilla CK3 `game/` directory | (unset) |

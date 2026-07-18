@@ -38,11 +38,14 @@ impl zed::Extension for PdxlExtension {
                     .to_string()
             })?;
 
+        // Setting `binary.path` alone makes Zed pass `arguments` as an empty
+        // list (not absent), so fall back to the default unless the user
+        // supplied non-empty args. Custom args must include the `lsp`
+        // subcommand themselves.
         let args = binary
             .and_then(|b| b.arguments)
-            .unwrap_or_else(|| {
-                vec!["lsp".into(), "--log-level".into(), "info".into()]
-            });
+            .filter(|a| !a.is_empty())
+            .unwrap_or_else(|| vec!["lsp".into(), "--log-level".into(), "info".into()]);
 
         Ok(zed::Command {
             command,
