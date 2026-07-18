@@ -524,6 +524,36 @@ fn hover_shows_builtin_effect_trigger_and_scope_link_docs() {
 }
 
 #[test]
+fn code_lens_counts_references_over_every_definition() {
+    let t = TempTree::new();
+    t.write("common/traits/00.txt", "brave = { }\ncraven = { }\n");
+    t.write(
+        "common/scripted_effects/e.txt",
+        "e = { add_trait = brave has_trait = brave }\n",
+    );
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/traits/00.txt");
+
+    // A lens per definition (both traits), regardless of reference count.
+    let lenses = server.code_lens(&uri);
+    assert_eq!(lenses.len(), 2, "one lens per definition");
+    assert!(
+        lenses.iter().all(|l| l.command.is_none()),
+        "phase 1 is title-free (lazy resolve)"
+    );
+
+    // Resolve the first lens (brave, referenced twice) → "2 references".
+    let resolved = server.code_lens_resolve(lenses[0].clone());
+    let cmd = resolved.command.expect("resolve fills the command");
+    assert_eq!(cmd.title, "2 references");
+    assert_eq!(cmd.command, "editor.action.showReferences");
+
+    // craven has none.
+    let craven = server.code_lens_resolve(lenses[1].clone());
+    assert_eq!(craven.command.unwrap().title, "0 references");
+}
+
+#[test]
 fn inlay_hints_show_best_effort_scope_at_block_openers() {
     let t = TempTree::new();
     let src = "namespace = t\nt.1 = {\n\ttype = character_event\n\timmediate = { add_gold = 10 }\n\toption = { name = t.1.a add_gold = 5 }\n\ttrigger = { any_child = { is_adult = yes } }\n\ttitle:e_test = { add_gold = 5 }\n\ttitle:e_test.faith = { add_gold = 5 }\n}\n";

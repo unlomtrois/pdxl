@@ -93,6 +93,11 @@ pub fn run_stdio(opts: Options) -> Result<(), Box<dyn std::error::Error + Sync +
         definition_provider: Some(OneOf::Left(true)),
         document_formatting_provider: Some(OneOf::Left(true)),
         references_provider: Some(OneOf::Left(true)),
+        // Reference-count lenses over every definition; two-phase (resolve
+        // fills the count lazily for on-screen lenses only).
+        code_lens_provider: Some(lsp_types::CodeLensOptions {
+            resolve_provider: Some(true),
+        }),
         document_symbol_provider: Some(OneOf::Left(true)),
         hover_provider: Some(lsp_types::HoverProviderCapability::Simple(true)),
         inlay_hint_provider: Some(OneOf::Right(
@@ -238,6 +243,32 @@ fn handle_request(server: &mut ServerState, out: &Sender<Message>, req: lsp_serv
                     let result = (!locations.is_empty()).then_some(locations);
                     Response::new_ok(req.id, result)
                 }
+                Err(e) => Response::new_err(
+                    req.id,
+                    lsp_server::ErrorCode::InvalidParams as i32,
+                    e.to_string(),
+                ),
+            };
+            let _ = out.send(Message::Response(resp));
+        }
+        lsp_types::request::CodeLensRequest::METHOD => {
+            let resp = match serde_json::from_value::<lsp_types::CodeLensParams>(req.params) {
+                Ok(params) => {
+                    let lenses = server.code_lens(&params.text_document.uri);
+                    let result = (!lenses.is_empty()).then_some(lenses);
+                    Response::new_ok(req.id, result)
+                }
+                Err(e) => Response::new_err(
+                    req.id,
+                    lsp_server::ErrorCode::InvalidParams as i32,
+                    e.to_string(),
+                ),
+            };
+            let _ = out.send(Message::Response(resp));
+        }
+        lsp_types::request::CodeLensResolve::METHOD => {
+            let resp = match serde_json::from_value::<lsp_types::CodeLens>(req.params) {
+                Ok(lens) => Response::new_ok(req.id, server.code_lens_resolve(lens)),
                 Err(e) => Response::new_err(
                     req.id,
                     lsp_server::ErrorCode::InvalidParams as i32,

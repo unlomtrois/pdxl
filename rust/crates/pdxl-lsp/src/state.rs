@@ -331,6 +331,67 @@ impl ServerState {
         locations
     }
 
+    /// `textDocument/codeLens`: one lens above every definition in the file,
+    /// regardless of kind — the reference-count feature is generic over the
+    /// symbol table, not per-entity. This phase is deliberately cheap: it
+    /// emits only the anchor positions (batched in a single pass) and stashes
+    /// the document URI; the count is computed lazily in [`Self::code_lens_resolve`]
+    /// for the handful of lenses the editor actually shows.
+    pub fn code_lens(&self, uri: &Url) -> Vec<lsp_types::CodeLens> {
+        let path = uri_to_path(uri);
+        let Some(project) = &self.project else {
+            return Vec::new();
+        };
+        let Some(facts) = project.facts_at(&path) else {
+            return Vec::new();
+        };
+        let Ok(src) = self.read_file(&path) else {
+            return Vec::new();
+        };
+        let offsets: Vec<u32> = facts.defs.iter().map(|d| d.offset).collect();
+        let positions = offsets_to_positions(&src, &offsets);
+        positions
+            .into_iter()
+            .map(|start| lsp_types::CodeLens {
+                range: Range { start, end: start },
+                command: None, // filled in on resolve
+                data: Some(serde_json::json!({ "uri": uri.as_str() })),
+            })
+            .collect()
+    }
+
+    /// `codeLens/resolve`: fill in the "N references" title and a click action
+    /// (peek references) for one lens. Runs the reference search only now, so
+    /// off-screen lenses cost nothing.
+    pub fn code_lens_resolve(&self, mut lens: lsp_types::CodeLens) -> lsp_types::CodeLens {
+        let Some(uri) = lens
+            .data
+            .as_ref()
+            .and_then(|d| d.get("uri"))
+            .and_then(|v| v.as_str())
+            .and_then(|s| Url::parse(s).ok())
+        else {
+            return lens;
+        };
+        // The lens anchors on the definition name; resolve references there.
+        let locations = self.references(&uri, lens.range.start, false);
+        let title = match locations.len() {
+            1 => "1 reference".to_string(),
+            n => format!("{n} references"),
+        };
+        lens.command = Some(lsp_types::Command {
+            title,
+            // VS Code's built-in peek-references command.
+            command: "editor.action.showReferences".to_string(),
+            arguments: Some(vec![
+                serde_json::to_value(&uri).unwrap_or_default(),
+                serde_json::to_value(lens.range.start).unwrap_or_default(),
+                serde_json::to_value(&locations).unwrap_or_default(),
+            ]),
+        });
+        lens
+    }
+
     /// `textDocument/documentSymbol`: the file's definitions as a flat outline.
     /// Built from `FileFacts.defs` — a feature the Go server does not have.
     pub fn document_symbol(&self, uri: &Url) -> Vec<lsp_types::DocumentSymbol> {
