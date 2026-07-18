@@ -21,6 +21,7 @@
 mod log;
 mod completion;
 mod position;
+mod semantic;
 mod state;
 
 pub use position::{offset_to_position, position_to_offset};
@@ -99,6 +100,18 @@ pub fn run_stdio(opts: Options) -> Result<(), Box<dyn std::error::Error + Sync +
             resolve_provider: Some(true),
         }),
         document_symbol_provider: Some(OneOf::Left(true)),
+        // Schema-aware highlighting driven by pdxl's lexer/parser (phase 1:
+        // lexer-level). The legend index order lives in `semantic`.
+        semantic_tokens_provider: Some(
+            lsp_types::SemanticTokensServerCapabilities::SemanticTokensOptions(
+                lsp_types::SemanticTokensOptions {
+                    work_done_progress_options: Default::default(),
+                    legend: semantic::legend(),
+                    range: Some(false),
+                    full: Some(lsp_types::SemanticTokensFullOptions::Bool(true)),
+                },
+            ),
+        ),
         hover_provider: Some(lsp_types::HoverProviderCapability::Simple(true)),
         inlay_hint_provider: Some(OneOf::Right(
             lsp_types::InlayHintServerCapabilities::Options(lsp_types::InlayHintOptions {
@@ -333,6 +346,22 @@ fn handle_request(server: &mut ServerState, out: &Sender<Message>, req: lsp_serv
                         params.text_document_position_params.position,
                     );
                     Response::new_ok(req.id, hover)
+                }
+                Err(e) => Response::new_err(
+                    req.id,
+                    lsp_server::ErrorCode::InvalidParams as i32,
+                    e.to_string(),
+                ),
+            };
+            let _ = out.send(Message::Response(resp));
+        }
+        lsp_types::request::SemanticTokensFullRequest::METHOD => {
+            let resp = match serde_json::from_value::<lsp_types::SemanticTokensParams>(req.params) {
+                Ok(params) => {
+                    let result = server
+                        .semantic_tokens(&params.text_document.uri)
+                        .map(lsp_types::SemanticTokensResult::Tokens);
+                    Response::new_ok(req.id, result)
                 }
                 Err(e) => Response::new_err(
                     req.id,

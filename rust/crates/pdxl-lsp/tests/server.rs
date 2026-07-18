@@ -524,6 +524,47 @@ fn hover_shows_builtin_effect_trigger_and_scope_link_docs() {
 }
 
 #[test]
+fn semantic_tokens_color_keys_values_and_literals() {
+    // Legend indices from src/semantic.rs: property=0, variable=1, number=2,
+    // string=3, keyword=4, comment=5, operator=7.
+    let t = TempTree::new();
+    let src = "a = 1\nb = \"x\"\nc = yes\n# note\nk = val\n";
+    t.write("common/scripted_effects/s.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/scripted_effects/s.txt");
+
+    let tokens = server.semantic_tokens(&uri).expect("semantic tokens");
+    let types: Vec<u32> = tokens.data.iter().map(|t| t.token_type).collect();
+    assert_eq!(
+        types,
+        vec![
+            0, 7, 2, /* a = 1 */ 0, 7, 3, /* b = "x" */ 0, 7, 4, /* c = yes */ 5,
+            /* # note */ 0, 7, 1 /* k = val */
+        ],
+    );
+
+    // First token: `a` at line 0, col 0, length 1, property, no modifiers.
+    let first = tokens.data[0];
+    assert_eq!(
+        (
+            first.delta_line,
+            first.delta_start,
+            first.length,
+            first.token_type
+        ),
+        (0, 0, 1, 0)
+    );
+    // The `=` after it is a delta of +2 chars on the same line.
+    assert_eq!(
+        (tokens.data[1].delta_line, tokens.data[1].delta_start),
+        (0, 2)
+    );
+    // The comment sits on its own line (delta_line advances).
+    let comment = tokens.data.iter().find(|t| t.token_type == 5).unwrap();
+    assert!(comment.delta_line >= 1);
+}
+
+#[test]
 fn code_lens_counts_references_over_every_definition() {
     let t = TempTree::new();
     t.write("common/traits/00.txt", "brave = { }\ncraven = { }\n");

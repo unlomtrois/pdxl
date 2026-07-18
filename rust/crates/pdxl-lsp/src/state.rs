@@ -331,6 +331,18 @@ impl ServerState {
         locations
     }
 
+    /// `textDocument/semanticTokens/full`: lexer-driven syntax highlighting.
+    /// Pure over the buffer (no project needed), so it works immediately, even
+    /// before the async build completes.
+    pub fn semantic_tokens(&self, uri: &Url) -> Option<lsp_types::SemanticTokens> {
+        let path = uri_to_path(uri);
+        let src = self.read_file(&path).ok()?;
+        Some(lsp_types::SemanticTokens {
+            result_id: None,
+            data: crate::semantic::tokens(&src),
+        })
+    }
+
     /// `textDocument/codeLens`: one lens above every definition in the file,
     /// regardless of kind — the reference-count feature is generic over the
     /// symbol table, not per-entity. This phase is deliberately cheap: it

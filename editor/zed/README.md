@@ -43,6 +43,24 @@ CodeLens as a general LSP feature). Use **Find All References** instead.
 Open a CK3 mod folder in Zed — the mod directory is taken from the workspace
 root automatically. `.txt` files are treated as PDXScript.
 
+### Richer highlighting (semantic tokens)
+
+The server provides schema-aware highlighting via LSP semantic tokens, which is
+far more precise than the tree-sitter grammar alone (it distinguishes keys,
+values, numbers, strings, booleans, comments, and macro params). Enable it per
+language in `settings.json`:
+
+```json
+{
+  "languages": {
+    "PDXScript": { "semantic_tokens": "combined" }
+  }
+}
+```
+
+`"combined"` layers the server tokens over tree-sitter (recommended);
+`"full"` uses only the server tokens.
+
 ## Settings
 
 Under `lsp.pdxl` in Zed `settings.json`:
