@@ -30,11 +30,14 @@ pub enum SymbolKind {
     Law = 11,
     /// Schemes (`common/schemes/scheme_types/`): top-level scheme definitions.
     Scheme = 12,
+    /// Event backgrounds (`common/event_backgrounds/`): top-level background
+    /// definitions, referenced by `background = { reference = X }`.
+    EventBackground = 13,
 }
 
 impl SymbolKind {
     /// Every kind, in discriminant order (stable iteration for reports).
-    pub const ALL: [SymbolKind; 13] = [
+    pub const ALL: [SymbolKind; 14] = [
         SymbolKind::ScriptedTrigger,
         SymbolKind::ScriptedEffect,
         SymbolKind::Trait,
@@ -48,6 +51,7 @@ impl SymbolKind {
         SymbolKind::LocKey,
         SymbolKind::Law,
         SymbolKind::Scheme,
+        SymbolKind::EventBackground,
     ];
 
     /// The report name, identical to Go's `SymbolKind.String()`.
@@ -66,6 +70,7 @@ impl SymbolKind {
             SymbolKind::LocKey => "loc_key",
             SymbolKind::Law => "law",
             SymbolKind::Scheme => "scheme",
+            SymbolKind::EventBackground => "event_background",
         }
     }
 }

@@ -288,11 +288,12 @@ impl Schema {
     }
 
     /// Whether a reference value should not be resolved: macro parameters
-    /// (`$X$`), scope/data-function chains (`foo:bar`), relative-scope
-    /// keywords, and empties (Go's `skipRefValue`).
+    /// (`$X$`), scope/data-function chains (`foo:bar`), file paths
+    /// (`gfx/…dds`), relative-scope keywords, and empties (Go's `skipRefValue`).
     pub fn skip_ref_value(&self, val: &str) -> bool {
-        if val.is_empty() || val.contains(['$', ':']) || val.starts_with('[') {
-            // `[...]` values are inline datafunction text, not names.
+        if val.is_empty() || val.contains(['$', ':', '/']) || val.starts_with('[') {
+            // `[...]` values are inline datafunction text, not names; a `/`
+            // means a texture/sound path, never a symbol key.
             return true;
         }
         // A scope keyword — bare (`has_trait = prev`) or heading a chain

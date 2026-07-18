@@ -24,6 +24,7 @@ mod character;
 mod culture;
 mod decision;
 mod event;
+mod event_background;
 mod faith;
 mod law;
 mod loc;
@@ -75,5 +76,6 @@ registry!(
     faith::Faith,
     law::Law,
     scheme::Scheme,
+    event_background::EventBackground,
     loc::Loc,
 );
