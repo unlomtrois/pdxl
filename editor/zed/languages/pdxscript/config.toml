@@ -1,0 +1,14 @@
+name = "PDXScript"
+grammar = "paradox"
+# CK3/Paradox script files are plain `.txt`. While this extension is installed,
+# Zed treats every `.txt` file as PDXScript (Zed associates languages globally
+# by suffix — the same tradeoff the VS Code extension's `**/*.txt` selector
+# makes, and the ck3-tiger/cwtools norm).
+path_suffixes = ["txt"]
+line_comments = ["# "]
+autoclose_before = "}]"
+brackets = [
+  { start = "{", end = "}", close = true, newline = true },
+  { start = "[", end = "]", close = true, newline = false },
+  { start = "\"", end = "\"", close = true, newline = false },
+]
