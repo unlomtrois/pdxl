@@ -33,11 +33,14 @@ pub enum SymbolKind {
     /// Event backgrounds (`common/event_backgrounds/`): top-level background
     /// definitions, referenced by `background = { reference = X }`.
     EventBackground = 13,
+    /// Event themes (`common/event_themes/`): top-level theme definitions,
+    /// referenced by the event `theme = X` keyword.
+    EventTheme = 14,
 }
 
 impl SymbolKind {
     /// Every kind, in discriminant order (stable iteration for reports).
-    pub const ALL: [SymbolKind; 14] = [
+    pub const ALL: [SymbolKind; 15] = [
         SymbolKind::ScriptedTrigger,
         SymbolKind::ScriptedEffect,
         SymbolKind::Trait,
@@ -52,6 +55,7 @@ impl SymbolKind {
         SymbolKind::Law,
         SymbolKind::Scheme,
         SymbolKind::EventBackground,
+        SymbolKind::EventTheme,
     ];
 
     /// The report name, identical to Go's `SymbolKind.String()`.
@@ -71,6 +75,7 @@ impl SymbolKind {
             SymbolKind::Law => "law",
             SymbolKind::Scheme => "scheme",
             SymbolKind::EventBackground => "event_background",
+            SymbolKind::EventTheme => "event_theme",
         }
     }
 }
