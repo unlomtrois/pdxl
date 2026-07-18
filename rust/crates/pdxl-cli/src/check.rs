@@ -11,12 +11,26 @@
 //! accepted for interface compatibility and has no effect. The `[scan]`
 //! ignore defaults match Go's `config.Default()`.
 
+use std::collections::HashMap;
 use std::io::{self, Write};
 use std::path::Path;
 use std::process::ExitCode;
 
-use pdxl_analysis::SymbolKind;
+use pdxl_analysis::{RefDiag, SymbolKind};
 use pdxl_fileset::{FileKind, FileSet};
+
+/// `file:line:col` for a diagnostic, derived on demand (the value pdxl used to
+/// precompute and store on every reference). Sources are read once and cached;
+/// there are few unresolved refs, so this stays cheap.
+fn diag_loc(cache: &mut HashMap<String, Option<Vec<u8>>>, d: &RefDiag) -> String {
+    let src = cache
+        .entry(d.file.to_string())
+        .or_insert_with(|| std::fs::read(d.file.as_ref()).ok());
+    let (line, col) = src
+        .as_deref()
+        .map_or((0, 0), |s| pdxl_src::line_col(s, d.start));
+    format!("{}:{}:{}", d.file, line, col)
+}
 
 /// Go `config.Default()` scan ignores.
 const IGNORE_DIRS: &[&str] = &["licenses"];
@@ -112,8 +126,9 @@ fn report_project(
 
     if !diags.is_empty() {
         writeln!(w, "\n{} unresolved references:", diags.len())?;
+        let mut cache = HashMap::new();
         for d in diags {
-            writeln!(w, "  {}: {}", d.loc, d.msg)?;
+            writeln!(w, "  {}: {}", diag_loc(&mut cache, d), d.msg)?;
         }
         w.flush()?;
         return Ok(ExitCode::FAILURE);
@@ -133,11 +148,11 @@ fn report_file(
             "{target} is not part of the scanned game/mod project"
         )));
     };
-    let prefix = format!("{full_path}:");
+    let mut cache = HashMap::new();
     let mut n = 0;
     for d in diags {
-        if d.loc.starts_with(&prefix) {
-            println!("{}: {}", d.loc, d.msg);
+        if d.file.as_ref() == full_path {
+            println!("{}: {}", diag_loc(&mut cache, d), d.msg);
             n += 1;
         }
     }

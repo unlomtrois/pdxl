@@ -162,11 +162,14 @@ fn loc_facts(src: &[u8], rel_path: &str) -> FileFacts {
     let Some(loc) = pdxl_loc::parse(src) else {
         return facts;
     };
+    // One shared allocation for all of this file's keys — a localization file
+    // holds tens of thousands, and this is 73% of the corpus's symbols.
+    let file: std::sync::Arc<str> = std::sync::Arc::from(rel_path);
     for e in loc.entries {
         facts.defs.push(pdxl_analysis::Symbol {
             name: e.key,
             kind: SymbolKind::LocKey,
-            file: rel_path.to_string(),
+            file: file.clone(),
             offset: e.key_start,
             end_offset: e.key_end,
             params: Vec::new(),
@@ -309,11 +312,12 @@ impl Project {
         let Some(key) = self.key_for(full_path) else {
             return Vec::new();
         };
-        // Go parity: match on the precomputed loc prefix "<full>:".
-        let prefix = format!("{}:", key.full.to_string_lossy());
+        // The diagnostic's file is the on-disk path — match it directly
+        // (equivalent to the old "<full>:" loc-prefix match).
+        let full = key.full.to_string_lossy();
         self.diags
             .iter()
-            .filter(|d| d.loc.starts_with(&prefix))
+            .filter(|d| d.file.as_ref() == full)
             .collect()
     }
 

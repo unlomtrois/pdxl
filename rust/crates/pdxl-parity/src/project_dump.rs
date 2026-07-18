@@ -53,9 +53,7 @@ pub fn dump_project(table: &SymbolTable, diags: &[RefDiag]) -> String {
             out.push_str(&d.start.to_string());
             out.push_str(",\"end\":");
             out.push_str(&d.end.to_string());
-            out.push_str(",\"loc\":\"");
-            push_escaped(&mut out, &d.loc);
-            out.push_str("\",\"msg\":\"");
+            out.push_str(",\"msg\":\"");
             push_escaped(&mut out, &d.msg);
             out.push_str("\"}");
             if i + 1 < diags.len() {

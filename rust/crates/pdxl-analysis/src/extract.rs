@@ -5,6 +5,7 @@
 //! oracle-checked byte-for-byte by the `pdxl-parity` facts differential.
 
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use pdxl_ast::{NodeId, NodeKind, SyntaxTree};
 
@@ -171,7 +172,7 @@ fn harvest_def(
     facts.defs.push(Symbol {
         name: String::from_utf8_lossy(tree.node_text(key_id)).into_owned(),
         kind,
-        file: rel_path.to_string(),
+        file: Arc::from(rel_path),
         offset: node.range.start,
         end_offset: tree.node(key_id).range.end,
         params: params.into_iter().collect(),
@@ -187,7 +188,7 @@ fn harvest_def(
                 facts.aliases.push(Symbol {
                     name,
                     kind,
-                    file: rel_path.to_string(),
+                    file: Arc::from(rel_path),
                     offset: node.range.start,
                     // Go parity: alias EndOffset equals the def's SrcStart.
                     end_offset: node.range.start,
@@ -237,7 +238,7 @@ fn harvest_nested_defs(
     facts.defs.push(Symbol {
         name: String::from_utf8_lossy(key).into_owned(),
         kind,
-        file: rel_path.to_string(),
+        file: Arc::from(rel_path),
         offset: node.range.start,
         end_offset: tree.node(key_id).range.end,
         params: Vec::new(),
@@ -328,14 +329,12 @@ fn scan_prefix_refs(
         let node = tree.node(node_id);
         let start = node.range.start + name_start as u32;
         let end = node.range.start + name_end as u32;
-        let (line, col) = pdxl_src::line_col(tree.source(), start);
         refs.push(Ref {
             kind: rule.kind,
             name: name.into_owned(),
-            file: path.to_string(),
+            file: Arc::from(path),
             start,
             end,
-            loc: format!("{path}:{line}:{col}"),
         });
         break; // a scalar names at most one scope literal
     }
@@ -453,14 +452,12 @@ fn append_ref(
         return;
     }
 
-    let (line, col) = pdxl_src::line_col(src, value.range.start);
     refs.push(Ref {
         kind,
         name: val.into_owned(),
-        file: path.to_string(),
+        file: Arc::from(path),
         start: value.range.start,
         end: value.range.end,
-        loc: format!("{path}:{line}:{col}"),
     });
 }
 

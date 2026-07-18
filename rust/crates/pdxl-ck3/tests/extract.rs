@@ -180,9 +180,12 @@ fn skips_unresolvable_values() {
 }
 
 #[test]
-fn loc_is_file_line_col() {
+fn ref_carries_file_and_offset() {
+    // The CLI derives `file:line:col` from these; here `brave` begins at byte
+    // 24 (line 2, col 19 in the old precomputed form).
     let f = extract("x = 1\ne = { add_trait = brave }\n", "events/dir/x.txt");
-    assert_eq!(f.refs[0].loc, "events/dir/x.txt:2:19");
+    assert_eq!(&*f.refs[0].file, "events/dir/x.txt");
+    assert_eq!(f.refs[0].start, 24);
 }
 
 // ── malformed input ──────────────────────────────────────────────────────────
@@ -272,13 +275,12 @@ fn title_scope_refs_in_all_positions() {
          }\n",
         "common/scripted_effects/e.txt",
     );
-    let titles: Vec<(&str, &str)> = f
+    let names: Vec<&str> = f
         .refs
         .iter()
         .filter(|r| r.kind == SymbolKind::Title)
-        .map(|r| (r.name.as_str(), r.loc.rsplit(':').nth(1).unwrap()))
+        .map(|r| r.name.as_str())
         .collect();
-    let names: Vec<&str> = titles.iter().map(|(n, _)| *n).collect();
     assert_eq!(
         names,
         vec!["e_empire", "e_empire", "k_titular", "h_hegemony", "c_shore"],
@@ -293,11 +295,8 @@ fn title_ref_range_covers_only_the_name() {
     let f = extract(src, "common/scripted_effects/e.txt");
     let r = f.refs.iter().find(|r| r.kind == SymbolKind::Title).unwrap();
     assert_eq!(&src[r.start as usize..r.end as usize], "e_empire");
-    assert!(
-        r.loc.ends_with(":1:11"),
-        "loc points at the name: {}",
-        r.loc
-    );
+    // The range starts at the name, not the `title:` prefix (byte 10 = col 11).
+    assert_eq!(r.start, 10);
 }
 
 #[test]

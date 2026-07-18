@@ -6,19 +6,20 @@
 //! over ~3,500 tiny `FileFacts` costs almost nothing.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::model::{FileFacts, Ref};
 use crate::table::SymbolTable;
 
 /// An unresolved-reference diagnostic. `file`/`start`/`end` give the on-disk
-/// path and byte range of the offending value (editor ranges); `loc` is the
-/// precomputed `file:line:col` used by the CLI.
+/// path and byte range of the offending value (editor ranges). The CLI's
+/// `file:line:col` string is derived on demand from these (few diagnostics),
+/// rather than precomputed and stored on every reference.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RefDiag {
-    pub file: String,
+    pub file: Arc<str>,
     pub start: u32,
     pub end: u32,
-    pub loc: String,
     pub msg: String,
 }
 
@@ -68,7 +69,6 @@ pub fn resolve_refs<'a>(
                 file: r.file.clone(),
                 start: r.start,
                 end: r.end,
-                loc: r.loc.clone(),
                 // Matches Go's `unknown %s %q` for the identifier-shaped names
                 // that reach this point (skip rules filter the rest).
                 msg: format!("unknown {} {:?}", r.kind.as_str(), r.name),

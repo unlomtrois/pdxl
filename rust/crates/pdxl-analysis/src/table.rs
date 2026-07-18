@@ -11,6 +11,7 @@
 //! feeds the merge, so "first" is stable across runs.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::model::{Symbol, SymbolKind};
 
@@ -22,7 +23,7 @@ pub struct Duplicate {
     /// The previously registered (winning) definition.
     pub first: Symbol,
     /// The file that redefined it.
-    pub file: String,
+    pub file: Arc<str>,
 }
 
 /// All collected definitions, indexed by kind and name.

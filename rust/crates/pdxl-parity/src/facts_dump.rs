@@ -30,9 +30,7 @@ pub fn dump_facts(facts: &FileFacts, rel_path: &str) -> String {
             out.push_str(&r.start.to_string());
             out.push_str(",\"end\":");
             out.push_str(&r.end.to_string());
-            out.push_str(",\"loc\":\"");
-            push_escaped(&mut out, &r.loc);
-            out.push_str("\"}");
+            out.push('}');
             if i + 1 < facts.refs.len() {
                 out.push(',');
             }

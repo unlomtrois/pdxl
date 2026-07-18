@@ -336,5 +336,5 @@ fn localization_keys_resolve_event_text_refs() {
     let sym = table
         .lookup(pdxl_analysis::SymbolKind::LocKey, "my.1.t")
         .expect("loc symbol");
-    assert_eq!(sym.file, "localization/english/my_events_l_english.yml");
+    assert_eq!(&*sym.file, "localization/english/my_events_l_english.yml");
 }

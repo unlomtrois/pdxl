@@ -196,7 +196,7 @@ impl ServerState {
         // (Go iterates a map here; order was unspecified — this is stricter).
         let mut by_file: BTreeMap<PathBuf, Vec<&RefDiag>> = BTreeMap::new();
         for d in project.diags() {
-            let path = PathBuf::from(&d.file);
+            let path = PathBuf::from(d.file.as_ref());
             if !self.under_mod_root(&path) {
                 continue;
             }
@@ -301,7 +301,7 @@ impl ServerState {
         let mut src_cache: HashMap<PathBuf, Option<Vec<u8>>> = HashMap::new();
         let mut locations = Vec::new();
         for r in project.references(kind, &name) {
-            let file = PathBuf::from(&r.file);
+            let file = PathBuf::from(r.file.as_ref());
             let text = src_cache
                 .entry(file.clone())
                 .or_insert_with(|| self.read_file(&file).ok());

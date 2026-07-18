@@ -6,6 +6,8 @@
 //! (directory location decides what a definition means), which is what makes
 //! facts independently extractable and cacheable per file.
 
+use std::sync::Arc;
+
 /// The type of a defined symbol. Variants, discriminants, and [`as_str`]
 /// (`SymbolKind::as_str`) names match Go's `SymbolKind` / `String()` exactly.
 #[repr(u8)]
@@ -86,7 +88,9 @@ pub struct Symbol {
     pub name: String,
     pub kind: SymbolKind,
     /// FileSet `RelPath` where it was defined (overlay key, not disk path).
-    pub file: String,
+    /// Interned per file — all symbols from one file share one allocation
+    /// (localization files hold tens of thousands of keys with the same path).
+    pub file: Arc<str>,
     /// Byte offset of the definition field node (go-to-definition target).
     pub offset: u32,
     /// Byte offset just past the definition name (the key scalar's end).
@@ -100,13 +104,12 @@ pub struct Symbol {
 pub struct Ref {
     pub kind: SymbolKind,
     pub name: String,
-    /// On-disk path (editor diagnostics point at a clickable file).
-    pub file: String,
+    /// On-disk path (editor diagnostics point at a clickable file). Interned
+    /// per file — all refs from one file share one allocation.
+    pub file: Arc<str>,
     /// Byte range of the referenced value.
     pub start: u32,
     pub end: u32,
-    /// Precomputed `file:line:col` for the CLI.
-    pub loc: String,
 }
 
 /// Everything one file contributes to analysis. Deterministic from the file's
