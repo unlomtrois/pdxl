@@ -27,7 +27,9 @@ use pdxl_analysis::context::ClauseKind;
 use pdxl_analysis::{RefDiag, SymbolKind};
 use pdxl_project::Project;
 
-use crate::position::{offset_to_position, path_to_uri, position_to_offset, uri_to_path};
+use crate::position::{
+    offset_to_position, offsets_to_positions, path_to_uri, position_to_offset, uri_to_path,
+};
 
 /// Coalesces rapid edits before re-analyzing (Go: `debounceDelay`).
 pub const DEBOUNCE_MS: u64 = 200;
@@ -342,13 +344,22 @@ impl ServerState {
         let Ok(src) = self.read_file(&path) else {
             return Vec::new();
         };
+        // One linear pass for all name spans (both offsets per def), not one
+        // full scan per offset — the file can hold hundreds of definitions.
+        let offsets: Vec<u32> = facts
+            .defs
+            .iter()
+            .flat_map(|d| [d.offset, d.end_offset])
+            .collect();
+        let positions = offsets_to_positions(&src, &offsets);
         facts
             .defs
             .iter()
-            .map(|d| {
+            .enumerate()
+            .map(|(i, d)| {
                 let range = Range {
-                    start: offset_to_position(&src, d.offset),
-                    end: offset_to_position(&src, d.end_offset),
+                    start: positions[2 * i],
+                    end: positions[2 * i + 1],
                 };
                 #[allow(deprecated)] // `deprecated` is a required struct field
                 lsp_types::DocumentSymbol {
@@ -682,15 +693,16 @@ fn scope_hints(src: &[u8], rel_path: &str, requested: Range) -> Vec<InlayHint> {
     let mut recent = Vec::new();
     let mut hints = Vec::new();
 
-    for token in pdxl_lexer::tokenize(src) {
+    let tokens = pdxl_lexer::tokenize(src);
+    for (i, &token) in tokens.iter().enumerate() {
         let is_event_body = event_body_context(&stack, rel_path);
         match token.kind {
             T::LBrace => {
                 let key = block_key(src, &recent, &is_scalar, &is_op);
                 let parent_scope = stack.last().and_then(|frame| frame.scope.clone());
                 let scope = block_scope(
+                    &tokens[..i],
                     src,
-                    token.range.start,
                     &recent,
                     &key,
                     &stack,
@@ -793,7 +805,8 @@ pub(crate) fn scope_at(src: &[u8], rel_path: &str, off: u32) -> Option<String> {
     };
     let mut stack: Vec<ScopeFrame> = Vec::new();
     let mut recent = Vec::new();
-    for token in pdxl_lexer::tokenize(src) {
+    let tokens = pdxl_lexer::tokenize(src);
+    for (i, &token) in tokens.iter().enumerate() {
         if token.range.start >= off {
             break;
         }
@@ -803,8 +816,8 @@ pub(crate) fn scope_at(src: &[u8], rel_path: &str, off: u32) -> Option<String> {
                 let key = block_key(src, &recent, &is_scalar, &is_op);
                 let inherited = stack.last().and_then(|frame| frame.scope.clone());
                 let scope = block_scope(
+                    &tokens[..i],
                     src,
-                    token.range.start,
                     &recent,
                     &key,
                     &stack,
@@ -882,15 +895,15 @@ fn block_key(
 }
 
 fn block_scope(
+    before: &[pdxl_lexer::Token],
     src: &[u8],
-    off: u32,
     recent: &[pdxl_lexer::Token],
     key: &[u8],
     stack: &[ScopeFrame],
     rel_path: &str,
     inherited: Option<String>,
 ) -> Option<String> {
-    if let Some(scope) = scope_link_chain_scope(src, off) {
+    if let Some(scope) = scope_link_chain_scope(before, src) {
         return Some(scope);
     }
     let parent_keys = stack.iter().map(|frame| frame.key.as_slice());
@@ -940,7 +953,7 @@ fn block_scope(
 
 /// Resolves a complete `prefix:data.member…` chain immediately before `off`.
 /// It powers both scope hints and scope-aware completions at block openers.
-fn scope_link_chain_scope(src: &[u8], off: u32) -> Option<String> {
+fn scope_link_chain_scope(before: &[pdxl_lexer::Token], src: &[u8]) -> Option<String> {
     use pdxl_lexer::TokenKind as T;
     let scalar = |kind: T| {
         matches!(
@@ -953,28 +966,39 @@ fn scope_link_chain_scope(src: &[u8], off: u32) -> Option<String> {
                 | T::ScriptValue
         )
     };
-    let mut chain = Vec::new();
-    let mut completed = Vec::new();
-    for token in pdxl_lexer::tokenize(src) {
-        if token.range.start >= off {
-            break;
-        }
-        if scalar(token.kind) || matches!(token.kind, T::Colon | T::Dot) {
-            chain.push(token);
-        } else if matches!(token.kind, T::Equal | T::QuestionEqual) {
-            if chain.iter().any(|token| token.kind == T::Colon) {
-                completed = std::mem::take(&mut chain);
-            }
-            chain.clear();
-        } else if token.kind != T::Comment {
-            chain.clear();
+    // The chain is the run of scalar/`:`/`.` tokens immediately before the
+    // brace. Scanned *backward* from the brace so this is O(chain), not
+    // O(file) — the previous forward scan re-walked every token before the
+    // brace, which is quadratic when called once per block (inlay hints on a
+    // large file). When the brace is preceded by `=`/`?=` (the
+    // `scope:x = { }` form) the run sits before the operator, and only counts
+    // as a scope chain if it contains a `:`.
+    let mut end = before.len();
+    while end > 0 && before[end - 1].kind == T::Comment {
+        end -= 1;
+    }
+    let require_colon = end > 0 && matches!(before[end - 1].kind, T::Equal | T::QuestionEqual);
+    if require_colon {
+        end -= 1;
+        while end > 0 && before[end - 1].kind == T::Comment {
+            end -= 1;
         }
     }
-    let chain = if completed.is_empty() {
-        chain
-    } else {
-        completed
-    };
+    let mut start = end;
+    while start > 0
+        && (scalar(before[start - 1].kind)
+            || matches!(before[start - 1].kind, T::Colon | T::Dot | T::Comment))
+    {
+        start -= 1;
+    }
+    let chain: Vec<pdxl_lexer::Token> = before[start..end]
+        .iter()
+        .copied()
+        .filter(|token| token.kind != T::Comment)
+        .collect();
+    if require_colon && !chain.iter().any(|token| token.kind == T::Colon) {
+        return None;
+    }
     if chain.len() < 3
         || !scalar(chain[0].kind)
         || chain[1].kind != T::Colon

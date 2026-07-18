@@ -28,6 +28,36 @@ pub fn offset_to_position(text: &[u8], off: u32) -> Position {
     }
 }
 
+/// Batch of [`offset_to_position`]: maps many offsets in a single linear pass
+/// over `text`, instead of one full scan per offset (which is O(n²) when
+/// mapping hundreds of offsets in a large file — e.g. every definition for a
+/// document outline). Offsets need not be sorted; input order is preserved.
+pub fn offsets_to_positions(text: &[u8], offsets: &[u32]) -> Vec<Position> {
+    let mut order: Vec<usize> = (0..offsets.len()).collect();
+    order.sort_by_key(|&i| offsets[i]);
+    let mut out = vec![Position::default(); offsets.len()];
+    let (mut line, mut col) = (0u32, 0u32);
+    let mut i = 0usize; // byte cursor, only ever advances
+    for slot in order {
+        let target = (offsets[slot] as usize).min(text.len());
+        while i < target {
+            let (r, size) = decode(&text[i..]);
+            if r == '\n' as u32 {
+                line += 1;
+                col = 0;
+            } else {
+                col += utf16_len(r);
+            }
+            i += size;
+        }
+        out[slot] = Position {
+            line,
+            character: col,
+        };
+    }
+    out
+}
+
 /// Converts an LSP position to a byte offset in `text`; `text.len()` if past
 /// the end, and the newline offset if the column overshoots its line.
 pub fn position_to_offset(text: &[u8], pos: Position) -> u32 {
@@ -121,6 +151,18 @@ mod tests {
                 character: 4
             }
         );
+    }
+
+    #[test]
+    fn batch_matches_individual() {
+        // Batch conversion must agree with per-offset conversion, for offsets
+        // given out of order and past the end, across multibyte content.
+        let text = "ab\ncé😀d\nx".as_bytes();
+        let offsets = [10u32, 0, 4, 99, 2, 6, 3, 1];
+        let batch = offsets_to_positions(text, &offsets);
+        for (i, &off) in offsets.iter().enumerate() {
+            assert_eq!(batch[i], offset_to_position(text, off), "offset {off}");
+        }
     }
 
     #[test]
