@@ -381,8 +381,12 @@ impl ServerState {
         };
         lens.command = Some(lsp_types::Command {
             title,
-            // VS Code's built-in peek-references command.
-            command: "editor.action.showReferences".to_string(),
+            // A client-side shim (see editor/vscode) — it converts these
+            // protocol-JSON arguments into native vscode.Uri/Position/Location
+            // objects before delegating to the built-in
+            // `editor.action.showReferences`, whose handler validates its
+            // arguments with `instanceof` and rejects raw JSON.
+            command: "pdxl.showReferences".to_string(),
             arguments: Some(vec![
                 serde_json::to_value(&uri).unwrap_or_default(),
                 serde_json::to_value(lens.range.start).unwrap_or_default(),

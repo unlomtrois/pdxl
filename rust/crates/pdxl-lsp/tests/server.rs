@@ -546,7 +546,7 @@ fn code_lens_counts_references_over_every_definition() {
     let resolved = server.code_lens_resolve(lenses[0].clone());
     let cmd = resolved.command.expect("resolve fills the command");
     assert_eq!(cmd.title, "2 references");
-    assert_eq!(cmd.command, "editor.action.showReferences");
+    assert_eq!(cmd.command, "pdxl.showReferences");
 
     // craven has none.
     let craven = server.code_lens_resolve(lenses[1].clone());

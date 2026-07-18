@@ -20,6 +20,42 @@ export function activate(context: vscode.ExtensionContext): void {
 
   log("pdxl extension activating...");
 
+  // Bridge for the reference-count CodeLens. The server emits a
+  // `pdxl.showReferences` command carrying protocol JSON; VS Code's built-in
+  // `editor.action.showReferences` validates its arguments with `instanceof`
+  // and rejects raw JSON, so convert here into native objects first.
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "pdxl.showReferences",
+      (
+        uri: string,
+        position: { line: number; character: number },
+        locations: { uri: string; range: vscode.Range }[],
+      ) => {
+        const target = vscode.Uri.parse(uri);
+        const pos = new vscode.Position(position.line, position.character);
+        const locs = locations.map(
+          (l) =>
+            new vscode.Location(
+              vscode.Uri.parse(l.uri),
+              new vscode.Range(
+                l.range.start.line,
+                l.range.start.character,
+                l.range.end.line,
+                l.range.end.character,
+              ),
+            ),
+        );
+        return vscode.commands.executeCommand(
+          "editor.action.showReferences",
+          target,
+          pos,
+          locs,
+        );
+      },
+    ),
+  );
+
   const config = vscode.workspace.getConfiguration("pdxl");
   const serverPath = config.get<string>("serverPath", "pdxl");
   const gamePath = config.get<string>("gamePath", "");
