@@ -46,8 +46,11 @@ root automatically. `.txt` files are treated as PDXScript.
 ### Richer highlighting (semantic tokens)
 
 The server provides schema-aware highlighting via LSP semantic tokens, which is
-far more precise than the tree-sitter grammar alone (it distinguishes keys,
-values, numbers, strings, booleans, comments, and macro params). Enable it per
+far more precise than the tree-sitter grammar alone. Beyond keys, values,
+literals, comments and macro params, it colors what only the analyzer knows:
+builtin effects/triggers (`add_trait`, `is_adult`) as functions, scope prefixes
+(`scope:`, `title:`) as namespaces, and values that resolve to a defined symbol
+(traits, events, schemes, backgrounds, loc keys, …) as types. Enable it per
 language in `settings.json`:
 
 ```json

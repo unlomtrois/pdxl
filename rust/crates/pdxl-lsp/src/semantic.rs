@@ -1,42 +1,84 @@
 //! Semantic tokens (`textDocument/semanticTokens/full`) — schema-aware syntax
 //! highlighting driven by pdxl's own toolchain instead of a tree-sitter
-//! grammar. This is **phase 1**: coloring from the lexer token stream alone
-//! (keys vs values, numbers, strings, booleans, comments, macro params,
-//! operators). A later phase will layer schema meaning (effects vs triggers,
-//! scope prefixes, loc keys, resolved vs unresolved refs).
+//! grammar.
 //!
-//! The wire format is delta-encoded 5-tuples; [`legend`] declares the token
-//! type table and [`TOKEN_TYPES`]' index order **is** the encoding, so the two
-//! must stay in sync with [`type_index`].
+//! Phase 1 colors from the lexer token stream (keys vs values, literals,
+//! comments, macro params, operators). **Phase 2** layers meaning that only
+//! pdxl knows:
+//! - **builtin keys** — a key that names a documented effect/trigger
+//!   (`add_trait`, `is_adult`) → `function` + `defaultLibrary`. Pure static
+//!   lookup, no project needed.
+//! - **scope prefixes** — an identifier before `:` (`scope`, `title`, …) →
+//!   `namespace`. Pure, no project.
+//! - **resolved references** — value ranges the analyzer resolved to a defined
+//!   symbol → `type`. These come from `FileFacts.refs` (caller passes the
+//!   ranges that resolve), so this part needs the project; unresolved refs are
+//!   left as plain values (they already carry a diagnostic).
+//!
+//! [`TOKEN_TYPES`] / [`TOKEN_MODIFIERS`] index order **is** the wire encoding —
+//! keep them in sync with the classifier below and [`legend`].
 
-use lsp_types::{SemanticToken, SemanticTokenType, SemanticTokensLegend};
+use std::collections::HashSet;
+use std::sync::OnceLock;
+
+use lsp_types::{SemanticToken, SemanticTokenModifier, SemanticTokenType, SemanticTokensLegend};
 use pdxl_lexer::TokenKind as T;
 
 use crate::position::offsets_to_positions;
 
-/// Legend, in wire-index order. Index `i` here is the `token_type` value the
-/// client receives; [`type_index`] must map onto these same positions.
-pub const TOKEN_TYPES: [SemanticTokenType; 8] = [
-    SemanticTokenType::PROPERTY, // 0: keys (`add_trait =`)
-    SemanticTokenType::VARIABLE, // 1: bare identifiers / values
-    SemanticTokenType::NUMBER,   // 2: numbers and dates
-    SemanticTokenType::STRING,   // 3
-    SemanticTokenType::KEYWORD,  // 4: yes / no
-    SemanticTokenType::COMMENT,  // 5
-    SemanticTokenType::MACRO,    // 6: $PARAM$, @sv, @[ … ]
-    SemanticTokenType::OPERATOR, // 7
+// Legend indices — the value the client receives for each token.
+const PROPERTY: u32 = 0;
+const VARIABLE: u32 = 1;
+const NUMBER: u32 = 2;
+const STRING: u32 = 3;
+const KEYWORD: u32 = 4;
+const COMMENT: u32 = 5;
+const MACRO: u32 = 6;
+const OPERATOR: u32 = 7;
+const FUNCTION: u32 = 8;
+const TYPE: u32 = 9;
+const NAMESPACE: u32 = 10;
+
+/// Legend, in wire-index order (see the constants above).
+pub const TOKEN_TYPES: [SemanticTokenType; 11] = [
+    SemanticTokenType::PROPERTY,
+    SemanticTokenType::VARIABLE,
+    SemanticTokenType::NUMBER,
+    SemanticTokenType::STRING,
+    SemanticTokenType::KEYWORD,
+    SemanticTokenType::COMMENT,
+    SemanticTokenType::MACRO,
+    SemanticTokenType::OPERATOR,
+    SemanticTokenType::FUNCTION,
+    SemanticTokenType::TYPE,
+    SemanticTokenType::NAMESPACE,
 ];
 
-/// The legend advertised in `ServerCapabilities`. No modifiers in phase 1.
+/// Only modifier so far: `defaultLibrary` marks documented builtins (bit 0).
+pub const TOKEN_MODIFIERS: [SemanticTokenModifier; 1] = [SemanticTokenModifier::DEFAULT_LIBRARY];
+const MOD_DEFAULT_LIBRARY: u32 = 1 << 0;
+
+/// The legend advertised in `ServerCapabilities`.
 pub fn legend() -> SemanticTokensLegend {
     SemanticTokensLegend {
         token_types: TOKEN_TYPES.to_vec(),
-        token_modifiers: Vec::new(),
+        token_modifiers: TOKEN_MODIFIERS.to_vec(),
     }
 }
 
-/// Operators that mark the identifier before them as a *key* (`k = v`,
-/// `k ?= v`, `days >= 5`).
+/// Documented effect + trigger names — a key matching one is a builtin.
+fn builtins() -> &'static HashSet<&'static str> {
+    static SET: OnceLock<HashSet<&'static str>> = OnceLock::new();
+    SET.get_or_init(|| {
+        pdxl_ck3::tables::EFFECTS
+            .iter()
+            .map(|row| row.name)
+            .chain(pdxl_ck3::tables::TRIGGERS.iter().map(|row| row.name))
+            .collect()
+    })
+}
+
+/// Operators that mark the identifier before them as a *key*.
 fn is_key_operator(kind: T) -> bool {
     matches!(
         kind,
@@ -76,53 +118,73 @@ fn is_operator(kind: T) -> bool {
     )
 }
 
-/// Legend index for a token, or `None` to leave it uncovered (braces,
-/// brackets, invalid, EOF — the theme's default text color). `is_key` means an
-/// identifier immediately precedes a key operator.
-fn type_index(kind: T, is_key: bool) -> Option<u32> {
+/// Base legend index for a token from its kind alone, or `None` to leave it
+/// uncovered (braces, brackets, invalid, EOF).
+fn base_type(kind: T, is_key: bool) -> Option<u32> {
     Some(match kind {
         T::Identifier => {
             if is_key {
-                0
+                PROPERTY
             } else {
-                1
+                VARIABLE
             }
         }
-        T::LiteralNumber | T::LiteralDate => 2,
-        T::LiteralString => 3,
-        T::LiteralBoolean => 4,
-        T::Comment => 5,
-        T::MacroParam | T::ScriptValue | T::ScriptMath => 6,
-        k if is_operator(k) => 7,
+        T::LiteralNumber | T::LiteralDate => NUMBER,
+        T::LiteralString => STRING,
+        T::LiteralBoolean => KEYWORD,
+        T::MacroParam | T::ScriptValue | T::ScriptMath => MACRO,
+        k if is_operator(k) => OPERATOR,
         _ => return None,
     })
 }
 
-/// Computes the delta-encoded semantic tokens for a buffer, from the lexer
-/// token stream. Pure — needs no project, so it works before the async build
-/// finishes and on files outside the mod tree.
-pub fn tokens(src: &[u8]) -> Vec<SemanticToken> {
+/// True if `off` falls inside one of the sorted, non-overlapping resolved-ref
+/// intervals (binary search on the greatest start ≤ `off`).
+fn in_resolved(resolved: &[(u32, u32)], off: u32) -> bool {
+    let i = resolved.partition_point(|&(start, _)| start <= off);
+    i > 0 && resolved[i - 1].1 > off
+}
+
+/// Computes delta-encoded semantic tokens. `resolved` is the sorted list of
+/// value byte-ranges the analyzer resolved to a defined symbol (empty when no
+/// project is available yet — builtins and scope prefixes still work).
+pub fn tokens(src: &[u8], resolved: &[(u32, u32)]) -> Vec<SemanticToken> {
     let lexed = pdxl_lexer::tokenize(src);
 
-    // Which emitted tokens, and their legend index.
-    let mut emit: Vec<(u32, u32, u32)> = Vec::new(); // (start_off, end_off, type)
+    // (start, end, type, modifiers)
+    let mut emit: Vec<(u32, u32, u32, u32)> = Vec::new();
     for (i, tok) in lexed.iter().enumerate() {
-        let is_key = tok.kind == T::Identifier
-            && lexed[i + 1..]
-                .iter()
-                .find(|t| t.kind != T::Comment)
-                .is_some_and(|t| is_key_operator(t.kind));
-        if let Some(ty) = type_index(tok.kind, is_key) {
-            emit.push((tok.range.start, tok.range.end, ty));
-        }
+        let next = lexed[i + 1..].iter().find(|t| t.kind != T::Comment);
+        let is_key = tok.kind == T::Identifier && next.is_some_and(|t| is_key_operator(t.kind));
+        let is_scope_prefix = tok.kind == T::Identifier && next.is_some_and(|t| t.kind == T::Colon);
+
+        let Some(base) = base_type(tok.kind, is_key) else {
+            continue;
+        };
+
+        let (ty, mods) = if in_resolved(resolved, tok.range.start) {
+            // A resolved reference value (whole dotted id colors uniformly).
+            (TYPE, 0)
+        } else if is_scope_prefix {
+            (NAMESPACE, 0)
+        } else if is_key {
+            let text = std::str::from_utf8(&src[tok.range.start as usize..tok.range.end as usize])
+                .unwrap_or_default();
+            if builtins().contains(text) {
+                (FUNCTION, MOD_DEFAULT_LIBRARY)
+            } else {
+                (PROPERTY, 0)
+            }
+        } else {
+            (base, 0)
+        };
+        emit.push((tok.range.start, tok.range.end, ty, mods));
     }
 
-    // The lexer consumes comments as inter-token whitespace (they never appear
-    // in the token stream), so recover them by scanning the gaps: a `#` inside
-    // a gap always starts a comment (only whitespace and comments live there),
-    // running to end of line. See the formatter's trivia scan for the same fact.
-    let mut cursor = 0usize;
-    let scan_gap = |from: usize, to: usize, emit: &mut Vec<(u32, u32, u32)>| {
+    // The lexer consumes comments as inter-token whitespace, so recover them by
+    // scanning the gaps: a `#` in a gap always starts a comment (only
+    // whitespace and comments live there), running to end of line.
+    let scan_gap = |from: usize, to: usize, emit: &mut Vec<(u32, u32, u32, u32)>| {
         let mut i = from;
         while i < to {
             if src[i] == b'#' {
@@ -130,36 +192,34 @@ pub fn tokens(src: &[u8]) -> Vec<SemanticToken> {
                 while j < to && src[j] != b'\n' {
                     j += 1;
                 }
-                emit.push((i as u32, j as u32, 5)); // comment
+                emit.push((i as u32, j as u32, COMMENT, 0));
                 i = j;
             } else {
                 i += 1;
             }
         }
     };
+    let mut cursor = 0usize;
     for tok in &lexed {
         scan_gap(cursor, tok.range.start as usize, &mut emit);
         cursor = cursor.max(tok.range.end as usize);
     }
     scan_gap(cursor, src.len(), &mut emit);
 
-    // Sort into document order (comments were appended out of place); the wire
-    // format is strictly increasing by position.
-    emit.sort_by_key(|&(start, _, _)| start);
+    // Document order; the wire format is strictly increasing by position.
+    emit.sort_by_key(|&(start, ..)| start);
 
-    // Batch offset→position (UTF-16) in one pass rather than per token.
-    let offsets: Vec<u32> = emit.iter().flat_map(|(s, e, _)| [*s, *e]).collect();
+    // Batch offset→position (UTF-16), then delta-encode.
+    let offsets: Vec<u32> = emit.iter().flat_map(|&(s, e, ..)| [s, e]).collect();
     let positions = offsets_to_positions(src, &offsets);
 
     let mut data = Vec::with_capacity(emit.len());
     let (mut prev_line, mut prev_start) = (0u32, 0u32);
-    for (i, &(_, _, ty)) in emit.iter().enumerate() {
+    for (i, &(_, _, ty, mods)) in emit.iter().enumerate() {
         let start = positions[2 * i];
         let end = positions[2 * i + 1];
-        // Tokens are single-line in PDXScript; skip the pathological case
-        // rather than emit a corrupt length.
         if end.line != start.line || end.character < start.character {
-            continue;
+            continue; // PDXScript tokens are single-line; skip the pathological case
         }
         let length = end.character - start.character;
         let delta_line = start.line - prev_line;
@@ -173,7 +233,7 @@ pub fn tokens(src: &[u8]) -> Vec<SemanticToken> {
             delta_start,
             length,
             token_type: ty,
-            token_modifiers_bitset: 0,
+            token_modifiers_bitset: mods,
         });
         prev_line = start.line;
         prev_start = start.character;

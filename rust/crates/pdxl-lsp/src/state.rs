@@ -337,9 +337,28 @@ impl ServerState {
     pub fn semantic_tokens(&self, uri: &Url) -> Option<lsp_types::SemanticTokens> {
         let path = uri_to_path(uri);
         let src = self.read_file(&path).ok()?;
+        // Value ranges the analyzer resolved to a defined symbol → colored as
+        // references. Unresolved refs are left as plain values (they already
+        // carry a diagnostic). Empty when the project isn't built yet.
+        let resolved = self
+            .project
+            .as_ref()
+            .and_then(|project| {
+                project.facts_at(&path).map(|facts| {
+                    let mut spans: Vec<(u32, u32)> = facts
+                        .refs
+                        .iter()
+                        .filter(|r| project.table().lookup(r.kind, &r.name).is_some())
+                        .map(|r| (r.start, r.end))
+                        .collect();
+                    spans.sort_by_key(|&(start, _)| start);
+                    spans
+                })
+            })
+            .unwrap_or_default();
         Some(lsp_types::SemanticTokens {
             result_id: None,
-            data: crate::semantic::tokens(&src),
+            data: crate::semantic::tokens(&src, &resolved),
         })
     }
 

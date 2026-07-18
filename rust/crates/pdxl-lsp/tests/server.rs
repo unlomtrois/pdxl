@@ -565,6 +565,34 @@ fn semantic_tokens_color_keys_values_and_literals() {
 }
 
 #[test]
+fn semantic_tokens_are_schema_aware() {
+    // Legend: property=0, variable=1, operator=7, function=8, type=9,
+    // namespace=10; defaultLibrary modifier = bit 0.
+    let t = TempTree::new();
+    t.write("common/traits/00.txt", "brave = { }\n");
+    t.write(
+        "common/scripted_effects/e.txt",
+        "e = { add_trait = brave x = scope:root }\n",
+    );
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/scripted_effects/e.txt");
+
+    let data = server.semantic_tokens(&uri).expect("tokens").data;
+    let types: Vec<u32> = data.iter().map(|t| t.token_type).collect();
+    // e=prop  ==op  add_trait=function  ==op  brave=type(resolved ref)
+    // x=prop  ==op  scope=namespace  :=op  root=variable
+    assert_eq!(types, vec![0, 7, 8, 7, 9, 0, 7, 10, 7, 1]);
+
+    // The builtin effect carries the defaultLibrary modifier.
+    let add_trait = data[2];
+    assert_eq!(add_trait.token_type, 8);
+    assert_eq!(add_trait.token_modifiers_bitset, 1);
+    // The resolved reference `brave` is a type, with no modifier.
+    assert_eq!(data[4].token_type, 9);
+    assert_eq!(data[4].token_modifiers_bitset, 0);
+}
+
+#[test]
 fn code_lens_counts_references_over_every_definition() {
     let t = TempTree::new();
     t.write("common/traits/00.txt", "brave = { }\ncraven = { }\n");
