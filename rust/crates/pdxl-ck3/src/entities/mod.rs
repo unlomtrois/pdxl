@@ -29,6 +29,7 @@ mod event_theme;
 mod faith;
 mod law;
 mod loc;
+mod modifier;
 mod on_action;
 mod scheme;
 mod scripted;
@@ -79,5 +80,6 @@ registry!(
     scheme::Scheme,
     event_background::EventBackground,
     event_theme::EventTheme,
+    modifier::Modifier,
     loc::Loc,
 );

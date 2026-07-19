@@ -38,11 +38,14 @@ pub enum SymbolKind {
     /// Event themes (`common/event_themes/`): top-level theme definitions,
     /// referenced by the event `theme = X` keyword.
     EventTheme = 14,
+    /// Static modifiers (`common/modifiers/`): top-level definitions, referenced
+    /// by `add_*_modifier = { modifier|type = X }` blocks and scalar shorthand.
+    Modifier = 15,
 }
 
 impl SymbolKind {
     /// Every kind, in discriminant order (stable iteration for reports).
-    pub const ALL: [SymbolKind; 15] = [
+    pub const ALL: [SymbolKind; 16] = [
         SymbolKind::ScriptedTrigger,
         SymbolKind::ScriptedEffect,
         SymbolKind::Trait,
@@ -58,6 +61,7 @@ impl SymbolKind {
         SymbolKind::Scheme,
         SymbolKind::EventBackground,
         SymbolKind::EventTheme,
+        SymbolKind::Modifier,
     ];
 
     /// The report name, identical to Go's `SymbolKind.String()`.
@@ -78,6 +82,7 @@ impl SymbolKind {
             SymbolKind::Scheme => "scheme",
             SymbolKind::EventBackground => "event_background",
             SymbolKind::EventTheme => "event_theme",
+            SymbolKind::Modifier => "modifier",
         }
     }
 }

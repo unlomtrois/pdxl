@@ -254,6 +254,30 @@ fn weighted_skips_config_and_no_event() {
     assert_eq!(ref_names(&f), vec!["ns.foo"]);
 }
 
+#[test]
+fn modifier_block_and_scalar_refs() {
+    let f = extract(
+        "e = {\n\
+         \tadd_scheme_modifier = { type = massive_success_modifier days = 360 }\n\
+         \tadd_character_modifier = { modifier = brave_modifier years = 5 }\n\
+         \tadd_artifact_modifier = shiny_modifier\n\
+         \tsome_weight = { modifier = ignored }\n\
+         \ttype = also_ignored\n\
+         }\n",
+        "events/x.txt",
+    );
+    assert_eq!(
+        ref_names(&f),
+        vec![
+            "massive_success_modifier",
+            "brave_modifier",
+            "shiny_modifier"
+        ],
+    );
+    assert!(f.refs.iter().all(|r| r.kind == SymbolKind::Modifier));
+    // A bare `modifier =` / `type =` outside an add-key block is not a ref.
+}
+
 // ── references: skip rules ───────────────────────────────────────────────────
 
 #[test]
