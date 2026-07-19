@@ -1233,7 +1233,11 @@ fn builtin_hover(src: &[u8], off: u32, rel_path: &str) -> Option<lsp_types::Hove
             text,
         ));
     }
-    let (label, row) = match ctx {
+    // Classify the key itself: within a struct context (e.g. an event
+    // `option`), an unknown key resolves through the struct's fallback — so
+    // `start_scheme` in an option is an effect, not a structural field.
+    let key_ctx = pdxl_analysis::context::resolve_key(ctx, name, true);
+    let (label, row) = match key_ctx {
         ClauseKind::Effect => (
             "effect",
             pdxl_ck3::tables::EFFECTS

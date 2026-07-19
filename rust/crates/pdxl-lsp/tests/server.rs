@@ -524,6 +524,28 @@ fn hover_shows_builtin_effect_trigger_and_scope_link_docs() {
 }
 
 #[test]
+fn hover_builtin_effect_under_struct_fallback() {
+    // `start_scheme` is not a named `option` field — it falls under the
+    // option struct's effect fallback, so built-in effect hover must still fire.
+    let t = TempTree::new();
+    let src = "T4N_drill.0 = {\n\ttype = character_event\n\toption = {\n\t\tname = T4N_drill.0.a\n\t\tstart_scheme = { type = x target_character = root }\n\t}\n}\n";
+    t.write("events/e.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "events/e.txt");
+    let hover = server
+        .hover(&uri, pos_of(src, "start_scheme"))
+        .expect("built-in effect hover under option fallback");
+    let lsp_types::HoverContents::Markup(markup) = hover.contents else {
+        panic!("expected markup");
+    };
+    assert!(
+        markup.value.contains("effect start_scheme"),
+        "{}",
+        markup.value
+    );
+}
+
+#[test]
 fn hover_builtin_effect_in_inline_scripted_def() {
     // An inline `scripted_effect NAME = { … }` in an event file makes its body
     // an Effect clause, so built-in effect hover works there (and inside a

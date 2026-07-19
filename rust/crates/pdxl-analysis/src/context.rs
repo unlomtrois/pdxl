@@ -259,6 +259,15 @@ where
     ctx.unwrap_or(ClauseKind::Config)
 }
 
+/// The clause a `key` opens from within `ctx` — i.e. what its value block is.
+/// For a struct context this applies the struct's field rules and fallback, so
+/// an unknown key in an `option` (fallback effects) resolves to
+/// [`ClauseKind::Effect`]. Used to classify a key (e.g. is `start_scheme` a
+/// built-in effect here?) without a parsed tree.
+pub fn resolve_key(ctx: ClauseKind, key: &str, value_is_block: bool) -> ClauseKind {
+    step(ctx, key.as_bytes(), value_is_block)
+}
+
 /// The context transition: entering the value of `key = value` from `ctx`.
 fn step(ctx: ClauseKind, key: &[u8], value_is_block: bool) -> ClauseKind {
     match ctx {
