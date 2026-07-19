@@ -810,26 +810,35 @@ fn scope_hints(src: &[u8], rel_path: &str, requested: Range) -> Vec<InlayHint> {
                     &key,
                     &stack,
                     rel_path,
-                    parent_scope,
+                    parent_scope.clone(),
                 );
                 if let Some(scope) = &scope {
                     let position = offset_to_position(src, token.range.end);
-                    if position_in_range(position, requested) {
-                        // Append the clause kind of this block's contents:
-                        // `: character (trigger)`, `: landed_title (effect)`.
-                        let label = {
-                            let mut chain: Vec<&[u8]> =
-                                stack.iter().map(|f| f.key.as_slice()).collect();
-                            chain.push(&key);
-                            let clause = pdxl_analysis::context::context_of_chain(
-                                chain,
-                                rel_path,
-                                pdxl_ck3::contexts::context_schema(),
-                            );
-                            match clause_suffix(clause) {
-                                Some(c) => format!(": {scope} ({c})"),
-                                None => format!(": {scope}"),
-                            }
+                    // The clause kind of this block's contents, used both to
+                    // decide whether a scope hint is meaningful and to suffix
+                    // it: `: character (trigger)`, `: landed_title (effect)`.
+                    let clause = {
+                        let mut chain: Vec<&[u8]> =
+                            stack.iter().map(|f| f.key.as_slice()).collect();
+                        chain.push(&key);
+                        pdxl_analysis::context::context_of_chain(
+                            chain,
+                            rel_path,
+                            pdxl_ck3::contexts::context_schema(),
+                        )
+                    };
+                    // Show a hint when this block *changes* the scope (a
+                    // `title:`/`scope:` literal, `root`, a named scope) — that's
+                    // the useful signal — or when its clause bears scope-using
+                    // script. A structural block that merely inherits its parent
+                    // scope (an event `cooldown`, a `widget`) is just noise.
+                    let inherited = parent_scope.as_deref() == Some(scope.as_str());
+                    if position_in_range(position, requested)
+                        && (!inherited || scope_hint_meaningful(clause))
+                    {
+                        let label = match clause_suffix(clause) {
+                            Some(c) => format!(": {scope} ({c})"),
+                            None => format!(": {scope}"),
                         };
                         hints.push(InlayHint {
                             position,
@@ -1152,6 +1161,25 @@ fn clause_suffix(ctx: ClauseKind) -> Option<&'static str> {
         ClauseKind::ScriptValue => Some("value"),
         ClauseKind::ScriptedModifier => Some("modifier"),
         _ => None,
+    }
+}
+
+/// Whether a block's clause can carry scope-navigating script (`root`,
+/// `scope:x`, `.holder` chains), so a scope inlay hint is useful there. Pure
+/// structural blocks — an event `cooldown` (only `days/months/years`), a
+/// `portrait`/`widget` config — inherit a scope but never use it, so labeling
+/// them is noise.
+fn scope_hint_meaningful(clause: ClauseKind) -> bool {
+    use pdxl_analysis::context::Fallback;
+    match clause {
+        ClauseKind::Effect
+        | ClauseKind::Trigger
+        | ClauseKind::ScriptValue
+        | ClauseKind::ScriptedModifier => true,
+        // A struct block bears scope only through an effect/trigger fallback
+        // (an event `option`'s loose effects); a Deny/data struct does not.
+        ClauseKind::Struct(spec) => matches!(spec.fallback, Fallback::Effect | Fallback::Trigger),
+        _ => false,
     }
 }
 

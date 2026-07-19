@@ -706,6 +706,28 @@ fn inlay_hints_show_best_effort_scope_at_block_openers() {
 }
 
 #[test]
+fn inlay_hints_suppress_structural_inherited_scope() {
+    // `cooldown` (only duration fields) and `right_portrait` (config) merely
+    // inherit the character scope — no hint. `immediate` (effects) and a
+    // `scope:`/`title:` scope change still get one.
+    let t = TempTree::new();
+    let src = "t.1 = {\n\ttype = character_event\n\tcooldown = { years = 1 }\n\tright_portrait = { character = root }\n\timmediate = { add_gold = 5 }\n}\n";
+    t.write("events/e.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "events/e.txt");
+    let labels: Vec<String> = server
+        .inlay_hints(&uri, Range::new(Position::new(0, 0), Position::new(99, 0)))
+        .iter()
+        .filter_map(|h| match &h.label {
+            InlayHintLabel::String(l) => Some(l.clone()),
+            InlayHintLabel::LabelParts(_) => None,
+        })
+        .collect();
+    // Only the effect block; cooldown and right_portrait are suppressed.
+    assert_eq!(labels, [": character (effect)"]);
+}
+
+#[test]
 fn m8b_no_result_branches_are_empty() {
     let (t, server, _rx) = m8b_project();
     let uri = uri_for(&t, "common/scripted_effects/a.txt");
