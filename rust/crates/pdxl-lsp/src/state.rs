@@ -1542,6 +1542,13 @@ fn symbol_at(
             return Some((r.kind, &r.name));
         }
     }
+    // Call-by-name sites (`my_effect = yes`): the key resolves to the scripted
+    // effect/trigger, enabling go-to-definition and find-references from a call.
+    for r in &facts.calls {
+        if r.start <= off && off < r.end {
+            return Some((r.kind, &r.name));
+        }
+    }
     None
 }
 
@@ -1553,6 +1560,11 @@ fn span_at(facts: &pdxl_analysis::FileFacts, off: u32) -> Option<(u32, u32)> {
         }
     }
     for r in &facts.refs {
+        if r.start <= off && off < r.end {
+            return Some((r.start, r.end));
+        }
+    }
+    for r in &facts.calls {
         if r.start <= off && off < r.end {
             return Some((r.start, r.end));
         }
