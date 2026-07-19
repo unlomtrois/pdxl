@@ -260,7 +260,13 @@ impl ServerState {
         let off = position_to_offset(&src, pos);
 
         let facts = project.facts_at(&path)?;
-        let reference = facts.refs.iter().find(|r| r.start <= off && off < r.end)?;
+        // A ref OR a call-by-name site (`my_effect = yes`) under the cursor
+        // jumps to its definition; a cursor on a definition name does not.
+        let reference = facts
+            .refs
+            .iter()
+            .chain(facts.calls.iter())
+            .find(|r| r.start <= off && off < r.end)?;
 
         let symbol = project.table().lookup(reference.kind, &reference.name)?;
         let def_full = project.rel_to_full(&symbol.file)?.to_path_buf();
