@@ -1,6 +1,13 @@
 //! Scripted logic: scripted triggers/effects (defined symbols) plus the
 //! script-value and scripted-modifier directories (structural roots only —
 //! they define no cross-referenced symbol kind).
+//!
+//! References to scripted effects/triggers are **call-by-name** (`my_effect =
+//! yes`): the field key IS the referenced name, so they can't be expressed as a
+//! fixed-keyword `RefPattern` here. They are recognized during extraction
+//! against the project's set of defined names and stored in `FileFacts.calls`
+//! (never diagnosed — see `pdxl_analysis::extract` and `CallTargets`). Hence
+//! `refs` below stays empty.
 
 use pdxl_analysis::context::ClauseKind::{self, Effect, ScriptValue, ScriptedModifier, Trigger};
 use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, SymbolKind};

@@ -80,7 +80,8 @@ fn cold_pass(entries: &[(String, PathBuf)], threads: usize) -> (usize, usize, us
                         let src = std::fs::read(full).expect("read");
                         bytes += src.len();
                         let parsed = pdxl_parser::parse(rel.clone(), src);
-                        let facts = extract_facts(parsed.tree(), rel, &full.to_string_lossy(), sch);
+                        let facts =
+                            extract_facts(parsed.tree(), rel, &full.to_string_lossy(), sch, None);
                         files += 1;
                         defs += facts.defs.len();
                         refs += facts.refs.len();

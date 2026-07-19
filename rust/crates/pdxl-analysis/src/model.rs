@@ -122,4 +122,25 @@ pub struct FileFacts {
     pub aliases: Vec<Symbol>,
     /// Filtered, resolvable references.
     pub refs: Vec<Ref>,
+    /// Call-by-name references: `my_effect = yes` / `my_trigger = { … }`, whose
+    /// *key* is the referenced scripted effect/trigger name (so they can't be
+    /// matched by a fixed-keyword rule). Emitted only for keys that name a
+    /// defined scripted effect/trigger (see [`CallTargets`]), and only nested
+    /// (never at file top level, where the same name would be the definition).
+    /// Never diagnosed — a call to an unknown name is indistinguishable from a
+    /// builtin we don't model — so these live outside `refs` and the `check`
+    /// path; they power editor find-references / CodeLens only.
+    pub calls: Vec<Ref>,
+}
+
+/// The names of every defined scripted effect / trigger in the project, used to
+/// recognize call-by-name references during extraction. A whole-corpus fact, so
+/// it is gathered in a cheap pre-pass over the two `scripted_*` directories and
+/// passed into [`crate::extract_facts`].
+#[derive(Clone, Copy)]
+pub struct CallTargets<'a> {
+    /// Names of defined `scripted_effect`s.
+    pub effects: &'a std::collections::HashSet<String>,
+    /// Names of defined `scripted_trigger`s.
+    pub triggers: &'a std::collections::HashSet<String>,
 }

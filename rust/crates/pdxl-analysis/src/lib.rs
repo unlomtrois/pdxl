@@ -28,7 +28,7 @@ mod schema;
 mod table;
 
 pub use extract::extract_facts;
-pub use model::{FileFacts, Ref, Symbol, SymbolKind};
+pub use model::{CallTargets, FileFacts, Ref, Symbol, SymbolKind};
 pub use resolve::{RefDiag, merge_and_resolve, resolve_refs};
 pub use schema::{DefRule, DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule, Schema};
 pub use table::{Duplicate, SymbolTable};

@@ -31,7 +31,7 @@ fn main() -> ExitCode {
     let stdout = io::stdout();
     let mut w = stdout.lock();
     for rel_path in &args[2..] {
-        let facts = extract_facts(parsed.tree(), rel_path, file, &schema);
+        let facts = extract_facts(parsed.tree(), rel_path, file, &schema, None);
         let _ = w.write_all(dump_facts(&facts, rel_path).as_bytes());
     }
     ExitCode::SUCCESS

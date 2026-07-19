@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use pdxl_ast::{NodeId, NodeKind, SyntaxTree};
 
-use crate::model::{FileFacts, Ref, Symbol, SymbolKind};
+use crate::model::{CallTargets, FileFacts, Ref, Symbol, SymbolKind};
 use crate::schema::{KeyForm, Schema};
 
 /// Walks a parsed file once, collecting its definitions, aliases, and
@@ -18,11 +18,16 @@ use crate::schema::{KeyForm, Schema};
 /// `rel_path` is the FileSet overlay key — it drives the def rule and the
 /// per-rule reference gates. `full_path` is the on-disk path used in reference
 /// `loc` strings, so diagnostics point at a clickable file.
+///
+/// `calls` supplies the project-wide scripted effect/trigger names used to
+/// recognize call-by-name references; pass `None` to skip that pass (e.g. the
+/// pre-pass that gathers those very names, or callers that don't need calls).
 pub fn extract_facts(
     tree: &SyntaxTree,
     rel_path: &str,
     full_path: &str,
     schema: &Schema,
+    calls: Option<&CallTargets>,
 ) -> FileFacts {
     let mut facts = FileFacts::default();
 
@@ -54,7 +59,59 @@ pub fn extract_facts(
         schema,
         &mut facts.refs,
     );
+
+    // Call-by-name references (`my_effect = yes`). Nested fields only — a
+    // top-level field of the same name is the definition, not a call.
+    if let Some(targets) = calls {
+        for item in tree.children(tree.root()) {
+            extract_calls(tree, item, full_path, targets, true, &mut facts.calls);
+        }
+    }
     facts
+}
+
+/// Records call-by-name references in the subtree rooted at `node_id`. A field
+/// `KEY = value` is a call iff `KEY` names a defined scripted effect/trigger and
+/// the field is not at file top level (`is_top`), where that name would be the
+/// definition itself. The recorded range covers the key — go-to-definition and
+/// find-references land on the invoked name.
+fn extract_calls(
+    tree: &SyntaxTree,
+    node_id: NodeId,
+    path: &str,
+    targets: &CallTargets,
+    is_top: bool,
+    calls: &mut Vec<Ref>,
+) {
+    let node = tree.node(node_id);
+    if node.kind == NodeKind::Field && !is_top {
+        let children = tree.child_ids(node_id);
+        if children.len() == 2
+            && let Ok(key) = std::str::from_utf8(tree.node_text(children[0]))
+        {
+            let kind = if targets.effects.contains(key) {
+                Some(SymbolKind::ScriptedEffect)
+            } else if targets.triggers.contains(key) {
+                Some(SymbolKind::ScriptedTrigger)
+            } else {
+                None
+            };
+            if let Some(kind) = kind {
+                let key_node = tree.node(children[0]);
+                calls.push(Ref {
+                    kind,
+                    name: key.to_string(),
+                    file: Arc::from(path),
+                    start: key_node.range.start,
+                    end: key_node.range.end,
+                });
+            }
+        }
+    }
+    // A top-level field's descendants are no longer top level.
+    for child in tree.children(node_id) {
+        extract_calls(tree, child, path, targets, false, calls);
+    }
 }
 
 fn harvest_container_defs(

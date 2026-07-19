@@ -6,12 +6,33 @@
 //! SymbolTable half of those tests belongs to Milestone 6 — plus focused
 //! coverage of every reference shape and skip rule.
 
-use pdxl_analysis::{FileFacts, SymbolKind, extract_facts};
+use std::collections::HashSet;
+
+use pdxl_analysis::{CallTargets, FileFacts, SymbolKind, extract_facts};
 
 /// Extracts facts from `src` as if it lived at `rel_path`.
 fn extract(src: &str, rel_path: &str) -> FileFacts {
     let parsed = pdxl_parser::parse(rel_path.to_string(), src.as_bytes().to_vec());
-    extract_facts(parsed.tree(), rel_path, rel_path, &pdxl_ck3::schema())
+    extract_facts(parsed.tree(), rel_path, rel_path, &pdxl_ck3::schema(), None)
+}
+
+/// Extracts facts with a set of callable scripted-effect/trigger names, so
+/// call-by-name references (`my_effect = yes`) are recorded.
+fn extract_with_calls(src: &str, rel_path: &str, effects: &[&str], triggers: &[&str]) -> FileFacts {
+    let parsed = pdxl_parser::parse(rel_path.to_string(), src.as_bytes().to_vec());
+    let effects: HashSet<String> = effects.iter().map(|s| s.to_string()).collect();
+    let triggers: HashSet<String> = triggers.iter().map(|s| s.to_string()).collect();
+    let targets = CallTargets {
+        effects: &effects,
+        triggers: &triggers,
+    };
+    extract_facts(
+        parsed.tree(),
+        rel_path,
+        rel_path,
+        &pdxl_ck3::schema(),
+        Some(&targets),
+    )
 }
 
 fn def_names(f: &FileFacts) -> Vec<&str> {
@@ -20,6 +41,53 @@ fn def_names(f: &FileFacts) -> Vec<&str> {
 
 fn ref_names(f: &FileFacts) -> Vec<&str> {
     f.refs.iter().map(|r| r.name.as_str()).collect()
+}
+
+fn call_names(f: &FileFacts) -> Vec<(&str, SymbolKind)> {
+    f.calls.iter().map(|r| (r.name.as_str(), r.kind)).collect()
+}
+
+// ── call-by-name references (scripted effect / trigger invocations) ──────────
+
+#[test]
+fn records_scripted_calls_nested_not_at_top_level() {
+    // `my_effect` appears both as a definition (top level) and as a call
+    // (nested inside an event's effect block). Only the nested one is a call.
+    let src = "\
+my_effect = { add_gold = 5 }
+namespace = test
+test.1 = {
+    immediate = {
+        my_effect = yes
+        my_trigger = { count = 2 }
+        add_gold = 10
+    }
+}
+";
+    let f = extract_with_calls(src, "events/test.txt", &["my_effect"], &["my_trigger"]);
+    // The top-level `my_effect = { … }` is a definition here, not a call.
+    assert_eq!(
+        call_names(&f),
+        vec![
+            ("my_effect", SymbolKind::ScriptedEffect),
+            ("my_trigger", SymbolKind::ScriptedTrigger),
+        ],
+        "only nested invocations of known scripted names are calls"
+    );
+    // The call range covers the invoked key, not its value.
+    let call = &f.calls[0];
+    assert_eq!(&src[call.start as usize..call.end as usize], "my_effect");
+}
+
+#[test]
+fn unknown_keys_are_not_calls() {
+    let f = extract_with_calls(
+        "x = { immediate = { not_scripted = yes } }",
+        "events/test.txt",
+        &["my_effect"],
+        &[],
+    );
+    assert!(call_names(&f).is_empty());
 }
 
 // ── definitions (ported from validate_test.go) ──────────────────────────────

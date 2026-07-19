@@ -33,8 +33,11 @@ use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use std::collections::HashSet;
+
 use pdxl_analysis::{
-    FileFacts, Ref, RefDiag, Schema, SymbolKind, SymbolTable, extract_facts, merge_and_resolve,
+    CallTargets, FileFacts, Ref, RefDiag, Schema, SymbolKind, SymbolTable, extract_facts,
+    merge_and_resolve,
 };
 use pdxl_fileset::FileSet;
 
@@ -69,7 +72,7 @@ pub fn analyze_with(
     schema: &Schema,
     cache: Option<&pdxl_cache::Store>,
 ) -> io::Result<(SymbolTable, Vec<RefDiag>)> {
-    let (order, facts) = gather_facts(fs, schema, cache)?;
+    let (order, facts, _names) = gather_facts(fs, schema, cache)?;
     let rels: Vec<&str> = order.iter().map(|k| k.rel.as_str()).collect();
     Ok(merge_and_resolve(&rels, &facts))
 }
@@ -80,14 +83,21 @@ fn gather_facts(
     fs: &FileSet,
     schema: &Schema,
     cache: Option<&pdxl_cache::Store>,
-) -> io::Result<(Vec<FileKey>, HashMap<String, FileFacts>)> {
+) -> io::Result<(Vec<FileKey>, HashMap<String, FileFacts>, CallNames)> {
+    // A cheap pre-pass over the two small `scripted_*` directories gathers the
+    // names that a `NAME = …` field can call, so extraction stores only real
+    // call sites instead of every identifier-keyed field (~1.2M corpus-wide).
+    let names = collect_call_names(fs, schema)?;
+    let targets = names.targets();
+
     // Fast path: with no cache, every winning file is independent — read,
     // parse, and extract are pure per file — so fan them out across cores.
     // Order is preserved (rayon's indexed collect keeps input order), which
     // duplicate detection in `merge_and_resolve` depends on. The cached path
     // stays sequential (the Store is shared mutable state).
     if cache.is_none() {
-        return gather_facts_parallel(fs, schema);
+        let (order, facts) = gather_facts_parallel(fs, schema, &targets)?;
+        return Ok((order, facts, names));
     }
     let mut order = Vec::new();
     let mut facts = HashMap::new();
@@ -98,7 +108,7 @@ fn gather_facts(
             loc_facts(&src, &entry.rel_path)
         } else {
             let tree = obtain_tree(&entry.full_path, &full, cache)?;
-            extract_facts(&tree, &entry.rel_path, &full, schema)
+            extract_facts(&tree, &entry.rel_path, &full, schema, Some(&targets))
         };
         order.push(FileKey {
             rel: entry.rel_path.clone(),
@@ -107,7 +117,54 @@ fn gather_facts(
         facts.insert(entry.rel_path.clone(), f);
         Ok(())
     })?;
-    Ok((order, facts))
+    Ok((order, facts, names))
+}
+
+/// Owns the scripted effect/trigger name sets (a whole-corpus fact). Borrowed as
+/// [`CallTargets`] for extraction; kept on the [`Project`] so incremental
+/// re-extraction of one file recognizes the same calls.
+#[derive(Default)]
+struct CallNames {
+    effects: HashSet<String>,
+    triggers: HashSet<String>,
+}
+
+impl CallNames {
+    fn targets(&self) -> CallTargets<'_> {
+        CallTargets {
+            effects: &self.effects,
+            triggers: &self.triggers,
+        }
+    }
+}
+
+/// Parses only the `common/scripted_effects/` and `common/scripted_triggers/`
+/// directories (a few MB) to collect every defined effect/trigger name — the
+/// keys a `NAME = …` field can invoke as a call-by-name reference.
+fn collect_call_names(fs: &FileSet, schema: &Schema) -> io::Result<CallNames> {
+    let mut names = CallNames::default();
+    for entry in fs.iter() {
+        let kind = if entry.rel_path.starts_with("common/scripted_effects/") {
+            SymbolKind::ScriptedEffect
+        } else if entry.rel_path.starts_with("common/scripted_triggers/") {
+            SymbolKind::ScriptedTrigger
+        } else {
+            continue;
+        };
+        let src = std::fs::read(&entry.full_path)?;
+        let full = entry.full_path.to_string_lossy().into_owned();
+        let (tree, _) = pdxl_parser::parse(full.clone(), src).into_parts();
+        // No call targets during the pre-pass — we only want its definitions.
+        let facts = extract_facts(&tree, &entry.rel_path, &full, schema, None);
+        let set = match kind {
+            SymbolKind::ScriptedEffect => &mut names.effects,
+            _ => &mut names.triggers,
+        };
+        for def in facts.defs {
+            set.insert(def.name);
+        }
+    }
+    Ok(names)
 }
 
 /// Data-parallel [`gather_facts`] for the no-cache path: one rayon task per
@@ -118,6 +175,7 @@ fn gather_facts(
 fn gather_facts_parallel(
     fs: &FileSet,
     schema: &Schema,
+    targets: &CallTargets,
 ) -> io::Result<(Vec<FileKey>, HashMap<String, FileFacts>)> {
     use rayon::prelude::*;
 
@@ -132,7 +190,7 @@ fn gather_facts_parallel(
             } else {
                 let src = std::fs::read(&entry.full_path)?;
                 let (tree, _) = pdxl_parser::parse(full.clone(), src).into_parts();
-                extract_facts(&tree, &entry.rel_path, &full, schema)
+                extract_facts(&tree, &entry.rel_path, &full, schema, Some(targets))
             };
             Ok((
                 FileKey {
@@ -215,19 +273,23 @@ pub struct Project {
     facts: HashMap<String, FileFacts>,
     table: SymbolTable,
     diags: Vec<RefDiag>,
+    /// Scripted effect/trigger names, so incremental re-extraction of one file
+    /// recognizes the same call-by-name references as the initial build.
+    call_names: CallNames,
 }
 
 impl Project {
     /// Gathers facts for every winning file in `fs` and builds the initial
     /// table and diagnostics.
     pub fn new(fs: &FileSet, schema: Schema) -> io::Result<Project> {
-        let (order, facts) = gather_facts(fs, &schema, None)?;
+        let (order, facts, call_names) = gather_facts(fs, &schema, None)?;
         let mut p = Project {
             schema,
             order,
             facts,
             table: SymbolTable::new(),
             diags: Vec::new(),
+            call_names,
         };
         p.rebuild();
         Ok(p)
@@ -291,7 +353,13 @@ impl Project {
         } else {
             let full = key.full.to_string_lossy().into_owned();
             let parsed = pdxl_parser::parse(full.clone(), src);
-            extract_facts(parsed.tree(), &key.rel, &full, &self.schema)
+            extract_facts(
+                parsed.tree(),
+                &key.rel,
+                &full,
+                &self.schema,
+                Some(&self.call_names.targets()),
+            )
         };
         self.facts.insert(key.rel.clone(), facts);
         self.rebuild();
@@ -333,6 +401,10 @@ impl Project {
         for key in &self.order {
             if let Some(f) = self.facts.get(&key.rel) {
                 out.extend(f.refs.iter().filter(|r| r.kind == kind && r.name == name));
+                // Call-by-name references (scripted effect/trigger invocations)
+                // live outside `refs`; surface them too. They only exist for the
+                // scripted kinds, so the kind filter naturally scopes this.
+                out.extend(f.calls.iter().filter(|r| r.kind == kind && r.name == name));
             }
         }
         out

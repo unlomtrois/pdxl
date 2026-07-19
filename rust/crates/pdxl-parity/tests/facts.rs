@@ -83,7 +83,7 @@ fn facts_match_goldens() {
         let parsed = pdxl_parser::parse(rel_file.clone(), src);
         let mut dump = String::new();
         for persona in PERSONAS {
-            let facts = extract_facts(parsed.tree(), persona, &rel_file, &schema);
+            let facts = extract_facts(parsed.tree(), persona, &rel_file, &schema, None);
             dump.push_str(&dump_facts(&facts, persona));
         }
 
