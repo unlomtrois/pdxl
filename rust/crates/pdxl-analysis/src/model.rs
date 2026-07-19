@@ -45,11 +45,14 @@ pub enum SymbolKind {
     /// `NAME = { <formula> }` definitions, referenced by name in any
     /// number-accepting value position (`add_stress = minor_stress_gain`).
     ScriptValue = 16,
+    /// Portrait animations (`gfx/portraits/portrait_animations/`): top-level
+    /// definitions, referenced by an event portrait's `animation = X`.
+    PortraitAnimation = 17,
 }
 
 impl SymbolKind {
     /// Every kind, in discriminant order (stable iteration for reports).
-    pub const ALL: [SymbolKind; 17] = [
+    pub const ALL: [SymbolKind; 18] = [
         SymbolKind::ScriptedTrigger,
         SymbolKind::ScriptedEffect,
         SymbolKind::Trait,
@@ -67,6 +70,7 @@ impl SymbolKind {
         SymbolKind::EventTheme,
         SymbolKind::Modifier,
         SymbolKind::ScriptValue,
+        SymbolKind::PortraitAnimation,
     ];
 
     /// The report name, identical to Go's `SymbolKind.String()`.
@@ -89,6 +93,7 @@ impl SymbolKind {
             SymbolKind::EventTheme => "event_theme",
             SymbolKind::Modifier => "modifier",
             SymbolKind::ScriptValue => "script_value",
+            SymbolKind::PortraitAnimation => "portrait_animation",
         }
     }
 }

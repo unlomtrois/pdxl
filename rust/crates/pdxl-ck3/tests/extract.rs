@@ -338,6 +338,33 @@ fn modifier_block_and_scalar_refs() {
     // A bare `modifier =` / `type =` outside an add-key block is not a ref.
 }
 
+#[test]
+fn portrait_animation_defs_and_gated_refs() {
+    // Defs from both directories share the kind.
+    let pa = extract(
+        "happiness = { male = { } }\n",
+        "gfx/portraits/portrait_animations/a.txt",
+    );
+    assert_eq!(pa.defs[0].kind, SymbolKind::PortraitAnimation);
+    let sa = extract("bow_closed = { }\n", "common/scripted_animations/a.txt");
+    assert_eq!(sa.defs[0].kind, SymbolKind::PortraitAnimation);
+
+    // `animation = X` is a reference under events/ …
+    let ev = extract(
+        "e = { right_portrait = { animation = happiness } }\n",
+        "events/x.txt",
+    );
+    assert_eq!(ref_names(&ev), vec!["happiness"]);
+    assert_eq!(ev.refs[0].kind, SymbolKind::PortraitAnimation);
+
+    // … but not elsewhere (tutorial `animation = center` is a camera position).
+    let tut = extract(
+        "l = { animation = center }\n",
+        "common/tutorial_lessons/x.txt",
+    );
+    assert!(tut.refs.is_empty());
+}
+
 // ── references: skip rules ───────────────────────────────────────────────────
 
 #[test]

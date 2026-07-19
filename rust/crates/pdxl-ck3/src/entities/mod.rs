@@ -31,6 +31,7 @@ mod law;
 mod loc;
 mod modifier;
 mod on_action;
+mod portrait_animation;
 mod scheme;
 mod scripted;
 mod title;
@@ -81,5 +82,6 @@ registry!(
     event_background::EventBackground,
     event_theme::EventTheme,
     modifier::Modifier,
+    portrait_animation::PortraitAnimation,
     loc::Loc,
 );
