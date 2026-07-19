@@ -690,8 +690,9 @@ impl ServerState {
         if cursor.chain.is_empty() {
             return crate::completion::top_level_items(&rel);
         }
-        let ctx = pdxl_analysis::context::context_of_chain(
+        let ctx = pdxl_analysis::context::context_of_chain_rooted(
             cursor.chain.iter().map(Vec::as_slice),
+            cursor.root_override,
             &rel,
             pdxl_ck3::contexts::context_schema(),
         );
@@ -1196,8 +1197,10 @@ fn builtin_hover(src: &[u8], off: u32, rel_path: &str) -> Option<lsp_types::Hove
         ));
     }
 
-    let ctx = pdxl_analysis::context::context_of_chain(
-        cursor_context(src, off).chain.iter().map(Vec::as_slice),
+    let cursor = cursor_context(src, off);
+    let ctx = pdxl_analysis::context::context_of_chain_rooted(
+        cursor.chain.iter().map(Vec::as_slice),
+        cursor.root_override,
         rel_path,
         pdxl_ck3::contexts::context_schema(),
     );
@@ -1288,6 +1291,10 @@ fn is_scope_link_token(src: &[u8], start: u32, end: u32) -> bool {
 /// pop on `}`. A token containing `off` (the word being typed) is excluded.
 struct CursorContext {
     chain: Vec<Vec<u8>>,
+    /// Body clause of the outermost enclosing block when it is an inline typed
+    /// definition (`scripted_effect NAME = { … }`), overriding the file's
+    /// directory-derived root. `None` for ordinary blocks.
+    root_override: Option<ClauseKind>,
     value_key: Option<String>,
     scope_prefix: Option<String>,
     scope_name_prefix: Option<String>,
@@ -1420,6 +1427,7 @@ fn cursor_context(src: &[u8], off: u32) -> CursorContext {
     };
 
     let mut stack: Vec<Vec<u8>> = Vec::new();
+    let mut root_override: Option<ClauseKind> = None;
     // The most recent non-comment tokens, enough to see `key = tag` behind
     // an opening brace.
     let mut recent: Vec<pdxl_lexer::Token> = Vec::new();
@@ -1444,6 +1452,22 @@ fn cursor_context(src: &[u8], off: u32) -> CursorContext {
                 } else {
                     Vec::new() // anonymous block (list item)
                 };
+                // The outermost enclosing block sets the root clause. A typed-
+                // def keyword before its key (`scripted_effect NAME = {`) makes
+                // that body an Effect/Trigger clause regardless of directory.
+                if stack.is_empty() {
+                    root_override = (n >= 3 && is_op(recent[n - 1].kind))
+                        .then(|| {
+                            let kw = &src[recent[n - 3].range.start as usize
+                                ..recent[n - 3].range.end as usize];
+                            match kw {
+                                b"scripted_effect" => Some(ClauseKind::Effect),
+                                b"scripted_trigger" => Some(ClauseKind::Trigger),
+                                _ => None,
+                            }
+                        })
+                        .flatten();
+                }
                 stack.push(key);
                 recent.clear();
             }
@@ -1524,6 +1548,7 @@ fn cursor_context(src: &[u8], off: u32) -> CursorContext {
     };
     CursorContext {
         chain: stack,
+        root_override,
         value_key,
         scope_prefix,
         scope_name_prefix,

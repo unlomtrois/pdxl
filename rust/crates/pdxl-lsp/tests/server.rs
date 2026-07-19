@@ -524,6 +524,39 @@ fn hover_shows_builtin_effect_trigger_and_scope_link_docs() {
 }
 
 #[test]
+fn hover_builtin_effect_in_inline_scripted_def() {
+    // An inline `scripted_effect NAME = { … }` in an event file makes its body
+    // an Effect clause, so built-in effect hover works there (and inside a
+    // `scope:` block) — not just in scripted_effects/ files.
+    for (path, src) in [
+        (
+            "events/e.txt",
+            "scripted_effect my_fx = {\n\tadd_stress = 10\n}\n",
+        ),
+        (
+            "events/e.txt",
+            "scripted_effect my_fx = {\n\tscope:scheme = {\n\t\tadd_stress = 10\n\t}\n}\n",
+        ),
+    ] {
+        let t = TempTree::new();
+        t.write(path, src);
+        let (server, _rx) = server_over(&t);
+        let uri = uri_for(&t, path);
+        let hover = server
+            .hover(&uri, pos_of(src, "add_stress"))
+            .expect("built-in effect hover inside inline scripted_effect");
+        let lsp_types::HoverContents::Markup(markup) = hover.contents else {
+            panic!("expected markup");
+        };
+        assert!(
+            markup.value.contains("effect add_stress"),
+            "{}",
+            markup.value
+        );
+    }
+}
+
+#[test]
 fn semantic_tokens_color_keys_values_and_literals() {
     // Legend indices from src/semantic.rs: property=0, variable=1, number=2,
     // string=3, keyword=4, comment=5, operator=7.

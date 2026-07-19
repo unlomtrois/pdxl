@@ -230,7 +230,23 @@ pub fn context_of_chain<'a, I>(keys: I, rel_path: &str, schema: &ContextSchema) 
 where
     I: IntoIterator<Item = &'a [u8]>,
 {
-    let Some(body_kind) = schema.root_for(rel_path) else {
+    context_of_chain_rooted(keys, None, rel_path, schema)
+}
+
+/// Like [`context_of_chain`], but `root` overrides the directory-derived body
+/// clause. Used for inline typed definitions (`scripted_effect NAME = { … }` in
+/// an event file), whose body is an Effect/Trigger clause regardless of the
+/// file's directory.
+pub fn context_of_chain_rooted<'a, I>(
+    keys: I,
+    root: Option<ClauseKind>,
+    rel_path: &str,
+    schema: &ContextSchema,
+) -> ClauseKind
+where
+    I: IntoIterator<Item = &'a [u8]>,
+{
+    let Some(body_kind) = root.or_else(|| schema.root_for(rel_path)) else {
         return ClauseKind::Unknown;
     };
     let mut ctx: Option<ClauseKind> = None;
