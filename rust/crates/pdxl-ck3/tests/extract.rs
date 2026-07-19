@@ -339,6 +339,19 @@ fn modifier_block_and_scalar_refs() {
 }
 
 #[test]
+fn trait_xp_block_references_trait() {
+    let f = extract(
+        "e = {\n\
+         \tadd_trait_xp = { trait = brave value = 3 }\n\
+         \thas_trait_xp = { trait = craven value >= 100 }\n\
+         }\n",
+        "events/x.txt",
+    );
+    assert_eq!(ref_names(&f), vec!["brave", "craven"]);
+    assert!(f.refs.iter().all(|r| r.kind == SymbolKind::Trait));
+}
+
+#[test]
 fn portrait_animation_defs_and_gated_refs() {
     // Defs from both directories share the kind.
     let pa = extract(
