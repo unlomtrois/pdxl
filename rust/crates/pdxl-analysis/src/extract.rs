@@ -31,21 +31,40 @@ pub fn extract_facts(
 ) -> FileFacts {
     let mut facts = FileFacts::default();
 
-    if let Some(rule) = schema.rule_for(rel_path) {
-        for node in tree.children(tree.root()) {
-            match rule.shape {
-                crate::schema::DefShape::TopLevel => {
-                    harvest_def(tree, node, rule.kind, rel_path, schema, &mut facts)
-                }
-                crate::schema::DefShape::Tree { key_prefixes } => {
-                    harvest_nested_defs(tree, node, key_prefixes, rule.kind, rel_path, &mut facts)
-                }
-                crate::schema::DefShape::ChildrenOf { containers } => harvest_container_defs(
-                    tree, node, containers, rule.kind, rel_path, schema, &mut facts,
-                ),
-                crate::schema::DefShape::GroupedBlocks { exclude } => harvest_grouped_defs(
-                    tree, node, exclude, rule.kind, rel_path, schema, &mut facts,
-                ),
+    // A top-level `KEYWORD NAME = { … }` typed definition parses as a bare
+    // scalar keyword followed by a `NAME = { }` field sibling (CLAUDE.md). The
+    // keyword decides the kind (`scripted_effect` → ScriptedEffect) regardless
+    // of directory, so these are harvested before — and instead of — the
+    // directory rule, which would otherwise mis-kind them (e.g. as events).
+    let rule = schema.rule_for(rel_path);
+    let mut pending_typed: Option<SymbolKind> = None;
+    for node in tree.children(tree.root()) {
+        let kind = tree.node(node).kind;
+        if kind == NodeKind::Scalar {
+            pending_typed = std::str::from_utf8(tree.node_text(node))
+                .ok()
+                .and_then(|kw| schema.typed_def_kind(kw));
+            continue;
+        }
+        if let Some(typed_kind) = pending_typed.take()
+            && kind == NodeKind::Field
+        {
+            harvest_def(tree, node, typed_kind, rel_path, schema, &mut facts);
+            continue;
+        }
+        let Some(rule) = rule else { continue };
+        match rule.shape {
+            crate::schema::DefShape::TopLevel => {
+                harvest_def(tree, node, rule.kind, rel_path, schema, &mut facts)
+            }
+            crate::schema::DefShape::Tree { key_prefixes } => {
+                harvest_nested_defs(tree, node, key_prefixes, rule.kind, rel_path, &mut facts)
+            }
+            crate::schema::DefShape::ChildrenOf { containers } => harvest_container_defs(
+                tree, node, containers, rule.kind, rel_path, schema, &mut facts,
+            ),
+            crate::schema::DefShape::GroupedBlocks { exclude } => {
+                harvest_grouped_defs(tree, node, exclude, rule.kind, rel_path, schema, &mut facts)
             }
         }
     }
@@ -60,14 +79,25 @@ pub fn extract_facts(
         &mut facts.refs,
     );
 
-    // Call-by-name references (`my_effect = yes`). Nested fields only — a
-    // top-level field of the same name is the definition, not a call.
+    // Call-by-name references (`my_effect = yes`).
     if let Some(targets) = calls {
-        for item in tree.children(tree.root()) {
-            extract_calls(tree, item, full_path, targets, true, &mut facts.calls);
-        }
+        facts.calls = extract_calls(tree, full_path, targets);
     }
     facts
+}
+
+/// Collects every call-by-name reference in a parsed file: nested `KEY = value`
+/// fields whose `KEY` names a defined scripted effect/trigger (a whole-project
+/// fact supplied via `targets`). A matching top-level field is skipped — there
+/// the name is the definition, not a call. This is a project-level second pass,
+/// because the callable-name set isn't known until every file's definitions
+/// (including inline typed defs) have been harvested.
+pub fn extract_calls(tree: &SyntaxTree, full_path: &str, targets: &CallTargets) -> Vec<Ref> {
+    let mut calls = Vec::new();
+    for item in tree.children(tree.root()) {
+        walk_calls(tree, item, full_path, targets, true, &mut calls);
+    }
+    calls
 }
 
 /// Records call-by-name references in the subtree rooted at `node_id`. A field
@@ -75,7 +105,7 @@ pub fn extract_facts(
 /// the field is not at file top level (`is_top`), where that name would be the
 /// definition itself. The recorded range covers the key — go-to-definition and
 /// find-references land on the invoked name.
-fn extract_calls(
+fn walk_calls(
     tree: &SyntaxTree,
     node_id: NodeId,
     path: &str,
@@ -110,7 +140,7 @@ fn extract_calls(
     }
     // A top-level field's descendants are no longer top level.
     for child in tree.children(node_id) {
-        extract_calls(tree, child, path, targets, false, calls);
+        walk_calls(tree, child, path, targets, false, calls);
     }
 }
 

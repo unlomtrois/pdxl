@@ -80,6 +80,32 @@ test.1 = {
 }
 
 #[test]
+fn inline_typed_scripted_defs_kinded_not_as_events() {
+    // `scripted_effect NAME = {}` inside an events file defines a scripted
+    // effect (not an event), regardless of directory.
+    let f = extract(
+        "scripted_effect my_eff = { add_gold = 5 }\n\
+         scripted_trigger my_trig = { always = yes }\n\
+         actual.1 = { type = character_event }\n",
+        "events/scheme_events/x.txt",
+    );
+    let by_kind: Vec<(&str, SymbolKind)> =
+        f.defs.iter().map(|d| (d.name.as_str(), d.kind)).collect();
+    assert_eq!(
+        by_kind,
+        vec![
+            ("my_eff", SymbolKind::ScriptedEffect),
+            ("my_trig", SymbolKind::ScriptedTrigger),
+            ("actual.1", SymbolKind::Event),
+        ]
+    );
+    // The def offset points at the NAME, not the keyword.
+    let d = &f.defs[0];
+    let src = "scripted_effect my_eff = { add_gold = 5 }\n";
+    assert_eq!(&src[d.offset as usize..d.end_offset as usize], "my_eff");
+}
+
+#[test]
 fn unknown_keys_are_not_calls() {
     let f = extract_with_calls(
         "x = { immediate = { not_scripted = yes } }",

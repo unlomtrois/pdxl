@@ -36,8 +36,8 @@ use std::path::{Path, PathBuf};
 use std::collections::HashSet;
 
 use pdxl_analysis::{
-    CallTargets, FileFacts, Ref, RefDiag, Schema, SymbolKind, SymbolTable, extract_facts,
-    merge_and_resolve,
+    CallTargets, FileFacts, Ref, RefDiag, Schema, SymbolKind, SymbolTable, extract_calls,
+    extract_facts, merge_and_resolve,
 };
 use pdxl_fileset::FileSet;
 
@@ -84,39 +84,43 @@ fn gather_facts(
     schema: &Schema,
     cache: Option<&pdxl_cache::Store>,
 ) -> io::Result<(Vec<FileKey>, HashMap<String, FileFacts>, CallNames)> {
-    // A cheap pre-pass over the two small `scripted_*` directories gathers the
-    // names that a `NAME = …` field can call, so extraction stores only real
-    // call sites instead of every identifier-keyed field (~1.2M corpus-wide).
-    let names = collect_call_names(fs, schema)?;
-    let targets = names.targets();
-
+    // Pass 1: definitions + references (no calls yet).
+    //
     // Fast path: with no cache, every winning file is independent — read,
     // parse, and extract are pure per file — so fan them out across cores.
     // Order is preserved (rayon's indexed collect keeps input order), which
     // duplicate detection in `merge_and_resolve` depends on. The cached path
     // stays sequential (the Store is shared mutable state).
-    if cache.is_none() {
-        let (order, facts) = gather_facts_parallel(fs, schema, &targets)?;
-        return Ok((order, facts, names));
-    }
-    let mut order = Vec::new();
-    let mut facts = HashMap::new();
-    fs.try_for_each(|entry| -> io::Result<()> {
-        let full = entry.full_path.to_string_lossy().into_owned();
-        let f = if entry.rel_path.ends_with(".yml") {
-            let src = std::fs::read(&entry.full_path)?;
-            loc_facts(&src, &entry.rel_path)
-        } else {
-            let tree = obtain_tree(&entry.full_path, &full, cache)?;
-            extract_facts(&tree, &entry.rel_path, &full, schema, Some(&targets))
-        };
-        order.push(FileKey {
-            rel: entry.rel_path.clone(),
-            full: entry.full_path.clone(),
-        });
-        facts.insert(entry.rel_path.clone(), f);
-        Ok(())
-    })?;
+    let (order, mut facts) = if cache.is_none() {
+        gather_facts_parallel(fs, schema)?
+    } else {
+        let mut order = Vec::new();
+        let mut facts = HashMap::new();
+        fs.try_for_each(|entry| -> io::Result<()> {
+            let full = entry.full_path.to_string_lossy().into_owned();
+            let f = if entry.rel_path.ends_with(".yml") {
+                let src = std::fs::read(&entry.full_path)?;
+                loc_facts(&src, &entry.rel_path)
+            } else {
+                let tree = obtain_tree(&entry.full_path, &full, cache)?;
+                extract_facts(&tree, &entry.rel_path, &full, schema, None)
+            };
+            order.push(FileKey {
+                rel: entry.rel_path.clone(),
+                full: entry.full_path.clone(),
+            });
+            facts.insert(entry.rel_path.clone(), f);
+            Ok(())
+        })?;
+        (order, facts)
+    };
+
+    // The callable-name set — every defined scripted effect/trigger, including
+    // inline typed defs harvested from event files — is a whole-project fact,
+    // known only now that every file's definitions are in. Pass 2 re-derives
+    // each file's call-by-name references against it.
+    let names = CallNames::from_facts(&facts);
+    fill_calls(&order, &mut facts, cache, &names.targets())?;
     Ok((order, facts, names))
 }
 
@@ -136,46 +140,81 @@ impl CallNames {
             triggers: &self.triggers,
         }
     }
+
+    /// Collects every scripted effect/trigger definition name from gathered
+    /// facts (directory-defined and inline typed defs alike).
+    fn from_facts(facts: &HashMap<String, FileFacts>) -> CallNames {
+        let mut names = CallNames::default();
+        for f in facts.values() {
+            for def in &f.defs {
+                match def.kind {
+                    SymbolKind::ScriptedEffect => {
+                        names.effects.insert(def.name.clone());
+                    }
+                    SymbolKind::ScriptedTrigger => {
+                        names.triggers.insert(def.name.clone());
+                    }
+                    _ => {}
+                }
+            }
+        }
+        names
+    }
 }
 
-/// Parses only the `common/scripted_effects/` and `common/scripted_triggers/`
-/// directories (a few MB) to collect every defined effect/trigger name — the
-/// keys a `NAME = …` field can invoke as a call-by-name reference.
-fn collect_call_names(fs: &FileSet, schema: &Schema) -> io::Result<CallNames> {
-    let mut names = CallNames::default();
-    for entry in fs.iter() {
-        let kind = if entry.rel_path.starts_with("common/scripted_effects/") {
-            SymbolKind::ScriptedEffect
-        } else if entry.rel_path.starts_with("common/scripted_triggers/") {
-            SymbolKind::ScriptedTrigger
-        } else {
+/// Pass 2: re-parse each script file and record its call-by-name references
+/// against the now-complete callable-name set. Cheap relative to pass 1 (`.yml`
+/// files are skipped; the cached path reuses stored trees).
+fn fill_calls(
+    order: &[FileKey],
+    facts: &mut HashMap<String, FileFacts>,
+    cache: Option<&pdxl_cache::Store>,
+    targets: &CallTargets,
+) -> io::Result<()> {
+    // Nothing can be called if no scripted symbols are defined.
+    if targets.effects.is_empty() && targets.triggers.is_empty() {
+        return Ok(());
+    }
+    if cache.is_none() {
+        use rayon::prelude::*;
+        let calls: Vec<(usize, Vec<pdxl_analysis::Ref>)> = order
+            .par_iter()
+            .enumerate()
+            .filter(|(_, key)| !key.rel.ends_with(".yml"))
+            .map(|(i, key)| -> io::Result<(usize, Vec<pdxl_analysis::Ref>)> {
+                let full = key.full.to_string_lossy().into_owned();
+                let src = std::fs::read(&key.full)?;
+                let (tree, _) = pdxl_parser::parse(full.clone(), src).into_parts();
+                Ok((i, extract_calls(&tree, &full, targets)))
+            })
+            .collect::<io::Result<Vec<_>>>()?;
+        for (i, file_calls) in calls {
+            if let Some(f) = facts.get_mut(&order[i].rel) {
+                f.calls = file_calls;
+            }
+        }
+        return Ok(());
+    }
+    for key in order {
+        if key.rel.ends_with(".yml") {
             continue;
-        };
-        let src = std::fs::read(&entry.full_path)?;
-        let full = entry.full_path.to_string_lossy().into_owned();
-        let (tree, _) = pdxl_parser::parse(full.clone(), src).into_parts();
-        // No call targets during the pre-pass — we only want its definitions.
-        let facts = extract_facts(&tree, &entry.rel_path, &full, schema, None);
-        let set = match kind {
-            SymbolKind::ScriptedEffect => &mut names.effects,
-            _ => &mut names.triggers,
-        };
-        for def in facts.defs {
-            set.insert(def.name);
+        }
+        let full = key.full.to_string_lossy().into_owned();
+        let tree = obtain_tree(&key.full, &full, cache)?;
+        if let Some(f) = facts.get_mut(&key.rel) {
+            f.calls = extract_calls(&tree, &full, targets);
         }
     }
-    Ok(names)
+    Ok(())
 }
 
-/// Data-parallel [`gather_facts`] for the no-cache path: one rayon task per
-/// winning file, each doing the pure read → parse → extract pipeline, then a
-/// single sequential fold that rebuilds `order` (FileSet insertion order) and
-/// the facts map. Only the stateless extraction is parallel; the merge and
-/// resolve downstream stay sequential.
+/// Data-parallel pass-1 gather for the no-cache path: one rayon task per winning
+/// file, each doing the pure read → parse → extract pipeline (no calls — those
+/// need the whole-project name set), then a single sequential fold that rebuilds
+/// `order` (FileSet insertion order) and the facts map.
 fn gather_facts_parallel(
     fs: &FileSet,
     schema: &Schema,
-    targets: &CallTargets,
 ) -> io::Result<(Vec<FileKey>, HashMap<String, FileFacts>)> {
     use rayon::prelude::*;
 
@@ -190,7 +229,7 @@ fn gather_facts_parallel(
             } else {
                 let src = std::fs::read(&entry.full_path)?;
                 let (tree, _) = pdxl_parser::parse(full.clone(), src).into_parts();
-                extract_facts(&tree, &entry.rel_path, &full, schema, Some(targets))
+                extract_facts(&tree, &entry.rel_path, &full, schema, None)
             };
             Ok((
                 FileKey {

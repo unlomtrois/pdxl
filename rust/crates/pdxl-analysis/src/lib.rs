@@ -27,7 +27,7 @@ mod resolve;
 mod schema;
 mod table;
 
-pub use extract::extract_facts;
+pub use extract::{extract_calls, extract_facts};
 pub use model::{CallTargets, FileFacts, Ref, Symbol, SymbolKind};
 pub use resolve::{RefDiag, merge_and_resolve, resolve_refs};
 pub use schema::{DefRule, DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule, Schema};
@@ -37,4 +37,4 @@ pub use table::{Duplicate, SymbolTable};
 /// facts cache must embed this in its keys (alongside content hash and
 /// rel_path) and treat mismatches as misses; bump it whenever extraction rules
 /// or the [`FileFacts`] model change meaning.
-pub const ANALYSIS_VERSION: u32 = 11; // 11: event themes (top-level defs + theme reference); 10: scalar override_background = X reference; 9: event backgrounds (top-level defs + background reference); 8: schemes (top-level defs + scheme-type refs); 7: laws (grouped-block defs + realm-law refs); 6: loc-key symbols + text-field refs; 5: full on_action refs; 4: nested faith defs; 3: gated capital→title refs; 2: landed titles
+pub const ANALYSIS_VERSION: u32 = 12; // 12: typed-def keywords (scripted_effect/trigger NAME = {}) + call-by-name refs; 11: event themes (top-level defs + theme reference); 10: scalar override_background = X reference; 9: event backgrounds (top-level defs + background reference); 8: schemes (top-level defs + scheme-type refs); 7: laws (grouped-block defs + realm-law refs); 6: loc-key symbols + text-field refs; 5: full on_action refs; 4: nested faith defs; 3: gated capital→title refs; 2: landed titles

@@ -186,14 +186,23 @@ pub struct Schema {
     /// Relative-scope keywords a reference value may be at runtime
     /// (`has_trait = prev`); unresolvable without scope tracking, so skipped.
     scope_keywords: HashSet<&'static str>,
+    /// Typed-definition keywords: a top-level `KEYWORD NAME = { … }` defines
+    /// `NAME` of the mapped kind regardless of directory (CK3:
+    /// `scripted_effect` / `scripted_trigger`, used inline in event files).
+    typed_defs: HashMap<&'static str, SymbolKind>,
 }
 
 impl Schema {
     /// Compiles kind rows (plus game-wide scope keywords, which belong to no
     /// single kind) into the lookup indices the extraction engine uses.
-    pub fn new(specs: &[KindSpec], scope_keywords: &[&'static str]) -> Schema {
+    pub fn new(
+        specs: &[KindSpec],
+        scope_keywords: &[&'static str],
+        typed_defs: &[(&'static str, SymbolKind)],
+    ) -> Schema {
         let mut schema = Schema {
             scope_keywords: scope_keywords.iter().copied().collect(),
+            typed_defs: typed_defs.iter().copied().collect(),
             ..Schema::default()
         };
         for spec in specs {
@@ -300,6 +309,12 @@ impl Schema {
         // (`title = root.primary_title`) — is runtime navigation, not a name.
         let first_segment = val.split('.').next().unwrap_or(val);
         self.scope_keywords.contains(first_segment)
+    }
+
+    /// The kind a typed-definition keyword introduces (`scripted_effect` →
+    /// [`SymbolKind::ScriptedEffect`]), or `None` for a non-keyword scalar.
+    pub fn typed_def_kind(&self, keyword: &str) -> Option<SymbolKind> {
+        self.typed_defs.get(keyword).copied()
     }
 
     pub(crate) fn key_rules(&self, key: &str) -> Option<&[KeyRule]> {

@@ -19,7 +19,7 @@
 //!
 //! [`KindSpec`]: pdxl_analysis::KindSpec
 
-use pdxl_analysis::Schema;
+use pdxl_analysis::{Schema, SymbolKind};
 
 mod entities;
 
@@ -38,8 +38,17 @@ const SCOPE_KEYWORDS: &[&str] = &[
     "prevprevprevprev",
 ];
 
+/// Typed-definition keywords: `KEYWORD NAME = { … }` defines `NAME` of the
+/// given kind regardless of directory. CK3 uses these inline in event files
+/// (`scripted_effect elope_outcome_effect = { … }`), and the same names are
+/// invoked as call-by-name references (`NAME = yes`).
+const TYPED_DEFS: &[(&str, SymbolKind)] = &[
+    ("scripted_effect", SymbolKind::ScriptedEffect),
+    ("scripted_trigger", SymbolKind::ScriptedTrigger),
+];
+
 /// Builds the CK3 schema from the entity registry. Cheap to construct; build
 /// once and share.
 pub fn schema() -> Schema {
-    Schema::new(&entities::kinds(), SCOPE_KEYWORDS)
+    Schema::new(&entities::kinds(), SCOPE_KEYWORDS, TYPED_DEFS)
 }
