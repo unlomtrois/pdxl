@@ -51,6 +51,12 @@ pub enum DefShape {
     /// Definitions are the top-level `NAME = { … }` fields (the original
     /// model; every kind except landed titles).
     TopLevel,
+    /// Definitions are the top-level `NAME = <value>` fields, where the value
+    /// may be a scalar *or* a block. CK3 script values come in both forms
+    /// (`minor_stress_gain = 10` and `formula = { … }`). Unlike [`Self::TopLevel`],
+    /// scalar-valued fields count — so this shape only fits directories where
+    /// every top-level field is a definition (no `namespace`-style metadata).
+    TopLevelValued,
     /// Definitions form a **tree**: a key is a definition (and is recursed
     /// into) iff it starts with one of these prefixes AND its value is a
     /// block. CK3 landed titles: `e_x = { k_y = { d_z = { … } } }` with

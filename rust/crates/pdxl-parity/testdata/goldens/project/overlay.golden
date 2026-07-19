@@ -1,6 +1,6 @@
 {
 "version":1,
-"counts":{"scripted_trigger":0,"scripted_effect":1,"trait":2,"event":0,"decision":0,"on_action":0,"character":0,"title":0,"culture":0,"faith":0,"loc_key":0,"law":0,"scheme":0,"event_background":0,"event_theme":0,"modifier":0,"total":3},
+"counts":{"scripted_trigger":0,"scripted_effect":1,"trait":2,"event":0,"decision":0,"on_action":0,"character":0,"title":0,"culture":0,"faith":0,"loc_key":0,"law":0,"scheme":0,"event_background":0,"event_theme":0,"modifier":0,"script_value":0,"total":3},
 "duplicates":[],
 "unresolved":[
 {"file":"<root0>/common/scripted_effects/e.txt","start":38,"end":49,"msg":"unknown trait \"personality\""},

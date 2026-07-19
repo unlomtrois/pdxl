@@ -120,7 +120,9 @@ fn gather_facts(
     // known only now that every file's definitions are in. Pass 2 re-derives
     // each file's call-by-name references against it.
     let names = CallNames::from_facts(&facts);
-    fill_calls(&order, &mut facts, cache, &names.targets())?;
+    if !names.is_empty() {
+        fill_calls(&order, &mut facts, cache, &names.targets())?;
+    }
     Ok((order, facts, names))
 }
 
@@ -131,6 +133,7 @@ fn gather_facts(
 struct CallNames {
     effects: HashSet<String>,
     triggers: HashSet<String>,
+    script_values: HashSet<String>,
 }
 
 impl CallNames {
@@ -138,11 +141,18 @@ impl CallNames {
         CallTargets {
             effects: &self.effects,
             triggers: &self.triggers,
+            script_values: &self.script_values,
         }
     }
 
-    /// Collects every scripted effect/trigger definition name from gathered
-    /// facts (directory-defined and inline typed defs alike).
+    /// Whether any name-gated reference is possible at all.
+    fn is_empty(&self) -> bool {
+        self.effects.is_empty() && self.triggers.is_empty() && self.script_values.is_empty()
+    }
+
+    /// Collects every name-gated definition from gathered facts: scripted
+    /// effects/triggers (matched in key position) and script values (matched in
+    /// value position), directory-defined and inline typed defs alike.
     fn from_facts(facts: &HashMap<String, FileFacts>) -> CallNames {
         let mut names = CallNames::default();
         for f in facts.values() {
@@ -153,6 +163,9 @@ impl CallNames {
                     }
                     SymbolKind::ScriptedTrigger => {
                         names.triggers.insert(def.name.clone());
+                    }
+                    SymbolKind::ScriptValue => {
+                        names.script_values.insert(def.name.clone());
                     }
                     _ => {}
                 }
@@ -171,10 +184,6 @@ fn fill_calls(
     cache: Option<&pdxl_cache::Store>,
     targets: &CallTargets,
 ) -> io::Result<()> {
-    // Nothing can be called if no scripted symbols are defined.
-    if targets.effects.is_empty() && targets.triggers.is_empty() {
-        return Ok(());
-    }
     if cache.is_none() {
         use rayon::prelude::*;
         let calls: Vec<(usize, Vec<pdxl_analysis::Ref>)> = order

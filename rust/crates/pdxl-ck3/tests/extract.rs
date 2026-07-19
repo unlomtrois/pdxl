@@ -19,12 +19,24 @@ fn extract(src: &str, rel_path: &str) -> FileFacts {
 /// Extracts facts with a set of callable scripted-effect/trigger names, so
 /// call-by-name references (`my_effect = yes`) are recorded.
 fn extract_with_calls(src: &str, rel_path: &str, effects: &[&str], triggers: &[&str]) -> FileFacts {
+    extract_with_names(src, rel_path, effects, triggers, &[])
+}
+
+fn extract_with_names(
+    src: &str,
+    rel_path: &str,
+    effects: &[&str],
+    triggers: &[&str],
+    script_values: &[&str],
+) -> FileFacts {
     let parsed = pdxl_parser::parse(rel_path.to_string(), src.as_bytes().to_vec());
     let effects: HashSet<String> = effects.iter().map(|s| s.to_string()).collect();
     let triggers: HashSet<String> = triggers.iter().map(|s| s.to_string()).collect();
+    let script_values: HashSet<String> = script_values.iter().map(|s| s.to_string()).collect();
     let targets = CallTargets {
         effects: &effects,
         triggers: &triggers,
+        script_values: &script_values,
     };
     extract_facts(
         parsed.tree(),
@@ -103,6 +115,54 @@ fn inline_typed_scripted_defs_kinded_not_as_events() {
     let d = &f.defs[0];
     let src = "scripted_effect my_eff = { add_gold = 5 }\n";
     assert_eq!(&src[d.offset as usize..d.end_offset as usize], "my_eff");
+}
+
+#[test]
+fn script_value_defs_scalar_and_block() {
+    // Both the scalar and formula forms are definitions.
+    let f = extract(
+        "minor_stress_gain = 10\nmy_formula = { value = 3 add = 2 }\n",
+        "common/script_values/00_x.txt",
+    );
+    let by_kind: Vec<(&str, SymbolKind)> =
+        f.defs.iter().map(|d| (d.name.as_str(), d.kind)).collect();
+    assert_eq!(
+        by_kind,
+        vec![
+            ("minor_stress_gain", SymbolKind::ScriptValue),
+            ("my_formula", SymbolKind::ScriptValue),
+        ]
+    );
+}
+
+#[test]
+fn script_value_refs_in_value_positions() {
+    let src = "e = {\n\
+         \tadd_stress = minor_stress_gain\n\
+         \tadd_gold = { value = my_formula multiply = 2 }\n\
+         \tadd_prestige = { minor_stress_gain another_value }\n\
+         \tminor_stress_gain = 5\n\
+         }\n";
+    let f = extract_with_names(
+        src,
+        "events/x.txt",
+        &[],
+        &[],
+        &["minor_stress_gain", "my_formula", "another_value"],
+    );
+    let names: Vec<(&str, SymbolKind)> =
+        f.calls.iter().map(|c| (c.name.as_str(), c.kind)).collect();
+    // The scalar value, the nested `value =`, and both list items — but NOT the
+    // `minor_stress_gain = 5` KEY (a key is never a script-value reference).
+    assert_eq!(
+        names,
+        vec![
+            ("minor_stress_gain", SymbolKind::ScriptValue),
+            ("my_formula", SymbolKind::ScriptValue),
+            ("minor_stress_gain", SymbolKind::ScriptValue),
+            ("another_value", SymbolKind::ScriptValue),
+        ]
+    );
 }
 
 #[test]

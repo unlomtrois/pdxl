@@ -41,11 +41,15 @@ pub enum SymbolKind {
     /// Static modifiers (`common/modifiers/`): top-level definitions, referenced
     /// by `add_*_modifier = { modifier|type = X }` blocks and scalar shorthand.
     Modifier = 15,
+    /// Script values (`common/script_values/`): top-level `NAME = <number>` or
+    /// `NAME = { <formula> }` definitions, referenced by name in any
+    /// number-accepting value position (`add_stress = minor_stress_gain`).
+    ScriptValue = 16,
 }
 
 impl SymbolKind {
     /// Every kind, in discriminant order (stable iteration for reports).
-    pub const ALL: [SymbolKind; 16] = [
+    pub const ALL: [SymbolKind; 17] = [
         SymbolKind::ScriptedTrigger,
         SymbolKind::ScriptedEffect,
         SymbolKind::Trait,
@@ -62,6 +66,7 @@ impl SymbolKind {
         SymbolKind::EventBackground,
         SymbolKind::EventTheme,
         SymbolKind::Modifier,
+        SymbolKind::ScriptValue,
     ];
 
     /// The report name, identical to Go's `SymbolKind.String()`.
@@ -83,6 +88,7 @@ impl SymbolKind {
             SymbolKind::EventBackground => "event_background",
             SymbolKind::EventTheme => "event_theme",
             SymbolKind::Modifier => "modifier",
+            SymbolKind::ScriptValue => "script_value",
         }
     }
 }
@@ -144,8 +150,12 @@ pub struct FileFacts {
 /// passed into [`crate::extract_facts`].
 #[derive(Clone, Copy)]
 pub struct CallTargets<'a> {
-    /// Names of defined `scripted_effect`s.
+    /// Names of defined `scripted_effect`s — matched in *key* position
+    /// (`my_effect = yes`).
     pub effects: &'a std::collections::HashSet<String>,
-    /// Names of defined `scripted_trigger`s.
+    /// Names of defined `scripted_trigger`s — matched in *key* position.
     pub triggers: &'a std::collections::HashSet<String>,
+    /// Names of defined script values — matched in *value* position
+    /// (`add_stress = minor_stress_gain`, `value = X`, list items).
+    pub script_values: &'a std::collections::HashSet<String>,
 }

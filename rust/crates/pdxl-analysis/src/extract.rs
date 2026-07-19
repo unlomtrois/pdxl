@@ -57,6 +57,9 @@ pub fn extract_facts(
             crate::schema::DefShape::TopLevel => {
                 harvest_def(tree, node, rule.kind, rel_path, schema, &mut facts)
             }
+            crate::schema::DefShape::TopLevelValued => {
+                harvest_valued_def(tree, node, rule.kind, rel_path, &mut facts)
+            }
             crate::schema::DefShape::Tree { key_prefixes } => {
                 harvest_nested_defs(tree, node, key_prefixes, rule.kind, rel_path, &mut facts)
             }
@@ -100,11 +103,15 @@ pub fn extract_calls(tree: &SyntaxTree, full_path: &str, targets: &CallTargets) 
     calls
 }
 
-/// Records call-by-name references in the subtree rooted at `node_id`. A field
-/// `KEY = value` is a call iff `KEY` names a defined scripted effect/trigger and
-/// the field is not at file top level (`is_top`), where that name would be the
-/// definition itself. The recorded range covers the key — go-to-definition and
-/// find-references land on the invoked name.
+/// Records name-gated references in the subtree rooted at `node_id`:
+/// - **scripted effect/trigger calls** — a nested `KEY = value` field whose
+///   `KEY` names one (skipped at file top level, where that name is the
+///   definition itself);
+/// - **script-value references** — any scalar in *value* position (a field's
+///   value, or a loose list item) whose text names a defined script value.
+///
+/// Each recorded range covers the matched name, so go-to-definition and
+/// find-references land on it precisely.
 fn walk_calls(
     tree: &SyntaxTree,
     node_id: NodeId,
@@ -114,27 +121,30 @@ fn walk_calls(
     calls: &mut Vec<Ref>,
 ) {
     let node = tree.node(node_id);
-    if node.kind == NodeKind::Field && !is_top {
+    if node.kind == NodeKind::Field {
         let children = tree.child_ids(node_id);
-        if children.len() == 2
-            && let Ok(key) = std::str::from_utf8(tree.node_text(children[0]))
-        {
-            let kind = if targets.effects.contains(key) {
-                Some(SymbolKind::ScriptedEffect)
-            } else if targets.triggers.contains(key) {
-                Some(SymbolKind::ScriptedTrigger)
-            } else {
-                None
-            };
-            if let Some(kind) = kind {
-                let key_node = tree.node(children[0]);
-                calls.push(Ref {
-                    kind,
-                    name: key.to_string(),
-                    file: Arc::from(path),
-                    start: key_node.range.start,
-                    end: key_node.range.end,
-                });
+        if children.len() == 2 {
+            // Key position: scripted effect/trigger call (not at top level).
+            if !is_top && let Ok(key) = std::str::from_utf8(tree.node_text(children[0])) {
+                let kind = if targets.effects.contains(key) {
+                    Some(SymbolKind::ScriptedEffect)
+                } else if targets.triggers.contains(key) {
+                    Some(SymbolKind::ScriptedTrigger)
+                } else {
+                    None
+                };
+                if let Some(kind) = kind {
+                    push_name_ref(tree, kind, children[0], path, calls);
+                }
+            }
+            // Value position: script-value reference (`add_stress = X`).
+            push_script_value(tree, children[1], targets, path, calls);
+        }
+    } else if node.kind == NodeKind::Block {
+        // Loose list items (`add_gold = { named_a named_b }`) are values too.
+        for item in tree.children(node_id) {
+            if tree.node(item).kind == NodeKind::Scalar {
+                push_script_value(tree, item, targets, path, calls);
             }
         }
     }
@@ -142,6 +152,44 @@ fn walk_calls(
     for child in tree.children(node_id) {
         walk_calls(tree, child, path, targets, false, calls);
     }
+}
+
+/// Emits a script-value reference if `value_id` is a scalar naming a defined
+/// script value. Bare names only — a scope chain (`mother.example_age`) or
+/// numeric literal never matches the name set, so both are skipped for free.
+fn push_script_value(
+    tree: &SyntaxTree,
+    value_id: NodeId,
+    targets: &CallTargets,
+    path: &str,
+    calls: &mut Vec<Ref>,
+) {
+    if tree.node(value_id).kind != NodeKind::Scalar {
+        return;
+    }
+    if let Ok(val) = std::str::from_utf8(tree.node_text(value_id))
+        && targets.script_values.contains(val)
+    {
+        push_name_ref(tree, SymbolKind::ScriptValue, value_id, path, calls);
+    }
+}
+
+/// Records a name-gated reference covering exactly the `node_id` scalar's range.
+fn push_name_ref(
+    tree: &SyntaxTree,
+    kind: SymbolKind,
+    node_id: NodeId,
+    path: &str,
+    calls: &mut Vec<Ref>,
+) {
+    let node = tree.node(node_id);
+    calls.push(Ref {
+        kind,
+        name: String::from_utf8_lossy(tree.node_text(node_id)).into_owned(),
+        file: Arc::from(path),
+        start: node.range.start,
+        end: node.range.end,
+    });
 }
 
 fn harvest_container_defs(
@@ -284,6 +332,37 @@ fn harvest_def(
             }
         }
     }
+}
+
+/// Records a definition whose value may be a scalar *or* a block (CK3 script
+/// values: `minor_stress_gain = 10` and `formula = { … }` are both defs). Like
+/// [`harvest_def`] but without the block requirement; no aliases apply.
+fn harvest_valued_def(
+    tree: &SyntaxTree,
+    node_id: NodeId,
+    kind: SymbolKind,
+    rel_path: &str,
+    facts: &mut FileFacts,
+) {
+    let node = tree.node(node_id);
+    if node.kind != NodeKind::Field {
+        return;
+    }
+    let children = tree.child_ids(node_id);
+    if children.len() != 2 {
+        return;
+    }
+    let key_id = children[0];
+    let mut params = BTreeSet::new();
+    collect_params(tree, children[1], &mut params);
+    facts.defs.push(Symbol {
+        name: String::from_utf8_lossy(tree.node_text(key_id)).into_owned(),
+        kind,
+        file: Arc::from(rel_path),
+        offset: node.range.start,
+        end_offset: tree.node(key_id).range.end,
+        params: params.into_iter().collect(),
+    });
 }
 
 /// Recursively harvests tree-shaped definitions (CK3 landed titles): a key is
