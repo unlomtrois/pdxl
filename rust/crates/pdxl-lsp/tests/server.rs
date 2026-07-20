@@ -1867,3 +1867,50 @@ fn gui_datafn_hover_and_diagnostics() {
         "expected a datafn warning publish: {publishes:?}"
     );
 }
+
+#[test]
+fn gui_semantic_tokens_color_keywords_types_and_datafns() {
+    // Legend: property=0, variable=1, string=3, keyword=4, function=8, type=9.
+    let t = TempTree::new();
+    let src = "types T {\n\
+         \ttype my_marker = widget {\n\
+         \t\tvisible = [GetPlayer.IsValid]\n\
+         \t}\n\
+         }\n\
+         window = {\n\
+         \tmy_marker = {}\n\
+         }\n";
+    t.write("gui/window_x.gui", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "gui/window_x.gui");
+    let tokens = server.semantic_tokens(&uri).expect("tokens").data;
+
+    // Reconstruct absolute (line, char, len, type) for assertions.
+    let mut abs = Vec::new();
+    let (mut line, mut ch) = (0u32, 0u32);
+    for t in &tokens {
+        if t.delta_line > 0 {
+            line += t.delta_line;
+            ch = t.delta_start;
+        } else {
+            ch += t.delta_start;
+        }
+        abs.push((line, ch, t.length, t.token_type));
+    }
+    let at = |l: u32, c: u32| abs.iter().find(|&&(al, ac, ..)| al == l && ac == c);
+
+    // `types` and `type` keywords (4), names and base as types (9).
+    assert_eq!(at(0, 0).unwrap().3, 4, "types keyword: {abs:?}");
+    assert_eq!(at(0, 6).unwrap().3, 9, "types name T");
+    assert_eq!(at(1, 1).unwrap().3, 4, "type keyword");
+    assert_eq!(at(1, 6).unwrap().3, 9, "type name my_marker");
+    assert_eq!(at(1, 18).unwrap().3, 9, "base widget");
+    // Datafunction segments resolve as builtin functions (8).
+    let fun_count = abs
+        .iter()
+        .filter(|&&(al, .., ty)| al == 2 && ty == 8)
+        .count();
+    assert_eq!(fun_count, 2, "GetPlayer + IsValid: {abs:?}");
+    // The instantiation key `my_marker = {}` is a resolved gui ref (9).
+    assert_eq!(at(6, 1).unwrap().3, 9, "instantiation ref: {abs:?}");
+}

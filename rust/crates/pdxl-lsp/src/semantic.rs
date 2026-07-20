@@ -188,6 +188,137 @@ fn emit_doc_comment(
 }
 
 pub fn tokens(src: &[u8], resolved: &[(u32, u32)], schema: Option<&Schema>) -> Vec<SemanticToken> {
+    tokens_impl(src, resolved, schema, false)
+}
+
+/// Semantic tokens for interface scripts (`.gui`): the script classifier plus
+/// a gui layer — dialect keywords (`types`/`type`/`template`/`block`/…),
+/// template/type definition names and bases, and datafunction chain segments
+/// resolved against the `DumpDataTypes` registry.
+pub fn tokens_gui(src: &[u8], resolved: &[(u32, u32)]) -> Vec<SemanticToken> {
+    tokens_impl(src, resolved, None, true)
+}
+
+/// The gui dialect's structural keywords when standing alone (not keys).
+fn is_gui_keyword(text: &[u8]) -> bool {
+    matches!(
+        text,
+        b"types" | b"type" | b"template" | b"local_template" | b"block" | b"blockoverride"
+    )
+}
+
+/// Collects gui-layer override ranges: keywords, definition names/bases, and
+/// datafunction segments. Overrides win over the base classification.
+fn gui_overrides(src: &[u8], lexed: &[pdxl_lexer::Token]) -> Vec<(u32, u32, u32, u32)> {
+    let mut out: Vec<(u32, u32, u32, u32)> = Vec::new();
+    let text_of = |t: &pdxl_lexer::Token| &src[t.range.start as usize..t.range.end as usize];
+
+    // Token-stream pass: keywords and the def-name/base shapes around them.
+    let toks: Vec<&pdxl_lexer::Token> = lexed.iter().filter(|t| t.kind != T::Comment).collect();
+    let mut i = 0;
+    while i < toks.len() {
+        let t = toks[i];
+        if t.kind == T::Identifier && is_gui_keyword(text_of(t)) {
+            // A key position (`type = X`) is a property, not a keyword.
+            let next_is_op = toks.get(i + 1).is_some_and(|n| is_key_operator(n.kind));
+            if !next_is_op {
+                out.push((t.range.start, t.range.end, KEYWORD, 0));
+                match text_of(t) {
+                    // `types NAME {` / `template NAME {` — NAME is a type decl.
+                    b"types" | b"template" | b"local_template" => {
+                        if let Some(name) = toks.get(i + 1)
+                            && name.kind == T::Identifier
+                            && toks.get(i + 2).is_some_and(|b| b.kind == T::LBrace)
+                        {
+                            out.push((name.range.start, name.range.end, TYPE, 0));
+                        }
+                    }
+                    // `type NAME = BASE {` — both NAME and BASE are types.
+                    b"type" => {
+                        if let Some(name) = toks.get(i + 1)
+                            && name.kind == T::Identifier
+                            && toks.get(i + 2).is_some_and(|o| o.kind == T::Equal)
+                            && let Some(base) = toks.get(i + 3)
+                            && base.kind == T::Identifier
+                            && toks.get(i + 4).is_some_and(|b| b.kind == T::LBrace)
+                        {
+                            out.push((name.range.start, name.range.end, TYPE, 0));
+                            out.push((base.range.start, base.range.end, TYPE, 0));
+                            i += 4;
+                            continue;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        i += 1;
+    }
+
+    // Datafunction pass: chain segments (bare and embedded-in-string forms),
+    // resolved against the DumpDataTypes registry.
+    let parsed = pdxl_gui::parse(String::new(), src.to_vec());
+    let registry = pdxl_ck3::datafn_registry();
+    for span in pdxl_gui::datafn::datafn_spans(parsed.tree()) {
+        let text = &src[span.start as usize..span.end as usize];
+        let Some(segments) = pdxl_gui::datafn::parse_chain(text, span.start) else {
+            continue;
+        };
+        let (infos, _err) = pdxl_gui::datafn::resolve_chain(&segments, registry);
+        for (seg, info) in segments.iter().zip(infos.iter()) {
+            let ty = if info.row.is_some() {
+                FUNCTION
+            } else if registry.is_type(&seg.name) {
+                TYPE
+            } else {
+                continue; // unresolved tail — leave the base coloring
+            };
+            out.push((seg.name_start, seg.name_end, ty, MOD_DEFAULT_LIBRARY));
+        }
+    }
+
+    out.sort_by_key(|&(start, ..)| start);
+    out.dedup_by_key(|&mut (start, ..)| start);
+    out
+}
+
+/// Splices sorted, non-overlapping `overrides` into `emit`: any base emission
+/// overlapping an override is split around it, and the overrides are added.
+fn apply_overrides(
+    emit: Vec<(u32, u32, u32, u32)>,
+    overrides: Vec<(u32, u32, u32, u32)>,
+) -> Vec<(u32, u32, u32, u32)> {
+    if overrides.is_empty() {
+        return emit;
+    }
+    let mut out = Vec::with_capacity(emit.len() + overrides.len());
+    for (start, end, ty, mods) in emit {
+        let mut cursor = start;
+        // Overrides intersecting [start, end).
+        let from = overrides.partition_point(|&(_, oe, ..)| oe <= start);
+        for &(os, oe, ..) in &overrides[from..] {
+            if os >= end {
+                break;
+            }
+            if os > cursor {
+                out.push((cursor, os, ty, mods));
+            }
+            cursor = cursor.max(oe);
+        }
+        if cursor < end {
+            out.push((cursor, end, ty, mods));
+        }
+    }
+    out.extend(overrides);
+    out
+}
+
+fn tokens_impl(
+    src: &[u8],
+    resolved: &[(u32, u32)],
+    schema: Option<&Schema>,
+    gui: bool,
+) -> Vec<SemanticToken> {
     let lexed = pdxl_lexer::tokenize(src);
 
     // (start, end, type, modifiers)
@@ -250,6 +381,12 @@ pub fn tokens(src: &[u8], resolved: &[(u32, u32)], schema: Option<&Schema>) -> V
         cursor = cursor.max(tok.range.end as usize);
     }
     scan_gap(cursor, src.len(), &mut emit);
+
+    // The gui layer overrides base classifications where it knows better.
+    if gui {
+        emit.sort_by_key(|&(start, ..)| start);
+        emit = apply_overrides(emit, gui_overrides(src, &lexed));
+    }
 
     // Document order; the wire format is strictly increasing by position.
     emit.sort_by_key(|&(start, ..)| start);

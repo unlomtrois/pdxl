@@ -389,14 +389,20 @@ impl ServerState {
         // Value ranges the analyzer resolved to a defined symbol → colored as
         // references. Unresolved refs are left as plain values (they already
         // carry a diagnostic). Empty when the project isn't built yet.
+        let is_gui = path.extension().is_some_and(|e| e == "gui");
         let resolved = self
             .project
             .as_ref()
             .and_then(|project| {
                 project.facts_at(&path).map(|facts| {
+                    // Gui name-gated refs (template/type instantiations,
+                    // `using` values) live in `calls`; include them for gui
+                    // files only — script call coloring is unchanged.
+                    let gui_calls = facts.calls.iter().filter(|_| is_gui);
                     let mut spans: Vec<(u32, u32)> = facts
                         .refs
                         .iter()
+                        .chain(gui_calls)
                         .filter(|r| project.table().lookup(r.kind, &r.name).is_some())
                         .map(|r| (r.start, r.end))
                         .collect();
@@ -408,9 +414,14 @@ impl ServerState {
         // The schema (present once built) lets `![kind:Name]` doc refs color
         // only the name past the qualifier.
         let schema = self.project.as_ref().map(Project::schema);
+        let data = if is_gui {
+            crate::semantic::tokens_gui(&src, &resolved)
+        } else {
+            crate::semantic::tokens(&src, &resolved, schema)
+        };
         Some(lsp_types::SemanticTokens {
             result_id: None,
-            data: crate::semantic::tokens(&src, &resolved, schema),
+            data,
         })
     }
 
