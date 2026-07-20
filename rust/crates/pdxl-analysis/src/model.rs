@@ -51,11 +51,15 @@ pub enum SymbolKind {
     /// Scripted character templates (`common/scripted_character_templates/`):
     /// top-level definitions, referenced by `create_character = { template = X }`.
     ScriptedCharacterTemplate = 18,
+    /// An event namespace declaration (`namespace = X` at file top level). The
+    /// symbol is the declaration itself (its value), so hovering it shows the
+    /// file's doc; the events that use the namespace are unaffected.
+    Namespace = 19,
 }
 
 impl SymbolKind {
     /// Every kind, in discriminant order (stable iteration for reports).
-    pub const ALL: [SymbolKind; 19] = [
+    pub const ALL: [SymbolKind; 20] = [
         SymbolKind::ScriptedTrigger,
         SymbolKind::ScriptedEffect,
         SymbolKind::Trait,
@@ -75,6 +79,7 @@ impl SymbolKind {
         SymbolKind::ScriptValue,
         SymbolKind::PortraitAnimation,
         SymbolKind::ScriptedCharacterTemplate,
+        SymbolKind::Namespace,
     ];
 
     /// The report name, identical to Go's `SymbolKind.String()`.
@@ -99,6 +104,7 @@ impl SymbolKind {
             SymbolKind::ScriptValue => "script_value",
             SymbolKind::PortraitAnimation => "portrait_animation",
             SymbolKind::ScriptedCharacterTemplate => "scripted_character_template",
+            SymbolKind::Namespace => "namespace",
         }
     }
 }

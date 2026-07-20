@@ -52,6 +52,13 @@ pub fn extract_facts(
             harvest_def(tree, node, typed_kind, rel_path, schema, &mut facts);
             continue;
         }
+        // A keyed-value definition (`namespace = X`): the value is the symbol.
+        if kind == NodeKind::Field
+            && let Some(kv_kind) = keyed_value_kind(tree, node, schema)
+        {
+            harvest_keyed_value_def(tree, node, kv_kind, rel_path, &mut facts);
+            continue;
+        }
         let Some(rule) = rule else { continue };
         match rule.shape {
             crate::schema::DefShape::TopLevel => {
@@ -332,6 +339,46 @@ fn harvest_def(
             }
         }
     }
+}
+
+/// The keyed-value kind of a top-level `KEY = value` field (`namespace = X` →
+/// Namespace), or `None` if `KEY` isn't a keyed-value key.
+fn keyed_value_kind(tree: &SyntaxTree, node_id: NodeId, schema: &Schema) -> Option<SymbolKind> {
+    let children = tree.child_ids(node_id);
+    if children.len() != 2 {
+        return None;
+    }
+    let key = std::str::from_utf8(tree.node_text(children[0])).ok()?;
+    schema.keyed_value_def_kind(key)
+}
+
+/// Records a keyed-value definition: the *value* of `KEY = value` is the symbol
+/// (`namespace = T4N_drill` → a Namespace named `T4N_drill`), so hovering the
+/// value shows the file's doc while nothing else in the file is touched.
+fn harvest_keyed_value_def(
+    tree: &SyntaxTree,
+    node_id: NodeId,
+    kind: SymbolKind,
+    rel_path: &str,
+    facts: &mut FileFacts,
+) {
+    let children = tree.child_ids(node_id);
+    if children.len() != 2 {
+        return;
+    }
+    let value_id = children[1];
+    if tree.node(value_id).kind != NodeKind::Scalar {
+        return; // `namespace = { … }` is not a namespace declaration
+    }
+    let value = tree.node(value_id);
+    facts.defs.push(Symbol {
+        name: String::from_utf8_lossy(trim_quotes(tree.node_text(value_id))).into_owned(),
+        kind,
+        file: Arc::from(rel_path),
+        offset: value.range.start,
+        end_offset: value.range.end,
+        params: Vec::new(),
+    });
 }
 
 /// Records a definition whose value may be a scalar *or* a block (CK3 script

@@ -32,6 +32,7 @@ mod faith;
 mod law;
 mod loc;
 mod modifier;
+mod namespace;
 mod on_action;
 mod portrait_animation;
 mod scheme;
@@ -86,5 +87,6 @@ registry!(
     modifier::Modifier,
     portrait_animation::PortraitAnimation,
     character_template::CharacterTemplate,
+    namespace::Namespace,
     loc::Loc,
 );

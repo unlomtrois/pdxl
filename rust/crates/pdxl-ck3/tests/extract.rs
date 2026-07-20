@@ -179,14 +179,17 @@ fn unknown_keys_are_not_calls() {
 // ── definitions (ported from validate_test.go) ──────────────────────────────
 
 #[test]
-fn collects_definitions_and_skips_namespace() {
-    let f = extract(
-        "namespace = test\ntest.0001 = { type = character_event }\n",
-        "events/test_events.txt",
-    );
-    // `namespace = test` has a scalar value, not a block — not a definition.
-    assert_eq!(def_names(&f), vec!["test.0001"]);
-    assert_eq!(f.defs[0].kind, SymbolKind::Event);
+fn collects_definitions_including_namespace() {
+    let src = "namespace = test\ntest.0001 = { type = character_event }\n";
+    let f = extract(src, "events/test_events.txt");
+    // `namespace = test` declares a Namespace named `test` (its value); the
+    // event is a separate Event definition.
+    assert_eq!(def_names(&f), vec!["test", "test.0001"]);
+    assert_eq!(f.defs[0].kind, SymbolKind::Namespace);
+    assert_eq!(f.defs[1].kind, SymbolKind::Event);
+    // The namespace symbol points at the value, so hover/doc land on the name.
+    let d = &f.defs[0];
+    assert_eq!(&src[d.offset as usize..d.end_offset as usize], "test");
 }
 
 #[test]

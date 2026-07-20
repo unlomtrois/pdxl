@@ -47,8 +47,17 @@ const TYPED_DEFS: &[(&str, SymbolKind)] = &[
     ("scripted_trigger", SymbolKind::ScriptedTrigger),
 ];
 
+/// Keyed-value definitions: a top-level `KEY = value` whose *value* is the
+/// symbol. `namespace = X` declares event namespace `X`.
+const KEYED_VALUE_DEFS: &[(&str, SymbolKind)] = &[("namespace", SymbolKind::Namespace)];
+
 /// Builds the CK3 schema from the entity registry. Cheap to construct; build
 /// once and share.
 pub fn schema() -> Schema {
-    Schema::new(&entities::kinds(), SCOPE_KEYWORDS, TYPED_DEFS)
+    Schema::new(
+        &entities::kinds(),
+        SCOPE_KEYWORDS,
+        TYPED_DEFS,
+        KEYED_VALUE_DEFS,
+    )
 }

@@ -4,7 +4,8 @@
 "defs":[
 {"name":"brave","kind":"scripted_trigger","file":"common/scripted_triggers/f.txt","offset":50,"end_offset":55,"params":[]},
 {"name":"craven","kind":"scripted_trigger","file":"common/scripted_triggers/f.txt","offset":108,"end_offset":114,"params":[]},
-{"name":"education_diplomacy_1","kind":"scripted_trigger","file":"common/scripted_triggers/f.txt","offset":201,"end_offset":222,"params":["LEVEL","SKILL"]}
+{"name":"education_diplomacy_1","kind":"scripted_trigger","file":"common/scripted_triggers/f.txt","offset":201,"end_offset":222,"params":["LEVEL","SKILL"]},
+{"name":"not_a_def","kind":"namespace","file":"common/scripted_triggers/f.txt","offset":320,"end_offset":329,"params":[]}
 ],
 "aliases":[],
 "refs":[]
@@ -15,7 +16,8 @@
 "defs":[
 {"name":"brave","kind":"scripted_effect","file":"common/scripted_effects/f.txt","offset":50,"end_offset":55,"params":[]},
 {"name":"craven","kind":"scripted_effect","file":"common/scripted_effects/f.txt","offset":108,"end_offset":114,"params":[]},
-{"name":"education_diplomacy_1","kind":"scripted_effect","file":"common/scripted_effects/f.txt","offset":201,"end_offset":222,"params":["LEVEL","SKILL"]}
+{"name":"education_diplomacy_1","kind":"scripted_effect","file":"common/scripted_effects/f.txt","offset":201,"end_offset":222,"params":["LEVEL","SKILL"]},
+{"name":"not_a_def","kind":"namespace","file":"common/scripted_effects/f.txt","offset":320,"end_offset":329,"params":[]}
 ],
 "aliases":[],
 "refs":[]
@@ -26,7 +28,8 @@
 "defs":[
 {"name":"brave","kind":"trait","file":"common/traits/f.txt","offset":50,"end_offset":55,"params":[]},
 {"name":"craven","kind":"trait","file":"common/traits/f.txt","offset":108,"end_offset":114,"params":[]},
-{"name":"education_diplomacy_1","kind":"trait","file":"common/traits/f.txt","offset":201,"end_offset":222,"params":["LEVEL","SKILL"]}
+{"name":"education_diplomacy_1","kind":"trait","file":"common/traits/f.txt","offset":201,"end_offset":222,"params":["LEVEL","SKILL"]},
+{"name":"not_a_def","kind":"namespace","file":"common/traits/f.txt","offset":320,"end_offset":329,"params":[]}
 ],
 "aliases":[
 {"name":"personality","kind":"trait","file":"common/traits/f.txt","offset":50,"end_offset":50,"params":[]},
@@ -42,7 +45,8 @@
 "defs":[
 {"name":"brave","kind":"decision","file":"common/decisions/f.txt","offset":50,"end_offset":55,"params":[]},
 {"name":"craven","kind":"decision","file":"common/decisions/f.txt","offset":108,"end_offset":114,"params":[]},
-{"name":"education_diplomacy_1","kind":"decision","file":"common/decisions/f.txt","offset":201,"end_offset":222,"params":["LEVEL","SKILL"]}
+{"name":"education_diplomacy_1","kind":"decision","file":"common/decisions/f.txt","offset":201,"end_offset":222,"params":["LEVEL","SKILL"]},
+{"name":"not_a_def","kind":"namespace","file":"common/decisions/f.txt","offset":320,"end_offset":329,"params":[]}
 ],
 "aliases":[],
 "refs":[]
@@ -53,7 +57,8 @@
 "defs":[
 {"name":"brave","kind":"on_action","file":"common/on_action/f.txt","offset":50,"end_offset":55,"params":[]},
 {"name":"craven","kind":"on_action","file":"common/on_action/f.txt","offset":108,"end_offset":114,"params":[]},
-{"name":"education_diplomacy_1","kind":"on_action","file":"common/on_action/f.txt","offset":201,"end_offset":222,"params":["LEVEL","SKILL"]}
+{"name":"education_diplomacy_1","kind":"on_action","file":"common/on_action/f.txt","offset":201,"end_offset":222,"params":["LEVEL","SKILL"]},
+{"name":"not_a_def","kind":"namespace","file":"common/on_action/f.txt","offset":320,"end_offset":329,"params":[]}
 ],
 "aliases":[],
 "refs":[]
@@ -61,7 +66,9 @@
 {
 "version":1,
 "rel_path":"common/landed_titles/f.txt",
-"defs":[],
+"defs":[
+{"name":"not_a_def","kind":"namespace","file":"common/landed_titles/f.txt","offset":320,"end_offset":329,"params":[]}
+],
 "aliases":[],
 "refs":[]
 }
@@ -71,7 +78,8 @@
 "defs":[
 {"name":"brave","kind":"event","file":"events/f.txt","offset":50,"end_offset":55,"params":[]},
 {"name":"craven","kind":"event","file":"events/f.txt","offset":108,"end_offset":114,"params":[]},
-{"name":"education_diplomacy_1","kind":"event","file":"events/f.txt","offset":201,"end_offset":222,"params":["LEVEL","SKILL"]}
+{"name":"education_diplomacy_1","kind":"event","file":"events/f.txt","offset":201,"end_offset":222,"params":["LEVEL","SKILL"]},
+{"name":"not_a_def","kind":"namespace","file":"events/f.txt","offset":320,"end_offset":329,"params":[]}
 ],
 "aliases":[],
 "refs":[]
@@ -82,7 +90,8 @@
 "defs":[
 {"name":"brave","kind":"character","file":"history/characters/f.txt","offset":50,"end_offset":55,"params":[]},
 {"name":"craven","kind":"character","file":"history/characters/f.txt","offset":108,"end_offset":114,"params":[]},
-{"name":"education_diplomacy_1","kind":"character","file":"history/characters/f.txt","offset":201,"end_offset":222,"params":["LEVEL","SKILL"]}
+{"name":"education_diplomacy_1","kind":"character","file":"history/characters/f.txt","offset":201,"end_offset":222,"params":["LEVEL","SKILL"]},
+{"name":"not_a_def","kind":"namespace","file":"history/characters/f.txt","offset":320,"end_offset":329,"params":[]}
 ],
 "aliases":[],
 "refs":[]
@@ -90,7 +99,9 @@
 {
 "version":1,
 "rel_path":"gfx/f.txt",
-"defs":[],
+"defs":[
+{"name":"not_a_def","kind":"namespace","file":"gfx/f.txt","offset":320,"end_offset":329,"params":[]}
+],
 "aliases":[],
 "refs":[]
 }

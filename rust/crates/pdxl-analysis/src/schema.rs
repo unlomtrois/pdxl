@@ -196,6 +196,10 @@ pub struct Schema {
     /// `NAME` of the mapped kind regardless of directory (CK3:
     /// `scripted_effect` / `scripted_trigger`, used inline in event files).
     typed_defs: HashMap<&'static str, SymbolKind>,
+    /// Keyed-value definitions: a top-level `KEY = value` where `KEY` maps here
+    /// defines `value` of that kind (CK3: `namespace = X`). The definition is
+    /// the declaration's value, so nothing else in the file is affected.
+    keyed_value_defs: HashMap<&'static str, SymbolKind>,
 }
 
 impl Schema {
@@ -205,10 +209,12 @@ impl Schema {
         specs: &[KindSpec],
         scope_keywords: &[&'static str],
         typed_defs: &[(&'static str, SymbolKind)],
+        keyed_value_defs: &[(&'static str, SymbolKind)],
     ) -> Schema {
         let mut schema = Schema {
             scope_keywords: scope_keywords.iter().copied().collect(),
             typed_defs: typed_defs.iter().copied().collect(),
+            keyed_value_defs: keyed_value_defs.iter().copied().collect(),
             ..Schema::default()
         };
         for spec in specs {
@@ -321,6 +327,12 @@ impl Schema {
     /// [`SymbolKind::ScriptedEffect`]), or `None` for a non-keyword scalar.
     pub fn typed_def_kind(&self, keyword: &str) -> Option<SymbolKind> {
         self.typed_defs.get(keyword).copied()
+    }
+
+    /// The kind a top-level `KEY = value` defines through `KEY` (`namespace` →
+    /// [`SymbolKind::Namespace`]), the definition being `value`; `None` otherwise.
+    pub fn keyed_value_def_kind(&self, key: &str) -> Option<SymbolKind> {
+        self.keyed_value_defs.get(key).copied()
     }
 
     pub(crate) fn key_rules(&self, key: &str) -> Option<&[KeyRule]> {

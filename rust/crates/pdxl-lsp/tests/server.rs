@@ -532,6 +532,20 @@ fn hover_md(server: &ServerState, uri: &Url, pos: Position) -> String {
 }
 
 #[test]
+fn namespace_hover_shows_file_doc() {
+    // A file-start `#!` doc above `namespace = X`; hovering the namespace name
+    // shows it (the events using the namespace are untouched).
+    let t = TempTree::new();
+    let src = "#! Drill events for the battalion.\nnamespace = T4N_drill\nT4N_drill.1 = { type = character_event }\n";
+    t.write("events/e.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "events/e.txt");
+    let md = hover_md(&server, &uri, pos_of(src, "T4N_drill\n"));
+    assert!(md.contains("namespace T4N_drill"), "{md}");
+    assert!(md.contains("Drill events for the battalion."), "{md}");
+}
+
+#[test]
 fn doc_block_shown_on_definition_and_call_site() {
     let t = TempTree::new();
     t.write("common/traits/00.txt", "brave = { }\n");
