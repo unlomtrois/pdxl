@@ -422,6 +422,73 @@ fn character_template_ref_gated_to_create_character() {
 }
 
 #[test]
+fn history_character_body_refs() {
+    // A character body's attribute fields reference traits, culture, faith
+    // (via `religion` or `faith`), dynasty/house, and parent characters —
+    // all gated to history/characters/.
+    let f = extract(
+        "20816 = {\n\
+         \tname = \"Bilal\"\n\
+         \tdynasty = 101046\n\
+         \tdynasty_house = house_chiny\n\
+         \treligion = muwalladi\n\
+         \tculture = andalusian\n\
+         \ttrait = gluttonous\n\
+         \tfather = 20800\n\
+         \tmother = 20801\n\
+         \t1039.1.1 = { birth = \"1039.1.1\" trait = brave add_spouse = 20900 }\n\
+         }\n",
+        "history/characters/andalusian.txt",
+    );
+    assert_eq!(f.defs.len(), 1);
+    assert_eq!(f.defs[0].kind, pdxl_ck3::kinds::CHARACTER);
+    let by_kind: Vec<(&str, pdxl_analysis::KindId)> =
+        f.refs.iter().map(|r| (r.name.as_str(), r.kind)).collect();
+    // Source-walk order.
+    assert_eq!(
+        by_kind,
+        vec![
+            ("101046", pdxl_ck3::kinds::DYNASTY),
+            ("house_chiny", pdxl_ck3::kinds::DYNASTY_HOUSE),
+            ("muwalladi", pdxl_ck3::kinds::FAITH),
+            ("andalusian", pdxl_ck3::kinds::CULTURE),
+            ("gluttonous", pdxl_ck3::kinds::TRAIT),
+            ("20800", pdxl_ck3::kinds::CHARACTER),
+            ("20801", pdxl_ck3::kinds::CHARACTER),
+            ("brave", pdxl_ck3::kinds::TRAIT),
+            ("20900", pdxl_ck3::kinds::CHARACTER),
+        ]
+    );
+
+    // … but the same keys mean nothing outside history/characters/.
+    let elsewhere = extract(
+        "e = { trait = gluttonous culture = andalusian father = 20800 }\n",
+        "events/x.txt",
+    );
+    assert!(ref_names(&elsewhere).is_empty());
+}
+
+#[test]
+fn dynasty_defs_and_refs() {
+    let d = extract(
+        "101046 = { name = \"dynn_X\" culture = \"andalusian\" }\n",
+        "common/dynasties/00.txt",
+    );
+    assert_eq!(d.defs[0].kind, pdxl_ck3::kinds::DYNASTY);
+    // The dynasty's `culture` attribute is a culture ref (quotes stripped).
+    assert_eq!(ref_names(&d), vec!["andalusian"]);
+    assert_eq!(d.refs[0].kind, pdxl_ck3::kinds::CULTURE);
+
+    let h = extract(
+        "house_chiny = { name = \"dynn_Chiny\" dynasty = 25061 }\n",
+        "common/dynasty_houses/00.txt",
+    );
+    assert_eq!(h.defs[0].kind, pdxl_ck3::kinds::DYNASTY_HOUSE);
+    assert_eq!(ref_names(&h), vec!["25061"]);
+    assert_eq!(h.refs[0].kind, pdxl_ck3::kinds::DYNASTY);
+}
+
+#[test]
 fn casus_belli_defs_and_refs() {
     // Defs in both CB dirs, each with its own kind.
     let d = extract(

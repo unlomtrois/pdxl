@@ -1,7 +1,7 @@
 //! Character traits (`common/traits/`).
 
 use crate::kinds;
-use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern};
+use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
 use super::common::anywhere;
@@ -23,6 +23,12 @@ impl Entity for Traits {
             // XP effects/triggers name the trait in a block: `{ trait = X … }`.
             anywhere(RefPattern::KeyBlockField("add_trait_xp", "trait")),
             anywhere(RefPattern::KeyBlockField("has_trait_xp", "trait")),
+            // History characters list starting/dated traits as `trait = X`
+            // (both the body and the dated blocks; corpus 0 unresolved).
+            RefRule {
+                pattern: RefPattern::KeyValue("trait"),
+                gate: Some("history/characters/"),
+            },
         ],
         // CK3 traits expose group / group_equivalence names as valid refs.
         aliases: &["group", "group_equivalence"],

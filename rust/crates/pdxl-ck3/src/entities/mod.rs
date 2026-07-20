@@ -28,6 +28,7 @@ mod character_template;
 pub(crate) mod create_character;
 mod culture;
 mod decision;
+mod dynasty;
 mod event;
 mod event_background;
 mod event_theme;
@@ -96,5 +97,6 @@ registry!(
     secret_type::SecretType,
     artifact::Artifact,
     casus_belli::CasusBelli,
+    dynasty::Dynasty,
     loc::Loc,
 );

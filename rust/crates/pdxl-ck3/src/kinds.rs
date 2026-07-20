@@ -37,3 +37,5 @@ pub const ARTIFACT_BLUEPRINT: KindId = KindId::new("artifact_blueprint");
 pub const ARTIFACT_SLOT: KindId = KindId::new("artifact_slot");
 pub const CASUS_BELLI: KindId = KindId::new("casus_belli");
 pub const CASUS_BELLI_GROUP: KindId = KindId::new("casus_belli_group");
+pub const DYNASTY: KindId = KindId::new("dynasty");
+pub const DYNASTY_HOUSE: KindId = KindId::new("dynasty_house");
