@@ -21,6 +21,7 @@ use pdxl_analysis::context::ClauseKind;
 pub(crate) mod common;
 
 pub(crate) mod artifact;
+mod casus_belli;
 mod character;
 mod character_interaction;
 mod character_template;
@@ -94,5 +95,6 @@ registry!(
     namespace::Namespace,
     secret_type::SecretType,
     artifact::Artifact,
+    casus_belli::CasusBelli,
     loc::Loc,
 );

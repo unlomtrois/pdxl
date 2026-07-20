@@ -92,6 +92,10 @@ pub struct DefSource {
 pub enum RefPattern {
     /// `key = X` — the scalar value resolves to the kind.
     KeyValue(&'static str),
+    /// `key = X` directly inside a **top-level definition body** (depth 1).
+    /// For attribute fields whose key is reused deeper in script with another
+    /// meaning (CB `group` vs `static_group_filter = { group = … }`).
+    KeyValueTop(&'static str),
     /// `parent = { key = X … }` — like [`RefPattern::KeyValue`], but only
     /// when the field sits directly inside a block opened by `parent`
     /// (CK3: `name` is a loc key inside `option`, a variable-list name in
@@ -157,6 +161,8 @@ pub(crate) struct KeyRule {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum KeyForm {
     Value,
+    /// Scalar value, only as a direct child of a top-level definition body.
+    ValueTop,
     /// Scalar value, only when the enclosing block's field key matches.
     ValueUnder(&'static str),
     /// The named direct-child field of the value block carries the reference.
@@ -249,6 +255,7 @@ impl Schema {
             for rule in spec.refs {
                 let (key, form) = match rule.pattern {
                     RefPattern::KeyValue(k) => (k, KeyForm::Value),
+                    RefPattern::KeyValueTop(k) => (k, KeyForm::ValueTop),
                     RefPattern::KeyValueUnder(parent, k) => (k, KeyForm::ValueUnder(parent)),
                     RefPattern::KeyBlockField(k, field) => (k, KeyForm::BlockField(field)),
                     RefPattern::KeyList(k) => (k, KeyForm::List),
@@ -295,7 +302,8 @@ impl Schema {
     ) -> impl Iterator<Item = KindId> + 'a {
         self.key_rules(key).into_iter().flat_map(move |rules| {
             rules.iter().filter_map(move |rule| {
-                (rule.form == KeyForm::Value && rule.applies(rel_path)).then_some(rule.kind)
+                (matches!(rule.form, KeyForm::Value | KeyForm::ValueTop) && rule.applies(rel_path))
+                    .then_some(rule.kind)
             })
         })
     }

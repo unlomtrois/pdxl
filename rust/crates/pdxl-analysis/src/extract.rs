@@ -86,6 +86,7 @@ pub fn extract_facts(
         rel_path,
         full_path,
         b"",
+        0,
         schema,
         &mut facts.refs,
     );
@@ -464,12 +465,16 @@ fn harvest_nested_defs(
 
 /// Recursively collects references from the subtree rooted at `node_id`.
 /// `rel_path` drives per-rule gates; `path` labels the extracted refs.
+/// `depth` counts enclosing fields (a top-level definition's body fields sit
+/// at depth 1 — what [`KeyForm::ValueTop`] matches).
+#[allow(clippy::too_many_arguments)]
 fn extract_refs(
     tree: &SyntaxTree,
     node_id: NodeId,
     rel_path: &str,
     path: &str,
     parent_key: &[u8],
+    depth: u32,
     schema: &Schema,
     refs: &mut Vec<Ref>,
 ) {
@@ -485,14 +490,33 @@ fn extract_refs(
                 rel_path,
                 path,
                 parent_key,
+                depth,
                 schema,
                 refs,
             );
             // The key itself is a scalar position (scope literals like
             // `title:k_x = { … }` appear as keys); the value's subtree gets
             // this field's key as its parent.
-            extract_refs(tree, children[0], rel_path, path, parent_key, schema, refs);
-            extract_refs(tree, children[1], rel_path, path, key, schema, refs);
+            extract_refs(
+                tree,
+                children[0],
+                rel_path,
+                path,
+                parent_key,
+                depth,
+                schema,
+                refs,
+            );
+            extract_refs(
+                tree,
+                children[1],
+                rel_path,
+                path,
+                key,
+                depth + 1,
+                schema,
+                refs,
+            );
             return;
         }
     }
@@ -503,7 +527,7 @@ fn extract_refs(
         scan_prefix_refs(tree, node_id, rel_path, path, schema, refs);
     }
     for child in tree.children(node_id) {
-        extract_refs(tree, child, rel_path, path, parent_key, schema, refs);
+        extract_refs(tree, child, rel_path, path, parent_key, depth, schema, refs);
     }
 }
 
@@ -565,6 +589,7 @@ fn extract_field_refs(
     rel_path: &str,
     path: &str,
     parent_key: &[u8],
+    depth: u32,
     schema: &Schema,
     refs: &mut Vec<Ref>,
 ) {
@@ -583,6 +608,10 @@ fn extract_field_refs(
         match rule.form {
             // Scalar form: key = value.
             KeyForm::Value if value.kind == NodeKind::Scalar => {
+                append_ref(tree, rule.kind, value_id, path, schema, refs);
+            }
+            // Scalar form, only directly inside a top-level definition body.
+            KeyForm::ValueTop if value.kind == NodeKind::Scalar && depth == 1 => {
                 append_ref(tree, rule.kind, value_id, path, schema, refs);
             }
             // Scalar form constrained to a parent block: option = { name = X }.

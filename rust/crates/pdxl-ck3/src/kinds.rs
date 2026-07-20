@@ -35,3 +35,5 @@ pub const ARTIFACT_FEATURE: KindId = KindId::new("artifact_feature");
 pub const ARTIFACT_FEATURE_GROUP: KindId = KindId::new("artifact_feature_group");
 pub const ARTIFACT_BLUEPRINT: KindId = KindId::new("artifact_blueprint");
 pub const ARTIFACT_SLOT: KindId = KindId::new("artifact_slot");
+pub const CASUS_BELLI: KindId = KindId::new("casus_belli");
+pub const CASUS_BELLI_GROUP: KindId = KindId::new("casus_belli_group");

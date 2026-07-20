@@ -422,6 +422,63 @@ fn character_template_ref_gated_to_create_character() {
 }
 
 #[test]
+fn casus_belli_defs_and_refs() {
+    // Defs in both CB dirs, each with its own kind.
+    let d = extract(
+        "claim_cb = { group = claim }\n",
+        "common/casus_belli_types/00.txt",
+    );
+    assert_eq!(d.defs[0].kind, pdxl_ck3::kinds::CASUS_BELLI);
+    // … and the `group =` field references a CB group (gated to this dir).
+    assert_eq!(ref_names(&d), vec!["claim"]);
+    assert_eq!(d.refs[0].kind, pdxl_ck3::kinds::CASUS_BELLI_GROUP);
+
+    let g = extract(
+        "claim = { allowed_for_character = { } }\n",
+        "common/casus_belli_groups/00.txt",
+    );
+    assert_eq!(g.defs[0].kind, pdxl_ck3::kinds::CASUS_BELLI_GROUP);
+
+    // `casus_belli`, `cb` (scalar and list) and `using_cb` resolve anywhere.
+    let f = extract(
+        "e = {\n\
+         \tstart_war = { casus_belli = claim_cb target = scope:t }\n\
+         \thas_cb_on = { target = scope:t cb = conquest_cb }\n\
+         \tany_character_war = { using_cb = religious_war }\n\
+         \tai_start_best_war = { cb = { claim_cb conquest_cb } }\n\
+         }\n",
+        "events/x.txt",
+    );
+    assert_eq!(
+        ref_names(&f),
+        vec![
+            "claim_cb",
+            "conquest_cb",
+            "religious_war",
+            "claim_cb",
+            "conquest_cb"
+        ]
+    );
+    assert!(
+        f.refs
+            .iter()
+            .all(|r| r.kind == pdxl_ck3::kinds::CASUS_BELLI)
+    );
+
+    // … but `group =` outside the CB-types dir means nothing …
+    let elsewhere = extract("e = { group = claim }\n", "events/x.txt");
+    assert!(elsewhere.refs.is_empty());
+
+    // … and a nested `group` (static_group_filter, inside a trigger block)
+    // is not a CB-group ref even inside the CB-types dir (KeyValueTop).
+    let nested = extract(
+        "war = { valid_to_start = { static_group_filter = { group = other } } }\n",
+        "common/casus_belli_types/00.txt",
+    );
+    assert!(ref_names(&nested).is_empty(), "{:?}", ref_names(&nested));
+}
+
+#[test]
 fn artifact_defs_and_refs() {
     // Each artifacts subdirectory yields its own kind of def.
     for (src, dir, kind) in [
