@@ -13,7 +13,10 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use pdxl_gamedocs::{parse_doc_log, parse_event_scopes, parse_event_targets, parse_modifiers};
+use pdxl_gamedocs::{
+    DataFnKind, parse_data_types, parse_doc_log, parse_event_scopes, parse_event_targets,
+    parse_modifiers,
+};
 
 fn main() -> ExitCode {
     let mut logs: Option<PathBuf> = None;
@@ -64,10 +67,28 @@ fn generate(logs: &Path, out: &Path) -> std::io::Result<()> {
     let scope_types = parse_event_scopes(&read("event_scopes.log")?);
     let mut modifiers = parse_modifiers(&read("modifiers.log")?);
 
+    // The `DumpDataTypes` console dump writes several files into a
+    // `data_types/` subdirectory; merge them all. Optional — older dumps may
+    // not have run the command.
+    let mut data_fns = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(logs.join("data_types")) {
+        let mut names: Vec<PathBuf> = entries.flatten().map(|e| e.path()).collect();
+        names.sort();
+        for path in names {
+            if path.extension().is_some_and(|e| e == "txt") {
+                let bytes = std::fs::read(&path)?;
+                data_fns.extend(parse_data_types(&String::from_utf8_lossy(&bytes)));
+            }
+        }
+    }
+
     sort_dedup(&mut effects, |e| e.name.clone());
     sort_dedup(&mut triggers, |e| e.name.clone());
     sort_dedup(&mut links, |l| l.name.clone());
     sort_dedup(&mut modifiers, |m| m.tag.clone());
+    sort_dedup(&mut data_fns, |d| {
+        (d.owner.clone(), d.name.clone(), d.kind as u8)
+    });
     code_saved.sort();
     code_saved.dedup();
     // Scope types keep dump order: it is a registry, not an alphabet.
@@ -82,6 +103,9 @@ fn generate(logs: &Path, out: &Path) -> std::io::Result<()> {
     write_links_table(&out.join("scope_links.rs"), &links, &code_saved)?;
     write_scope_types_table(&out.join("scope_types.rs"), &scope_types)?;
     write_modifiers_table(&out.join("modifiers.rs"), &modifiers)?;
+    if !data_fns.is_empty() {
+        write_data_fns_table(&out.join("data_types.rs"), &data_fns)?;
+    }
 
     eprintln!(
         "generated: {} effects, {} triggers, {} scope links (+{} code-saved names), {} scope types, {} modifiers",
@@ -92,7 +116,39 @@ fn generate(logs: &Path, out: &Path) -> std::io::Result<()> {
         scope_types.len(),
         modifiers.len()
     );
+    eprintln!("generated: {} data-type entries", data_fns.len());
     Ok(())
+}
+
+fn write_data_fns_table(path: &Path, rows: &[pdxl_gamedocs::DataFnEntry]) -> std::io::Result<()> {
+    let mut s = header("data_types/*.txt (DumpDataTypes console command)");
+    s.push_str(
+        "use super::{DataFnKind, DataFnRow};
+
+#[rustfmt::skip]
+",
+    );
+    let _ = writeln!(s, "pub const DATA_FNS: &[DataFnRow] = &[");
+    for row in rows {
+        let kind = match row.kind {
+            DataFnKind::Type => "Type",
+            DataFnKind::GlobalPromote => "GlobalPromote",
+            DataFnKind::GlobalFunction => "GlobalFunction",
+            DataFnKind::GlobalMacro => "GlobalMacro",
+            DataFnKind::Promote => "Promote",
+            DataFnKind::Function => "Function",
+        };
+        let _ = writeln!(
+            s,
+            "    DataFnRow {{ owner: {:?}, name: {:?}, kind: DataFnKind::{kind}, args: {}, ret: {:?}, desc: {:?} }},",
+            row.owner, row.name, row.args, row.ret, row.description,
+        );
+    }
+    s.push_str(
+        "];
+",
+    );
+    std::fs::write(path, s)
 }
 
 fn sort_dedup<T: PartialEq, K: Ord>(rows: &mut Vec<T>, key: impl Fn(&T) -> K) {

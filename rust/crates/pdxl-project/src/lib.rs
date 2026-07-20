@@ -498,6 +498,15 @@ impl Project {
         self.rebuild();
     }
 
+    /// The on-disk paths of every tracked interface script (`.gui`).
+    pub fn gui_file_paths(&self) -> Vec<PathBuf> {
+        self.order
+            .iter()
+            .filter(|k| k.rel.ends_with(".gui"))
+            .map(|k| k.full.clone())
+            .collect()
+    }
+
     /// The current whole-project symbol table.
     pub fn table(&self) -> &SymbolTable {
         &self.table

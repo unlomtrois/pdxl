@@ -203,11 +203,44 @@ impl ServerState {
             by_file.entry(path).or_default().push(d);
         }
 
+        // Interface scripts: datafunction typing errors (mod files only),
+        // recomputed from the current buffer/disk state. Warnings, not
+        // errors — the registry is a snapshot of one game version.
+        let mut gui_diags: BTreeMap<PathBuf, Vec<Diagnostic>> = BTreeMap::new();
+        let registry = pdxl_ck3::datafn_registry();
+        for path in project.gui_file_paths() {
+            if !self.under_mod_root(&path) {
+                continue;
+            }
+            let Ok(text) = self.read_file(&path) else {
+                continue;
+            };
+            let parsed = pdxl_gui::parse(String::new(), text.clone());
+            let errs = pdxl_gui::datafn::validate_datafns(parsed.tree(), registry);
+            if errs.is_empty() {
+                continue;
+            }
+            let diags = errs
+                .into_iter()
+                .map(|e| Diagnostic {
+                    range: Range {
+                        start: offset_to_position(&text, e.start),
+                        end: offset_to_position(&text, e.end),
+                    },
+                    severity: Some(DiagnosticSeverity::WARNING),
+                    source: Some("pdxl".to_string()),
+                    message: e.msg,
+                    ..Diagnostic::default()
+                })
+                .collect();
+            gui_diags.insert(path, diags);
+        }
+
         for (file, file_diags) in &by_file {
             let Ok(text) = self.read_file(file) else {
                 continue;
             };
-            let diags = file_diags
+            let mut diags: Vec<Diagnostic> = file_diags
                 .iter()
                 .map(|d| Diagnostic {
                     range: Range {
@@ -220,22 +253,32 @@ impl ServerState {
                     ..Diagnostic::default()
                 })
                 .collect();
+            if let Some(extra) = gui_diags.remove(file) {
+                diags.extend(extra);
+            }
             self.publish(file, diags);
+        }
+        // Gui-only files (no unresolved refs, but datafn warnings).
+        let gui_files: Vec<PathBuf> = gui_diags.keys().cloned().collect();
+        for (file, diags) in gui_diags {
+            self.publish(&file, diags);
         }
 
         // Clear files that had diagnostics last cycle but no longer do.
+        let mut current: std::collections::HashSet<PathBuf> = by_file.into_keys().collect();
+        current.extend(gui_files);
         let stale: Vec<PathBuf> = self
             .published
             .iter()
-            .filter(|f| !by_file.contains_key(*f))
+            .filter(|f| !current.contains(*f))
             .cloned()
             .collect();
         for file in stale {
             self.publish(&file, Vec::new());
         }
 
-        log_debug!("published diagnostics for {} file(s)", by_file.len());
-        self.published = by_file.into_keys().collect();
+        log_debug!("published diagnostics for {} file(s)", current.len());
+        self.published = current.into_iter().collect();
     }
 
     fn publish(&self, file: &Path, diagnostics: Vec<Diagnostic>) {
@@ -491,6 +534,14 @@ impl ServerState {
         let facts = project.facts_at(&path)?;
         let src = self.read_file(&path).ok()?;
         let off = position_to_offset(&src, pos);
+
+        // Interface scripts: hovering inside a `[…]` datafunction shows the
+        // segment's signature from the DumpDataTypes registry.
+        if path.extension().is_some_and(|e| e == "gui")
+            && let Some(hover) = gui_datafn_hover(&src, off)
+        {
+            return Some(hover);
+        }
 
         if let Some((kind, name)) = symbol_at(facts, off) {
             let mut text = format!("```pdxscript\n{} {}\n```", kind.name(), name);
@@ -2027,6 +2078,64 @@ fn lsp_symbol_kind(icon: pdxl_analysis::IconHint) -> lsp_types::SymbolKind {
         I::Hierarchy => lsp_types::SymbolKind::NAMESPACE, // hierarchical, like titles
         I::Text => lsp_types::SymbolKind::STRING,
     }
+}
+
+/// Hover for a `[…]` datafunction segment in a `.gui` source: parses the
+/// file with the interface dialect, finds the expression span containing
+/// `off`, resolves the chain against the DumpDataTypes registry, and renders
+/// the segment under the cursor.
+fn gui_datafn_hover(src: &[u8], off: u32) -> Option<lsp_types::Hover> {
+    use pdxl_gui::datafn;
+    let parsed = pdxl_gui::parse(String::new(), src.to_vec());
+    let tree = parsed.tree();
+    let registry = pdxl_ck3::datafn_registry();
+    for span in datafn::datafn_spans(tree) {
+        if off < span.start || off >= span.end {
+            continue;
+        }
+        let text = &src[span.start as usize..span.end as usize];
+        let segments = datafn::parse_chain(text, span.start)?;
+        let (resolved, _err) = datafn::resolve_chain(&segments, registry);
+        let idx = segments
+            .iter()
+            .position(|s| off >= s.name_start && off < s.name_end)?;
+        let seg = &segments[idx];
+        let info = resolved.get(idx)?;
+        let mut text = match info.row {
+            Some(row) => {
+                let owner = if row.owner.is_empty() {
+                    String::new()
+                } else {
+                    format!("{}.", row.owner)
+                };
+                let args = if row.args > 0 {
+                    let names: Vec<String> = (0..row.args).map(|i| format!("Arg{i}")).collect();
+                    format!("( {} )", names.join(", "))
+                } else {
+                    String::new()
+                };
+                let mut t = format!(
+                    "```pdxscript\n{owner}{}{args} → {}\n```\n\n*{}*",
+                    row.name,
+                    row.ret,
+                    row.kind.label()
+                );
+                if !row.desc.is_empty() {
+                    t.push_str(&format!("\n\n{}", row.desc));
+                }
+                t
+            }
+            None if idx == 0 && registry.is_type(&seg.name) => format!(
+                "```pdxscript\n{}\n```\n\n*data type* — reads the narrowest enclosing \
+                 datacontext of this type",
+                seg.name
+            ),
+            None => return None,
+        };
+        text.push('\n');
+        return Some(markdown_hover(src, (seg.name_start, seg.name_end), text));
+    }
+    None
 }
 
 #[cfg(test)]

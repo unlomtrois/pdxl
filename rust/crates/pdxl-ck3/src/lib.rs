@@ -92,6 +92,13 @@ const GUI_KINDS: GuiKinds = GuiKinds {
     ty: kinds::GUI_TYPE,
 };
 
+/// The compiled datafunction registry (gui `[…]` expression typing), built
+/// once from the generated `DumpDataTypes` table.
+pub fn datafn_registry() -> &'static pdxl_gui::datafn::DataFnRegistry {
+    static REG: std::sync::OnceLock<pdxl_gui::datafn::DataFnRegistry> = std::sync::OnceLock::new();
+    REG.get_or_init(|| pdxl_gui::datafn::DataFnRegistry::from_rows(tables::DATA_FNS))
+}
+
 /// Builds the CK3 schema from the entity registry. Cheap to construct; build
 /// once and share.
 pub fn schema() -> Schema {

@@ -17,6 +17,7 @@ pdxl-fileset.workspace = true
 pdxl-moddesc.workspace = true
 pdxl-analysis.workspace = true
 pdxl-ck3.workspace = true
+pdxl-gui.workspace = true
 pdxl-project.workspace = true
 pdxl-lsp.workspace = true
 clap.workspace = true

@@ -9,6 +9,7 @@ description = "CK3 rules for pdxl-analysis: definition directories, reference ke
 
 [dependencies]
 pdxl-analysis.workspace = true
+pdxl-gui.workspace = true
 
 [dev-dependencies]
 pdxl-ast.workspace = true

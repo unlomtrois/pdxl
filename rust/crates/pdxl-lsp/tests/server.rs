@@ -1839,3 +1839,31 @@ fn gui_template_definition_and_references() {
         "definition + using site expected: {refs:?}"
     );
 }
+
+#[test]
+fn gui_datafn_hover_and_diagnostics() {
+    let t = TempTree::new();
+    let src = "window = {\n\
+         \tdatacontext = \"[GetPlayer.GetLiege]\"\n\
+         \tvisible = [GetPlayer.NotARealFunction]\n\
+         }\n";
+    t.write("gui/window_x.gui", src);
+    let (server, rx) = server_over(&t);
+    let uri = uri_for(&t, "gui/window_x.gui");
+
+    // Hover on a member segment shows its signature and return type.
+    let hover = hover_md(&server, &uri, pos_of(src, "GetLiege"));
+    assert!(hover.contains("Character.GetLiege"), "{hover}");
+    assert!(hover.contains("Character"), "{hover}");
+
+    // The bad member produced a datafunction warning for this mod file.
+    let publishes = drain_publishes(&rx);
+    let ours: Vec<_> = publishes
+        .iter()
+        .filter(|(p, _)| p.ends_with("gui/window_x.gui"))
+        .collect();
+    assert!(
+        ours.iter().any(|(_, n)| *n >= 1),
+        "expected a datafn warning publish: {publishes:?}"
+    );
+}

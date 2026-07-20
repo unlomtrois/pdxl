@@ -26,6 +26,7 @@
 //! resolvable remainder measured on vanilla + T4N: ~8.1k `using` refs and
 //! ~30.8k instantiations across 389 files.
 
+pub mod datafn;
 use std::collections::HashSet;
 use std::sync::Arc;
 

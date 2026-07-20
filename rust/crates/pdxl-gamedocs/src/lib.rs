@@ -249,6 +249,108 @@ pub fn parse_modifiers(text: &str) -> Vec<ModifierDef> {
     out
 }
 
+/// What one `DumpDataTypes` stanza defines.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DataFnKind {
+    /// A registered data type (`Definition type: Type`).
+    Type,
+    /// A global promote (`GetPlayer`) — chain roots.
+    GlobalPromote,
+    /// A global function (`GetTitleByKey( Arg0 )`).
+    GlobalFunction,
+    /// A global macro (treated like a function for chain typing).
+    GlobalMacro,
+    /// A member promote (`Character.GetLiege`).
+    Promote,
+    /// A member function (`Character.GetHeldTitle( Arg0 )`).
+    Function,
+}
+
+/// One entry from the `DumpDataTypes` console dump (`logs/data_types/*.txt`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DataFnEntry {
+    /// The owning type for member promotes/functions, empty for globals/types.
+    pub owner: String,
+    /// The promote/function/type name (without the owner prefix).
+    pub name: String,
+    pub kind: DataFnKind,
+    /// Declared argument count (`( Arg0, Arg1 )`).
+    pub args: u8,
+    /// The return type; `[unregistered]` means the engine did not register
+    /// it — chain typing must stop there.
+    pub ret: String,
+    /// Optional `Description:` line.
+    pub description: String,
+}
+
+/// Parses one `DumpDataTypes` dump file: stanzas separated by dashed lines,
+/// each `Name` or `Owner.Member( Arg0, … )` followed by `Definition type:` /
+/// `Return type:` / optional `Description:` fields. Unparsable stanzas
+/// (operator entries like `Add_CFixedPoint`-style names always parse; only
+/// malformed heads are skipped) are dropped.
+pub fn parse_data_types(text: &str) -> Vec<DataFnEntry> {
+    let mut out = Vec::new();
+    for stanza in text.split("-----------------------") {
+        let mut head: Option<&str> = None;
+        let mut def_type = "";
+        let mut ret = "";
+        let mut description = String::new();
+        for line in stanza.lines().map(str::trim) {
+            if line.is_empty() {
+                continue;
+            }
+            if let Some(v) = field_value(line, "Definition type:") {
+                def_type = v;
+            } else if let Some(v) = field_value(line, "Return type:") {
+                ret = v;
+            } else if let Some(v) = field_value(line, "Description:") {
+                description = v.to_string();
+            } else if head.is_none() {
+                head = Some(line);
+            }
+        }
+        let Some(head) = head else { continue };
+        let kind = match def_type {
+            "Type" => DataFnKind::Type,
+            "Global promote" => DataFnKind::GlobalPromote,
+            "Global function" => DataFnKind::GlobalFunction,
+            "Global macro" => DataFnKind::GlobalMacro,
+            "Promote" => DataFnKind::Promote,
+            "Function" => DataFnKind::Function,
+            _ => continue,
+        };
+        // `Owner.Member( Arg0, Arg1 )` / `Name( Arg0 )` / `Name`.
+        let (path, args) = match head.find('(') {
+            Some(i) => {
+                let inner = head[i + 1..].trim_end_matches(')').trim();
+                let n = if inner.is_empty() {
+                    0
+                } else {
+                    inner.split(',').count()
+                };
+                (head[..i].trim(), n as u8)
+            }
+            None => (head, 0),
+        };
+        let (owner, name) = match path.split_once('.') {
+            Some((o, n)) => (o.to_string(), n.to_string()),
+            None => (String::new(), path.to_string()),
+        };
+        if name.is_empty() || !name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_') {
+            continue;
+        }
+        out.push(DataFnEntry {
+            owner,
+            name,
+            kind,
+            args,
+            ret: ret.to_string(),
+            description,
+        });
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -360,5 +462,37 @@ mod tests {
         assert_eq!(mods[0].tag, "dynasty_opinion");
         assert_eq!(mods[0].use_areas, vec!["character"]);
         assert_eq!(mods[1].tag, "$MEN_AT_ARMS_TYPE$_pursuit_add");
+    }
+
+    #[test]
+    fn data_types_parses_globals_members_and_args() {
+        let entries = parse_data_types(
+            "GetVariableSystem\n\
+             Description: Access the global variable system\n\
+             Definition type: Global promote\n\
+             Return type: VariableSystem\n\
+             \n\
+             -----------------------\n\
+             \n\
+             Character.GetHeldTitle( Arg0 )\n\
+             Definition type: Function\n\
+             Return type: Title\n\
+             \n\
+             -----------------------\n\
+             \n\
+             Character\n\
+             Definition type: Type\n\
+             Return type: Character\n",
+        );
+        assert_eq!(entries.len(), 3);
+        assert_eq!(entries[0].name, "GetVariableSystem");
+        assert_eq!(entries[0].kind, DataFnKind::GlobalPromote);
+        assert_eq!(entries[0].ret, "VariableSystem");
+        assert_eq!(entries[0].description, "Access the global variable system");
+        assert_eq!(entries[1].owner, "Character");
+        assert_eq!(entries[1].name, "GetHeldTitle");
+        assert_eq!(entries[1].args, 1);
+        assert_eq!(entries[1].kind, DataFnKind::Function);
+        assert_eq!(entries[2].kind, DataFnKind::Type);
     }
 }

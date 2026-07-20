@@ -58,12 +58,18 @@ pub struct ModifierRow {
     pub use_areas: &'static [&'static str],
 }
 
+// The datafunction row/kind types live in `pdxl-gui` (the machinery that
+// consumes them); the generated table re-uses them via this re-export.
+pub use pdxl_gui::datafn::{DataFnKind, DataFnRow};
+
+pub mod data_types;
 pub mod effects;
 pub mod modifiers;
 pub mod scope_links;
 pub mod scope_types;
 pub mod triggers;
 
+pub use data_types::DATA_FNS;
 pub use effects::EFFECTS;
 pub use modifiers::MODIFIERS;
 pub use scope_links::{CODE_SAVED_SCOPES, SCOPE_LINKS};

@@ -51,10 +51,34 @@ pub fn run(
     let schema = pdxl_ck3::schema();
     let (table, diags) = pdxl_project::analyze(&fs, &schema)?;
 
+    // Interface scripts: datafunction chain typing against the DumpDataTypes
+    // registry. Reported like unresolved references (few; genuine errors).
+    let gui_errors = check_gui_datafns(&fs)?;
+
     match file {
         Some(target) => report_file(&fs, &diags, target),
-        None => report_project(&table, &diags, schema.kinds()),
+        None => report_project(&table, &diags, &gui_errors, schema.kinds()),
     }
+}
+
+/// Validates every `.gui` file's datafunction chains, returning
+/// `file:line:col: message` strings.
+fn check_gui_datafns(fs: &FileSet) -> io::Result<Vec<String>> {
+    let registry = pdxl_ck3::datafn_registry();
+    let mut out = Vec::new();
+    for entry in fs.iter() {
+        if !entry.rel_path.ends_with(".gui") {
+            continue;
+        }
+        let src = std::fs::read(&entry.full_path)?;
+        let full = entry.full_path.to_string_lossy().into_owned();
+        let (tree, _) = pdxl_gui::parse(full.clone(), src.clone()).into_parts();
+        for err in pdxl_gui::datafn::validate_datafns(&tree, registry) {
+            let (line, col) = pdxl_src::line_col(&src, err.start);
+            out.push(format!("{full}:{line}:{col}: {}", err.msg));
+        }
+    }
+    Ok(out)
 }
 
 /// Mirrors Go `buildProjectFileSet`: ignores from config defaults, replace
@@ -104,6 +128,7 @@ fn build_project_fileset(game: Option<&str>, mod_arg: Option<&str>) -> io::Resul
 fn report_project(
     table: &pdxl_analysis::SymbolTable,
     diags: &[pdxl_analysis::RefDiag],
+    gui_errors: &[String],
     kinds: &[KindId],
 ) -> io::Result<ExitCode> {
     let stdout = io::stdout();
@@ -127,6 +152,13 @@ fn report_project(
         }
     }
 
+    if !gui_errors.is_empty() {
+        writeln!(w, "\n{} gui datafunction errors:", gui_errors.len())?;
+        for e in gui_errors {
+            writeln!(w, "  {e}")?;
+        }
+    }
+
     if !diags.is_empty() {
         writeln!(w, "\n{} unresolved references:", diags.len())?;
         let mut cache = HashMap::new();
@@ -137,7 +169,11 @@ fn report_project(
         return Ok(ExitCode::FAILURE);
     }
     w.flush()?;
-    Ok(ExitCode::SUCCESS)
+    if gui_errors.is_empty() {
+        Ok(ExitCode::SUCCESS)
+    } else {
+        Ok(ExitCode::FAILURE)
+    }
 }
 
 /// Mirrors Go `reportFile`: only `target`'s unresolved references.
