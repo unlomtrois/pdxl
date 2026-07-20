@@ -82,6 +82,8 @@ export function activate(context: vscode.ExtensionContext): void {
       // Localization files: find-references / hover on loc keys from the yml
       // side. Narrow pattern — random workspace .yml (CI configs) stays out.
       { scheme: "file", pattern: "**/localization/**/*.yml" },
+      // Interface scripts: template/type navigation + datafunction typing.
+      { scheme: "file", pattern: "**/*.gui" },
     ],
     initializationOptions: { gamePath },
     // Surface server stderr (slog) in the "pdxl (server)" output channel.
