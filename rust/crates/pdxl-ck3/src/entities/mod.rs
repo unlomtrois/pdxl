@@ -37,6 +37,7 @@ mod on_action;
 mod portrait_animation;
 mod scheme;
 mod scripted;
+mod secret_type;
 mod title;
 mod traits;
 
@@ -88,5 +89,6 @@ registry!(
     portrait_animation::PortraitAnimation,
     character_template::CharacterTemplate,
     namespace::Namespace,
+    secret_type::SecretType,
     loc::Loc,
 );

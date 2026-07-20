@@ -55,11 +55,14 @@ pub enum SymbolKind {
     /// symbol is the declaration itself (its value), so hovering it shows the
     /// file's doc; the events that use the namespace are unaffected.
     Namespace = 19,
+    /// Secret types (`common/secret_types/`): top-level definitions, referenced
+    /// by `add_secret`/`any_secret`/… `= { type = X }`.
+    SecretType = 20,
 }
 
 impl SymbolKind {
     /// Every kind, in discriminant order (stable iteration for reports).
-    pub const ALL: [SymbolKind; 20] = [
+    pub const ALL: [SymbolKind; 21] = [
         SymbolKind::ScriptedTrigger,
         SymbolKind::ScriptedEffect,
         SymbolKind::Trait,
@@ -80,6 +83,7 @@ impl SymbolKind {
         SymbolKind::PortraitAnimation,
         SymbolKind::ScriptedCharacterTemplate,
         SymbolKind::Namespace,
+        SymbolKind::SecretType,
     ];
 
     /// The report name, identical to Go's `SymbolKind.String()`.
@@ -105,6 +109,7 @@ impl SymbolKind {
             SymbolKind::PortraitAnimation => "portrait_animation",
             SymbolKind::ScriptedCharacterTemplate => "scripted_character_template",
             SymbolKind::Namespace => "namespace",
+            SymbolKind::SecretType => "secret_type",
         }
     }
 }

@@ -727,6 +727,29 @@ fn option_field_completion_carries_docs() {
 }
 
 #[test]
+fn secret_type_body_completion_and_hover() {
+    let t = TempTree::new();
+    let src = "secret_deviant = {\n\tcategory = deviancy\n\t\n}\n";
+    t.write("common/secret_types/00.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/secret_types/00.txt");
+
+    let items = server.completion(&uri, pos_after(src, "category = deviancy"));
+    let names: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    for f in [
+        "is_valid",
+        "is_shunned",
+        "on_discover",
+        "on_expose",
+        "on_owner_death",
+    ] {
+        assert!(names.contains(&f), "missing `{f}`: {names:?}");
+    }
+    let hover = hover_md(&server, &uri, pos_of(src, "category = deviancy"));
+    assert!(hover.contains("secret_type field category"), "{hover}");
+}
+
+#[test]
 fn character_template_body_completion_and_hover() {
     // A template definition body shares create_character's field structure.
     let t = TempTree::new();

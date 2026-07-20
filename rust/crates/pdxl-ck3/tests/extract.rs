@@ -342,6 +342,28 @@ fn modifier_block_and_scalar_refs() {
 }
 
 #[test]
+fn secret_type_def_and_gated_type_ref() {
+    // Def in common/secret_types/.
+    let d = extract(
+        "secret_deviant = { category = deviancy }\n",
+        "common/secret_types/00.txt",
+    );
+    assert_eq!(d.defs[0].kind, SymbolKind::SecretType);
+
+    // `type = X` inside a secret effect references a secret …
+    let f = extract(
+        "e = { add_secret = { type = secret_deviant secret_owner = root } }\n",
+        "events/x.txt",
+    );
+    assert_eq!(ref_names(&f), vec!["secret_deviant"]);
+    assert_eq!(f.refs[0].kind, SymbolKind::SecretType);
+
+    // … but a bare `type = character_event` (event) is not a secret ref.
+    let ev = extract("test.1 = { type = character_event }\n", "events/x.txt");
+    assert!(ev.refs.is_empty());
+}
+
+#[test]
 fn character_template_ref_gated_to_create_character() {
     // `create_character = { template = X }` references a character template …
     let f = extract(
