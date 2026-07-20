@@ -523,6 +523,59 @@ fn hover_shows_builtin_effect_trigger_and_scope_link_docs() {
     }
 }
 
+/// Extracts the markdown string from a hover result.
+fn hover_md(server: &ServerState, uri: &Url, pos: Position) -> String {
+    match server.hover(uri, pos).expect("hover").contents {
+        lsp_types::HoverContents::Markup(m) => m.value,
+        _ => panic!("expected markup"),
+    }
+}
+
+#[test]
+fn doc_block_shown_on_definition_and_call_site() {
+    let t = TempTree::new();
+    t.write("common/traits/00.txt", "brave = { }\n");
+    let src = "#! This is a ![brave] effect.\n#! It is removed when the scheme ends.\nscripted_effect my_fx = {\n\tadd_gold = 1\n}\nother = {\n\tmy_fx = yes\n}\n";
+    t.write("events/e.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "events/e.txt");
+
+    // On the definition name.
+    let md = hover_md(&server, &uri, pos_of(src, "my_fx = {"));
+    assert!(md.contains("It is removed when the scheme ends."), "{md}");
+    // `![brave]` became a go-to-definition link (brave resolves as a trait).
+    assert!(md.contains("[brave](file://") && md.contains("#L1"), "{md}");
+
+    // On a call site — shows the target's doc too.
+    let md_call = hover_md(&server, &uri, pos_of(src, "my_fx = yes"));
+    assert!(
+        md_call.contains("It is removed when the scheme ends."),
+        "{md_call}"
+    );
+}
+
+#[test]
+fn doc_block_rules() {
+    // Blank line ends the block; plain `#` is not a doc; unresolved ref is plain.
+    let t = TempTree::new();
+    let src = "#! detached doc\n\n# ordinary comment\n#! attached ![nope]\nscripted_effect fx = { add_gold = 1 }\n";
+    t.write("events/e.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "events/e.txt");
+    let md = hover_md(&server, &uri, pos_of(src, "fx = {"));
+    assert!(md.contains("attached"), "{md}");
+    assert!(
+        !md.contains("detached doc"),
+        "blank line must end the block: {md}"
+    );
+    assert!(
+        !md.contains("ordinary comment"),
+        "plain # is not a doc: {md}"
+    );
+    // Unresolved `![nope]` renders as a code span, not a link.
+    assert!(md.contains("`nope`") && !md.contains("[nope]("), "{md}");
+}
+
 #[test]
 fn option_field_completion_carries_docs() {
     let t = TempTree::new();

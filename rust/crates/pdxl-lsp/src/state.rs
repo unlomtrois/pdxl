@@ -498,6 +498,12 @@ impl ServerState {
                 {
                     text.push_str(&format!("\n\n> {loc_text}"));
                 }
+                // A `#!` doc block above the definition (resolved even when
+                // hovering a reference, so a call site shows the target's doc).
+                if let Some(doc) = self.doc_comment_for(project, symbol) {
+                    text.push_str("\n\n");
+                    text.push_str(&self.render_doc(&doc, project));
+                }
                 text.push_str(&format!("\n\nDefined in `{}`", symbol.file));
                 if !symbol.params.is_empty() {
                     text.push_str("\n\nParameters: ");
@@ -535,6 +541,62 @@ impl ServerState {
         let open = line.find('"')?;
         let close = line.rfind('"')?;
         (close > open).then(|| line[open + 1..close].to_string())
+    }
+
+    /// The `#!` doc block directly above a symbol's definition, if any. Re-reads
+    /// the defining file (like [`Self::loc_text`]) — one line-scan per hover.
+    fn doc_comment_for(&self, project: &Project, symbol: &pdxl_analysis::Symbol) -> Option<String> {
+        let full = project.rel_to_full(&symbol.file)?;
+        let src = self.read_file(full).ok()?;
+        extract_doc_block(&src, symbol.offset)
+    }
+
+    /// Renders a doc block to hover markdown, turning each `![Name]` into a
+    /// go-to-definition link when `Name` resolves (first matching kind), or a
+    /// plain code span otherwise. Prose is passed through as markdown.
+    fn render_doc(&self, doc: &str, project: &Project) -> String {
+        let mut out = String::with_capacity(doc.len());
+        let mut cache: HashMap<PathBuf, Option<Vec<u8>>> = HashMap::new();
+        let mut rest = doc;
+        while let Some(pos) = rest.find("![") {
+            out.push_str(&rest[..pos]);
+            let after = &rest[pos + 2..];
+            if let Some(close) = after.find(']') {
+                out.push_str(&self.render_doc_ref(&after[..close], project, &mut cache));
+                rest = &after[close + 1..];
+            } else {
+                out.push_str("![");
+                rest = after;
+            }
+        }
+        out.push_str(rest);
+        out
+    }
+
+    /// A single `![Name]` reference: a link to its definition, else `` `Name` ``.
+    fn render_doc_ref(
+        &self,
+        name: &str,
+        project: &Project,
+        cache: &mut HashMap<PathBuf, Option<Vec<u8>>>,
+    ) -> String {
+        for kind in SymbolKind::ALL {
+            let Some(sym) = project.table().lookup(kind, name) else {
+                continue;
+            };
+            let Some(full) = project.rel_to_full(&sym.file) else {
+                continue;
+            };
+            let src = cache
+                .entry(full.to_path_buf())
+                .or_insert_with(|| self.read_file(full).ok());
+            if let Some(src) = src {
+                // Editors expect a 1-based line in the `#L` fragment.
+                let line = offset_to_position(src, sym.offset).line + 1;
+                return format!("[{name}]({}#L{line})", path_to_uri(full));
+            }
+        }
+        format!("`{name}`")
     }
 
     /// `textDocument/inlayHint`: lightweight dynamic-scope annotations at
@@ -742,6 +804,42 @@ impl ServerState {
     pub fn is_ready(&self) -> bool {
         self.project.is_some()
     }
+}
+
+/// Collects the contiguous `#!` doc lines directly above the line containing
+/// `def_offset`, top-to-bottom, with the `#!` marker and one optional following
+/// space stripped. A blank or ordinary line ends the block; `None` if there is
+/// no doc line immediately above the definition.
+fn extract_doc_block(src: &[u8], def_offset: u32) -> Option<String> {
+    let def = (def_offset as usize).min(src.len());
+    // Start of the line the definition sits on (past any leading keyword).
+    let mut end = src[..def]
+        .iter()
+        .rposition(|&b| b == b'\n')
+        .map_or(0, |i| i + 1);
+
+    let mut docs: Vec<String> = Vec::new();
+    while end > 0 {
+        // `end - 1` is the '\n' ending the previous line; find that line's start.
+        let prev_nl = src[..end - 1]
+            .iter()
+            .rposition(|&b| b == b'\n')
+            .map_or(0, |i| i + 1);
+        let line = &src[prev_nl..end - 1];
+        let Some(rest) = line.trim_ascii_start().strip_prefix(b"#!") else {
+            break;
+        };
+        let Ok(s) = std::str::from_utf8(rest) else {
+            break;
+        };
+        docs.push(s.strip_prefix(' ').unwrap_or(s).trim_end().to_string());
+        end = prev_nl;
+    }
+    if docs.is_empty() {
+        return None;
+    }
+    docs.reverse();
+    Some(docs.join("\n"))
 }
 
 fn markdown_hover(src: &[u8], span: (u32, u32), text: String) -> lsp_types::Hover {
@@ -1691,5 +1789,32 @@ fn lsp_symbol_kind(icon: pdxl_analysis::IconHint) -> lsp_types::SymbolKind {
         I::Object => lsp_types::SymbolKind::OBJECT,
         I::Hierarchy => lsp_types::SymbolKind::NAMESPACE, // hierarchical, like titles
         I::Text => lsp_types::SymbolKind::STRING,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::extract_doc_block;
+
+    /// Offset of `needle`'s start in `src`.
+    fn off(src: &str, needle: &str) -> u32 {
+        src.find(needle).unwrap() as u32
+    }
+
+    #[test]
+    fn doc_block_above_typed_def_and_no_space_marker() {
+        // Offset points at the NAME, mid-line after the keyword; the scan must
+        // back up to the line start, then collect the `#!` lines above.
+        let src = "#!first\n#! second\nscripted_effect my_fx = { }\n";
+        let got = extract_doc_block(src.as_bytes(), off(src, "my_fx"));
+        assert_eq!(got.as_deref(), Some("first\nsecond"));
+    }
+
+    #[test]
+    fn no_block_without_marker_or_across_blank_line() {
+        let src = "#! detached\n\nfx = { }\n";
+        assert_eq!(extract_doc_block(src.as_bytes(), off(src, "fx")), None);
+        let plain = "# just a comment\nfx = { }\n";
+        assert_eq!(extract_doc_block(plain.as_bytes(), off(plain, "fx")), None);
     }
 }
