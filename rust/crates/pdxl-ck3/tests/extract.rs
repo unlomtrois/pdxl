@@ -339,6 +339,24 @@ fn modifier_block_and_scalar_refs() {
 }
 
 #[test]
+fn character_template_ref_gated_to_create_character() {
+    // `create_character = { template = X }` references a character template …
+    let f = extract(
+        "e = { create_character = { template = my_char save_scope_as = x } }\n",
+        "events/x.txt",
+    );
+    assert_eq!(ref_names(&f), vec!["my_char"]);
+    assert_eq!(f.refs[0].kind, SymbolKind::ScriptedCharacterTemplate);
+
+    // … but `create_artifact = { template = X }` (artifact template) is not.
+    let art = extract(
+        "e = { create_artifact = { template = regalia_template } }\n",
+        "events/x.txt",
+    );
+    assert!(art.refs.is_empty());
+}
+
+#[test]
 fn trait_xp_block_references_trait() {
     let f = extract(
         "e = {\n\

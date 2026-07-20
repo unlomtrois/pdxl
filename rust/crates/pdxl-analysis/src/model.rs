@@ -48,11 +48,14 @@ pub enum SymbolKind {
     /// Portrait animations (`gfx/portraits/portrait_animations/`): top-level
     /// definitions, referenced by an event portrait's `animation = X`.
     PortraitAnimation = 17,
+    /// Scripted character templates (`common/scripted_character_templates/`):
+    /// top-level definitions, referenced by `create_character = { template = X }`.
+    ScriptedCharacterTemplate = 18,
 }
 
 impl SymbolKind {
     /// Every kind, in discriminant order (stable iteration for reports).
-    pub const ALL: [SymbolKind; 18] = [
+    pub const ALL: [SymbolKind; 19] = [
         SymbolKind::ScriptedTrigger,
         SymbolKind::ScriptedEffect,
         SymbolKind::Trait,
@@ -71,6 +74,7 @@ impl SymbolKind {
         SymbolKind::Modifier,
         SymbolKind::ScriptValue,
         SymbolKind::PortraitAnimation,
+        SymbolKind::ScriptedCharacterTemplate,
     ];
 
     /// The report name, identical to Go's `SymbolKind.String()`.
@@ -94,6 +98,7 @@ impl SymbolKind {
             SymbolKind::Modifier => "modifier",
             SymbolKind::ScriptValue => "script_value",
             SymbolKind::PortraitAnimation => "portrait_animation",
+            SymbolKind::ScriptedCharacterTemplate => "scripted_character_template",
         }
     }
 }

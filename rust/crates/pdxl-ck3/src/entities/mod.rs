@@ -21,6 +21,7 @@ use pdxl_analysis::context::ClauseKind;
 pub(crate) mod common;
 
 mod character;
+mod character_template;
 mod culture;
 mod decision;
 mod event;
@@ -83,5 +84,6 @@ registry!(
     event_theme::EventTheme,
     modifier::Modifier,
     portrait_animation::PortraitAnimation,
+    character_template::CharacterTemplate,
     loc::Loc,
 );
