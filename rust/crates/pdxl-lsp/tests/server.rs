@@ -713,6 +713,30 @@ fn option_field_completion_carries_docs() {
 }
 
 #[test]
+fn character_template_body_completion_and_hover() {
+    // A template definition body shares create_character's field structure.
+    let t = TempTree::new();
+    let src = "T4N_avatar = {\n\tage = 20\n\t\n}\n";
+    t.write("common/scripted_character_templates/x.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/scripted_character_templates/x.txt");
+
+    let items = server.completion(&uri, pos_after(src, "age = 20"));
+    let names: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    for f in [
+        "faith",
+        "culture",
+        "dynasty",
+        "random_traits_list",
+        "after_creation",
+    ] {
+        assert!(names.contains(&f), "missing `{f}`: {names:?}");
+    }
+    let hover = hover_md(&server, &uri, pos_of(src, "age = 20"));
+    assert!(hover.contains("Starting age"), "{hover}");
+}
+
+#[test]
 fn create_character_block_completion_and_hover() {
     let t = TempTree::new();
     // `create_character` is a built-in effect with a documented block structure.

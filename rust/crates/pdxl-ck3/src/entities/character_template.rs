@@ -29,5 +29,10 @@ impl Entity for CharacterTemplate {
         aliases: &[],
     }];
 
-    const ROOTS: &'static [(&'static str, ClauseKind)] = &[];
+    // A template body is a bundle of `create_character` parameters, so it reads
+    // as the same documented structure — its fields complete and hover.
+    const ROOTS: &'static [(&'static str, ClauseKind)] = &[(
+        "common/scripted_character_templates/",
+        ClauseKind::Struct(&super::create_character::CREATE_CHARACTER),
+    )];
 }
