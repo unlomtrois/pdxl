@@ -7,7 +7,7 @@
 use pdxl_analysis::context::ClauseKind::{self, DynamicDesc, Effect, ScriptValue, Struct, Trigger};
 use pdxl_analysis::context::ScalarKind::{LocKey, Setting};
 use pdxl_analysis::context::{Fallback, StructSpec, block, scalar, scalar_or_block};
-use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern};
+use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 use crate::kinds;
 
@@ -249,18 +249,36 @@ static INTERACTION: StructSpec = StructSpec {
 pub(crate) struct CharacterInteraction;
 
 impl Entity for CharacterInteraction {
-    const KINDS: &'static [KindSpec] = &[KindSpec {
-        kind: kinds::CHARACTER_INTERACTION,
-        icon: IconHint::Action,
-        defs: Some(DefSource {
-            dir_prefix: "common/character_interactions/",
-            shape: DefShape::TopLevel,
-        }),
-        // `interaction = X` resolves everywhere (important_actions, decisions,
-        // scripted effects, events, …); corpus-validated at 0 unresolved.
-        refs: &[anywhere(RefPattern::KeyValue("interaction"))],
-        aliases: &[],
-    }];
+    const KINDS: &'static [KindSpec] = &[
+        KindSpec {
+            kind: kinds::CHARACTER_INTERACTION,
+            icon: IconHint::Action,
+            defs: Some(DefSource {
+                dir_prefix: "common/character_interactions/",
+                shape: DefShape::TopLevel,
+            }),
+            // `interaction = X` resolves everywhere (important_actions,
+            // decisions, scripted effects, events, …); 0 unresolved.
+            refs: &[anywhere(RefPattern::KeyValue("interaction"))],
+            aliases: &[],
+        },
+        // Interaction categories (`common/character_interaction_categories/`),
+        // named by an interaction's `category = X`. Gated there because `category`
+        // is overloaded (traits, activities, portraits, …).
+        KindSpec {
+            kind: kinds::INTERACTION_CATEGORY,
+            icon: IconHint::Tag,
+            defs: Some(DefSource {
+                dir_prefix: "common/character_interaction_categories/",
+                shape: DefShape::TopLevel,
+            }),
+            refs: &[RefRule {
+                pattern: RefPattern::KeyValue("category"),
+                gate: Some("common/character_interactions/"),
+            }],
+            aliases: &[],
+        },
+    ];
 
     const ROOTS: &'static [(&'static str, ClauseKind)] = &[(
         "common/character_interactions/",

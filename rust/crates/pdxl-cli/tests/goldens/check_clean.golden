@@ -17,6 +17,7 @@ modifier                0
 portrait_animation      0
 scripted_character_template      0
 character_interaction      0
+interaction_category      0
 namespace               0
 secret_type             0
 loc_key                 0

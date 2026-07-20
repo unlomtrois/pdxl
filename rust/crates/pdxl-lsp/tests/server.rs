@@ -749,6 +749,25 @@ fn character_interaction_body_completion_and_hover() {
         "{hover}"
     );
     assert!(hover.contains("interaction menu category"), "{hover}");
+
+    // Value completion for `category = ` offers the defined categories.
+    t.write(
+        "common/character_interaction_categories/00.txt",
+        "interaction_category_hostile = { }\ninteraction_category_diplomacy = { }\n",
+    );
+    let (mut server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/character_interactions/00.txt");
+    let vsrc = "x = {\n\tcategory = \n}\n";
+    server.did_open(uri.clone(), vsrc.to_string());
+    let vnames: Vec<String> = server
+        .completion(&uri, pos_after(vsrc, "category = "))
+        .iter()
+        .map(|i| i.label.clone())
+        .collect();
+    assert!(
+        vnames.iter().any(|n| n == "interaction_category_hostile"),
+        "{vnames:?}"
+    );
 }
 
 #[test]
