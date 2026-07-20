@@ -24,6 +24,7 @@ use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule
 
 use super::Entity;
 use super::common::{COST, DURATION, anywhere};
+use super::culture_shared::in_innovations;
 
 const TYPES_DIR: &str = "common/casus_belli_types/";
 const GROUPS_DIR: &str = "common/casus_belli_groups/";
@@ -488,6 +489,9 @@ impl Entity for CasusBelli {
                 anywhere(RefPattern::KeyValue("using_cb")),
                 // `ai_start_best_war = { cb = { X Y } }` — same key, list form.
                 anywhere(RefPattern::KeyList("cb")),
+                // An innovation's tooltip-only CB unlock (corpus-validated:
+                // the key never occurs in eras/ or anywhere else).
+                in_innovations(RefPattern::KeyValue("unlock_casus_belli")),
             ],
             aliases: &[],
         },

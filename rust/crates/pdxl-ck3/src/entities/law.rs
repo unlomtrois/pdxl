@@ -10,6 +10,7 @@ use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule
 
 use super::Entity;
 use super::common::{COST, OPAQUE, anywhere};
+use super::culture_shared::in_innovations;
 
 /// Where realm/title laws are defined; also gates the in-group
 /// `default = law_name` reference.
@@ -252,6 +253,9 @@ impl Entity for Law {
                 pattern: RefPattern::KeyValue("default"),
                 gate: Some(LAWS_DIR),
             },
+            // An innovation's tooltip-only law unlock (corpus-validated: the
+            // key never occurs in eras/ or anywhere else).
+            in_innovations(RefPattern::KeyValue("unlock_law")),
         ],
         aliases: &[],
     }];

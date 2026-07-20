@@ -724,6 +724,298 @@ fn artifact_defs_and_refs() {
     );
 }
 
+// ── culture domain (ANALYSIS_VERSION 30) ────────────────────────────────────
+
+#[test]
+fn culture_pillar_defs_and_refs() {
+    // Defs in common/culture/pillars/.
+    let d = extract(
+        "ethos_bellicose = { type = ethos }\nlanguage_norse = { type = language }\n",
+        "common/culture/pillars/00.txt",
+    );
+    assert_eq!(def_names(&d), vec!["ethos_bellicose", "language_norse"]);
+    assert!(
+        d.defs
+            .iter()
+            .all(|s| s.kind == pdxl_ck3::kinds::CULTURE_PILLAR)
+    );
+
+    // The five pillar slots of a culture body reference pillars (depth 1).
+    let f = extract(
+        "norse = {\n\
+         \tethos = ethos_bellicose\n\
+         \theritage = heritage_north_germanic\n\
+         \tlanguage = language_norse\n\
+         \tmartial_custom = martial_custom_male_only\n\
+         \thead_determination = head_determination_domain\n\
+         }\n",
+        "common/culture/cultures/00.txt",
+    );
+    let pillars: Vec<&str> = f
+        .refs
+        .iter()
+        .filter(|r| r.kind == pdxl_ck3::kinds::CULTURE_PILLAR)
+        .map(|r| r.name.as_str())
+        .collect();
+    assert_eq!(
+        pillars,
+        vec![
+            "ethos_bellicose",
+            "heritage_north_germanic",
+            "language_norse",
+            "martial_custom_male_only",
+            "head_determination_domain"
+        ]
+    );
+
+    // `has_cultural_pillar` (trigger) and `culture_pillar:` literals resolve
+    // anywhere.
+    let t = extract(
+        "e = {\n\
+         \thas_cultural_pillar = heritage_north_germanic\n\
+         \tsave_temporary_scope_value_as = { name = x value = culture_pillar:language_norse }\n\
+         }\n",
+        "events/x.txt",
+    );
+    let names: Vec<&str> = t
+        .refs
+        .iter()
+        .filter(|r| r.kind == pdxl_ck3::kinds::CULTURE_PILLAR)
+        .map(|r| r.name.as_str())
+        .collect();
+    assert_eq!(names, vec!["heritage_north_germanic", "language_norse"]);
+
+    // `ethos =` outside common/culture/cultures/ means nothing …
+    let elsewhere = extract("e = { ethos = ethos_bellicose }\n", "events/x.txt");
+    assert!(elsewhere.refs.is_empty());
+    // … and a nested (non-depth-1) `language =` is not a ref (KeyValueTop).
+    let nested = extract(
+        "norse = { dlc = { language = language_norse } }\n",
+        "common/culture/cultures/00.txt",
+    );
+    assert!(
+        nested
+            .refs
+            .iter()
+            .all(|r| r.kind != pdxl_ck3::kinds::CULTURE_PILLAR),
+        "{:?}",
+        ref_names(&nested)
+    );
+}
+
+#[test]
+fn culture_tradition_defs_and_refs() {
+    let d = extract(
+        "tradition_seafaring = { category = realm }\n",
+        "common/culture/traditions/00.txt",
+    );
+    assert_eq!(d.defs[0].kind, pdxl_ck3::kinds::CULTURE_TRADITION);
+
+    // The culture body's tradition list and dlc_tradition trait/fallback.
+    let f = extract(
+        "norse = {\n\
+         \ttraditions = { tradition_seafaring tradition_runestones }\n\
+         \tdlc_tradition = {\n\
+         \t\ttrait = tradition_northern_stories\n\
+         \t\trequires_dlc_flag = the_northern_lords\n\
+         \t\tfallback = tradition_poetry\n\
+         \t}\n\
+         }\n",
+        "common/culture/cultures/00.txt",
+    );
+    let names: Vec<&str> = f
+        .refs
+        .iter()
+        .filter(|r| r.kind == pdxl_ck3::kinds::CULTURE_TRADITION)
+        .map(|r| r.name.as_str())
+        .collect();
+    assert_eq!(
+        names,
+        vec![
+            "tradition_seafaring",
+            "tradition_runestones",
+            "tradition_northern_stories",
+            "tradition_poetry"
+        ]
+    );
+
+    // Trigger, effects and scope literal resolve anywhere; the scope-object
+    // comparison form (`has_cultural_tradition = prev`) is skipped.
+    let t = extract(
+        "e = {\n\
+         \thas_cultural_tradition = tradition_seafaring\n\
+         \thas_cultural_tradition = prev\n\
+         \tadd_culture_tradition = tradition_runestones\n\
+         \tremove_culture_tradition = tradition_poetry\n\
+         \texists = culture_tradition:tradition_seafaring\n\
+         }\n",
+        "events/x.txt",
+    );
+    let names: Vec<&str> = t
+        .refs
+        .iter()
+        .filter(|r| r.kind == pdxl_ck3::kinds::CULTURE_TRADITION)
+        .map(|r| r.name.as_str())
+        .collect();
+    assert_eq!(
+        names,
+        vec![
+            "tradition_seafaring",
+            "tradition_runestones",
+            "tradition_poetry",
+            "tradition_seafaring"
+        ]
+    );
+
+    // `traditions = { … }` outside common/culture/cultures/ is not a ref.
+    let elsewhere = extract(
+        "e = { traditions = { tradition_seafaring } }\n",
+        "events/x.txt",
+    );
+    assert!(elsewhere.refs.is_empty());
+}
+
+#[test]
+fn culture_era_defs_and_gated_refs() {
+    let d = extract(
+        "culture_era_tribal = { year = 500 }\n",
+        "common/culture/eras/00.txt",
+    );
+    assert_eq!(d.defs[0].kind, pdxl_ck3::kinds::CULTURE_ERA);
+
+    // An innovation names its era, its unlocked CB, and its unlocked law —
+    // all gated to common/culture/innovations/.
+    let f = extract(
+        "innovation_motte = {\n\
+         \tculture_era = culture_era_tribal\n\
+         \tunlock_casus_belli = claim_cb\n\
+         \tunlock_law = crown_authority_1\n\
+         }\n",
+        "common/culture/innovations/00.txt",
+    );
+    let by_kind: Vec<(&str, KindId)> = f.refs.iter().map(|r| (r.name.as_str(), r.kind)).collect();
+    assert_eq!(
+        by_kind,
+        vec![
+            ("culture_era_tribal", pdxl_ck3::kinds::CULTURE_ERA),
+            ("claim_cb", pdxl_ck3::kinds::CASUS_BELLI),
+            ("crown_authority_1", pdxl_ck3::kinds::LAW),
+        ]
+    );
+
+    // The same keys outside innovations/ mean nothing (eras/ included:
+    // corpus-validated zero occurrences there).
+    let elsewhere = extract(
+        "x = {\n\
+         \tculture_era = culture_era_tribal\n\
+         \tunlock_casus_belli = claim_cb\n\
+         \tunlock_law = crown_authority_1\n\
+         }\n",
+        "common/culture/eras/00.txt",
+    );
+    assert!(elsewhere.refs.is_empty(), "{:?}", ref_names(&elsewhere));
+}
+
+#[test]
+fn culture_innovation_defs_and_refs() {
+    let d = extract(
+        "innovation_motte = { culture_era = culture_era_tribal group = culture_group_military }\n",
+        "common/culture/innovations/00.txt",
+    );
+    assert_eq!(d.defs[0].kind, pdxl_ck3::kinds::CULTURE_INNOVATION);
+
+    // `has_innovation` (trigger) and `culture_innovation:` resolve anywhere.
+    let f = extract(
+        "e = {\n\
+         \thas_innovation = innovation_motte\n\
+         \texists = culture_innovation:innovation_longboats\n\
+         }\n",
+        "events/x.txt",
+    );
+    let names: Vec<&str> = f
+        .refs
+        .iter()
+        .filter(|r| r.kind == pdxl_ck3::kinds::CULTURE_INNOVATION)
+        .map(|r| r.name.as_str())
+        .collect();
+    assert_eq!(names, vec!["innovation_motte", "innovation_longboats"]);
+}
+
+#[test]
+fn name_list_defs_and_refs() {
+    let d = extract(
+        "name_list_norse = { always_use_patronym = yes }\n",
+        "common/culture/name_lists/00.txt",
+    );
+    assert_eq!(d.defs[0].kind, pdxl_ck3::kinds::NAME_LIST);
+
+    // `name_list = X` is ungated (corpus-validated as never overloaded): it
+    // fires in culture bodies and aesthetics bundles alike.
+    let c = extract(
+        "norse = { name_list = name_list_norse }\n",
+        "common/culture/cultures/00.txt",
+    );
+    let names: Vec<&str> = c
+        .refs
+        .iter()
+        .filter(|r| r.kind == pdxl_ck3::kinds::NAME_LIST)
+        .map(|r| r.name.as_str())
+        .collect();
+    assert_eq!(names, vec!["name_list_norse"]);
+    let b = extract(
+        "aesthetics_norwegian = { name_list = name_list_norse }\n",
+        "common/culture/aesthetics_bundles/00.txt",
+    );
+    assert_eq!(ref_names(&b), vec!["name_list_norse"]);
+    assert_eq!(b.refs[0].kind, pdxl_ck3::kinds::NAME_LIST);
+}
+
+#[test]
+fn culture_parents_list_references_cultures() {
+    let f = extract(
+        "norwegian = { parents = { norse west_germanic } }\n",
+        "common/culture/cultures/00.txt",
+    );
+    let names: Vec<&str> = f
+        .refs
+        .iter()
+        .filter(|r| r.kind == pdxl_ck3::kinds::CULTURE)
+        .map(|r| r.name.as_str())
+        .collect();
+    assert_eq!(names, vec!["norse", "west_germanic"]);
+
+    // `parents = { … }` outside common/culture/cultures/ is not a ref.
+    let elsewhere = extract("e = { parents = { norse } }\n", "events/x.txt");
+    assert!(elsewhere.refs.is_empty());
+}
+
+#[test]
+fn culture_misc_def_only_kinds() {
+    // Aesthetics bundles, creation names, and name equivalencies are
+    // definitions only — nothing in script names them by key.
+    let b = extract(
+        "aesthetics_norwegian = { is_shown = { } }\n",
+        "common/culture/aesthetics_bundles/00.txt",
+    );
+    assert_eq!(b.defs[0].kind, pdxl_ck3::kinds::AESTHETICS_BUNDLE);
+
+    let c = extract(
+        "scanian = { trigger = { always = yes } hybrid = yes }\n",
+        "common/culture/creation_names/00.txt",
+    );
+    assert_eq!(c.defs[0].kind, pdxl_ck3::kinds::CULTURE_CREATION_NAME);
+
+    // Equivalency bodies are loose lists of unquoted name tokens; the items
+    // are not references.
+    let e = extract(
+        "aaron_male = { Aaron AarO_n Haroun Harun }\n",
+        "common/culture/name_equivalency/00.txt",
+    );
+    assert_eq!(def_names(&e), vec!["aaron_male"]);
+    assert_eq!(e.defs[0].kind, pdxl_ck3::kinds::NAME_EQUIVALENCY);
+    assert!(e.refs.is_empty());
+}
+
 #[test]
 fn trait_xp_block_references_trait() {
     let f = extract(
@@ -894,6 +1186,28 @@ fn title_scope_refs_in_all_positions() {
         vec!["e_empire", "e_empire", "k_titular", "h_hegemony", "c_shore"],
         "value, chained value, key, and loose list items must all extract"
     );
+}
+
+#[test]
+fn scope_ref_skips_macro_concatenated_name() {
+    // `culture_innovation:innovation_$INNOVATION$` — the lexer splits the
+    // macro, so the scalar ends right before `$`. The captured prefix is not
+    // a resolvable name and must be skipped (T4N silk-road triggers).
+    let f = extract(
+        "t = { this = culture_innovation:innovation_$INNOVATION$ }\n",
+        "common/scripted_triggers/x.txt",
+    );
+    assert!(
+        f.refs.is_empty(),
+        "macro-concatenated scope names must not extract: {:?}",
+        f.refs.iter().map(|r| r.name.as_str()).collect::<Vec<_>>()
+    );
+    // … while a plain literal in the same shape still extracts.
+    let ok = extract(
+        "t = { this = culture_innovation:innovation_camels }\n",
+        "common/scripted_triggers/x.txt",
+    );
+    assert_eq!(ref_names(&ok), vec!["innovation_camels"]);
 }
 
 #[test]

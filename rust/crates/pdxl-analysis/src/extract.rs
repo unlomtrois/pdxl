@@ -563,8 +563,17 @@ fn scan_prefix_refs(
         if schema.skip_ref_value(&name) {
             continue; // macro-interpolated ($X$) or empty names
         }
-
         let node = tree.node(node_id);
+        // A '$' immediately after the scalar means the name is the prefix of
+        // a macro-interpolated identifier (`culture_innovation:innovation_$X$`)
+        // — the lexer splits it, so only the prefix was captured.
+        let src = tree.source();
+        if name_end == text.len()
+            && (node.range.end as usize) < src.len()
+            && src[node.range.end as usize] == b'$'
+        {
+            continue;
+        }
         let start = node.range.start + name_start as u32;
         let end = node.range.start + name_end as u32;
         refs.push(Ref {

@@ -27,6 +27,12 @@ mod character_interaction;
 mod character_template;
 pub(crate) mod create_character;
 mod culture;
+mod culture_era;
+mod culture_innovation;
+mod culture_misc;
+mod culture_pillar;
+mod culture_shared;
+mod culture_tradition;
 mod death_reason;
 mod decision;
 mod dynasty;
@@ -37,6 +43,7 @@ mod faith;
 mod law;
 mod loc;
 mod modifier;
+mod name_list;
 mod namespace;
 mod nickname;
 mod on_action;
@@ -102,5 +109,11 @@ registry!(
     dynasty::Dynasty,
     nickname::Nickname,
     death_reason::DeathReason,
+    culture_pillar::CulturePillar,
+    culture_tradition::CultureTradition,
+    culture_era::CultureEra,
+    culture_innovation::CultureInnovation,
+    name_list::NameList,
+    culture_misc::CultureMisc,
     loc::Loc,
 );
