@@ -599,6 +599,66 @@ impl ServerState {
         format!("`{name}`")
     }
 
+    /// `textDocument/documentLink`: makes every `![Name]` inside a `#!` doc
+    /// comment clickable, targeting `Name`'s definition (resolved refs only).
+    pub fn document_links(&self, uri: &Url) -> Vec<lsp_types::DocumentLink> {
+        let path = uri_to_path(uri);
+        let Some(project) = &self.project else {
+            return Vec::new();
+        };
+        let Ok(src) = self.read_file(&path) else {
+            return Vec::new();
+        };
+        let mut cache: HashMap<PathBuf, Option<Vec<u8>>> = HashMap::new();
+        let mut links = Vec::new();
+        for (start, end) in doc_ref_ranges(&src) {
+            let Ok(name) = std::str::from_utf8(&src[start as usize..end as usize]) else {
+                continue;
+            };
+            let Some(target) = self.doc_ref_target(name, project, &mut cache) else {
+                continue;
+            };
+            links.push(lsp_types::DocumentLink {
+                range: Range {
+                    start: offset_to_position(&src, start),
+                    end: offset_to_position(&src, end),
+                },
+                target: Some(target),
+                tooltip: Some(format!("Go to {name}")),
+                data: None,
+            });
+        }
+        links
+    }
+
+    /// A `file://…#L<line>` URL pointing at `name`'s definition, first matching
+    /// kind, or `None` if it doesn't resolve.
+    fn doc_ref_target(
+        &self,
+        name: &str,
+        project: &Project,
+        cache: &mut HashMap<PathBuf, Option<Vec<u8>>>,
+    ) -> Option<Url> {
+        for kind in SymbolKind::ALL {
+            let Some(sym) = project.table().lookup(kind, name) else {
+                continue;
+            };
+            let Some(full) = project.rel_to_full(&sym.file) else {
+                continue;
+            };
+            let src = cache
+                .entry(full.to_path_buf())
+                .or_insert_with(|| self.read_file(full).ok());
+            if let Some(src) = src {
+                let line = offset_to_position(src, sym.offset).line + 1;
+                let mut url = path_to_uri(full);
+                url.set_fragment(Some(&format!("L{line}")));
+                return Some(url);
+            }
+        }
+        None
+    }
+
     /// `textDocument/inlayHint`: lightweight dynamic-scope annotations at
     /// block openers. This is an editor query only; facts and diagnostics are
     /// deliberately unchanged.
@@ -840,6 +900,54 @@ fn extract_doc_block(src: &[u8], def_offset: u32) -> Option<String> {
     }
     docs.reverse();
     Some(docs.join("\n"))
+}
+
+/// Byte ranges of the `Name` in every `![Name]` inside a `#!` doc comment.
+/// Comments are recovered from the gaps between real tokens (same basis as the
+/// semantic-token highlighter), so a `#` inside a string is never mistaken for
+/// one.
+fn doc_ref_ranges(src: &[u8]) -> Vec<(u32, u32)> {
+    let lexed = pdxl_lexer::tokenize(src);
+    let mut out = Vec::new();
+    let mut cursor = 0usize;
+    for tok in &lexed {
+        scan_doc_gap(src, cursor, tok.range.start as usize, &mut out);
+        cursor = cursor.max(tok.range.end as usize);
+    }
+    scan_doc_gap(src, cursor, src.len(), &mut out);
+    out
+}
+
+fn scan_doc_gap(src: &[u8], from: usize, to: usize, out: &mut Vec<(u32, u32)>) {
+    let mut i = from;
+    while i < to {
+        if src[i] != b'#' {
+            i += 1;
+            continue;
+        }
+        let mut j = i;
+        while j < to && src[j] != b'\n' {
+            j += 1;
+        }
+        if src.get(i + 1) == Some(&b'!') {
+            let mut k = i;
+            while k + 1 < j {
+                if src[k] == b'!' && src[k + 1] == b'[' {
+                    let ns = k + 2;
+                    if let Some(rel) = src[ns..j].iter().position(|&b| b == b']') {
+                        let ne = ns + rel;
+                        if ne > ns {
+                            out.push((ns as u32, ne as u32));
+                        }
+                        k = ne + 1;
+                        continue;
+                    }
+                }
+                k += 1;
+            }
+        }
+        i = j;
+    }
 }
 
 fn markdown_hover(src: &[u8], span: (u32, u32), text: String) -> lsp_types::Hover {

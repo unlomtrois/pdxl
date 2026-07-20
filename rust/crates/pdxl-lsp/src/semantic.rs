@@ -148,6 +148,33 @@ fn in_resolved(resolved: &[(u32, u32)], off: u32) -> bool {
 /// Computes delta-encoded semantic tokens. `resolved` is the sorted list of
 /// value byte-ranges the analyzer resolved to a defined symbol (empty when no
 /// project is available yet — builtins and scope prefixes still work).
+/// Emits semantic tokens for a single `#!` doc comment run `[start, end)`:
+/// each `![Name]`'s name is colored as a reference ([`TYPE`]); everything else,
+/// including the `![` / `]` markers, stays [`COMMENT`].
+fn emit_doc_comment(src: &[u8], start: usize, end: usize, emit: &mut Vec<(u32, u32, u32, u32)>) {
+    let mut seg = start; // start of the current pending comment segment
+    let mut k = start;
+    while k + 1 < end {
+        if src[k] == b'!' && src[k + 1] == b'[' {
+            let name_start = k + 2;
+            if let Some(rel) = src[name_start..end].iter().position(|&b| b == b']') {
+                let name_end = name_start + rel;
+                emit.push((seg as u32, name_start as u32, COMMENT, 0));
+                if name_end > name_start {
+                    emit.push((name_start as u32, name_end as u32, TYPE, 0));
+                }
+                seg = name_end; // the `]` and beyond resume as comment
+                k = name_end;
+                continue;
+            }
+        }
+        k += 1;
+    }
+    if seg < end {
+        emit.push((seg as u32, end as u32, COMMENT, 0));
+    }
+}
+
 pub fn tokens(src: &[u8], resolved: &[(u32, u32)]) -> Vec<SemanticToken> {
     let lexed = pdxl_lexer::tokenize(src);
 
@@ -192,7 +219,13 @@ pub fn tokens(src: &[u8], resolved: &[(u32, u32)]) -> Vec<SemanticToken> {
                 while j < to && src[j] != b'\n' {
                     j += 1;
                 }
-                emit.push((i as u32, j as u32, COMMENT, 0));
+                // A `#!` doc comment: color each `![Name]`'s name like a
+                // reference; the rest stays comment.
+                if src.get(i + 1) == Some(&b'!') {
+                    emit_doc_comment(src, i, j, emit);
+                } else {
+                    emit.push((i as u32, j as u32, COMMENT, 0));
+                }
                 i = j;
             } else {
                 i += 1;

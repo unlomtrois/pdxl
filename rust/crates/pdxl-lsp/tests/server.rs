@@ -555,6 +555,45 @@ fn doc_block_shown_on_definition_and_call_site() {
 }
 
 #[test]
+fn doc_ref_is_clickable_document_link() {
+    let t = TempTree::new();
+    t.write("common/traits/00.txt", "brave = { }\n");
+    let src = "#! see ![brave] and ![nope]\nfx = { }\n";
+    t.write("events/e.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "events/e.txt");
+    let links = server.document_links(&uri);
+    // Only the resolvable ref becomes a link, targeting the trait file + line.
+    assert_eq!(links.len(), 1, "{links:?}");
+    let link = &links[0];
+    let target = link.target.as_ref().unwrap().as_str();
+    assert!(
+        target.contains("common/traits/00.txt") && target.ends_with("#L1"),
+        "{target}"
+    );
+    // The link range covers `brave`, not the `![` markers.
+    assert_eq!(link.range.start.line, 0);
+    assert_eq!(link.range.start.character, "#! see ![".len() as u32);
+}
+
+#[test]
+fn doc_ref_gets_reference_colored_semantic_token() {
+    // The `![Name]` name is colored as a reference (TYPE=6), the rest comment.
+    let t = TempTree::new();
+    let src = "#! doc ![brave]\nfx = { }\n";
+    t.write("events/e.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "events/e.txt");
+    let tokens = server.semantic_tokens(&uri).expect("tokens").data;
+    // Legend (semantic.rs TOKEN_TYPES): comment=5, type=9.
+    assert!(
+        tokens.iter().any(|t| t.token_type == 9),
+        "expected a TYPE token for the doc ref"
+    );
+    assert!(tokens.iter().any(|t| t.token_type == 5), "comment segments");
+}
+
+#[test]
 fn doc_block_rules() {
     // Blank line ends the block; plain `#` is not a doc; unresolved ref is plain.
     let t = TempTree::new();

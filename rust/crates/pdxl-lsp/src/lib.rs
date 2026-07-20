@@ -113,6 +113,11 @@ pub fn run_stdio(opts: Options) -> Result<(), Box<dyn std::error::Error + Sync +
             ),
         ),
         hover_provider: Some(lsp_types::HoverProviderCapability::Simple(true)),
+        // Clickable `![Name]` links inside `#!` doc comments.
+        document_link_provider: Some(lsp_types::DocumentLinkOptions {
+            resolve_provider: Some(false),
+            work_done_progress_options: lsp_types::WorkDoneProgressOptions::default(),
+        }),
         inlay_hint_provider: Some(OneOf::Right(
             lsp_types::InlayHintServerCapabilities::Options(lsp_types::InlayHintOptions {
                 resolve_provider: Some(false),
@@ -377,6 +382,19 @@ fn handle_request(server: &mut ServerState, out: &Sender<Message>, req: lsp_serv
                     req.id,
                     server.inlay_hints(&params.text_document.uri, params.range),
                 ),
+                Err(e) => Response::new_err(
+                    req.id,
+                    lsp_server::ErrorCode::InvalidParams as i32,
+                    e.to_string(),
+                ),
+            };
+            let _ = out.send(Message::Response(resp));
+        }
+        lsp_types::request::DocumentLinkRequest::METHOD => {
+            let resp = match serde_json::from_value::<lsp_types::DocumentLinkParams>(req.params) {
+                Ok(params) => {
+                    Response::new_ok(req.id, server.document_links(&params.text_document.uri))
+                }
                 Err(e) => Response::new_err(
                     req.id,
                     lsp_server::ErrorCode::InvalidParams as i32,
