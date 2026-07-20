@@ -127,6 +127,25 @@ impl DataFnRegistry {
         self.members.get(&(owner, name)).copied()
     }
 
+    /// Every member promote/function of `owner` (unordered).
+    pub fn members_of<'a>(&'a self, owner: &str) -> impl Iterator<Item = &'static DataFnRow> + 'a {
+        let owner = owner.to_string();
+        self.members
+            .iter()
+            .filter(move |((o, _), _)| *o == owner)
+            .map(|(_, row)| *row)
+    }
+
+    /// Every global promote/function (unordered) — chain-root candidates.
+    pub fn globals_iter(&self) -> impl Iterator<Item = &'static DataFnRow> + '_ {
+        self.globals.values().copied()
+    }
+
+    /// Every registered type name (unordered).
+    pub fn type_names(&self) -> impl Iterator<Item = &'static str> + '_ {
+        self.types.iter().copied()
+    }
+
     /// Whether `ty` is a chain-typable receiver: registered and known to have
     /// members. An `[unregistered]` or member-less return type ends checking.
     fn can_type_through(&self, ty: &str) -> bool {

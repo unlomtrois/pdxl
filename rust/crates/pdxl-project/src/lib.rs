@@ -72,14 +72,19 @@ pub fn analyze_with(
     schema: &Schema,
     cache: Option<&pdxl_cache::Store>,
 ) -> io::Result<(SymbolTable, Vec<RefDiag>)> {
-    let (order, facts, _names) = gather_facts(fs, schema, cache)?;
+    let (order, facts, _names, _vocab) = gather_facts(fs, schema, cache)?;
     let rels: Vec<&str> = order.iter().map(|k| k.rel.as_str()).collect();
     Ok(merge_and_resolve(&rels, &facts))
 }
 
 /// The output of a whole-project gather: file order, per-file facts, and the
 /// call-by-name name sets (absent when the game declares no call kinds).
-type Gathered = (Vec<FileKey>, HashMap<String, FileFacts>, Option<CallNames>);
+type Gathered = (
+    Vec<FileKey>,
+    HashMap<String, FileFacts>,
+    Option<CallNames>,
+    Option<pdxl_gui::vocab::GuiVocab>,
+);
 
 /// Walks `fs` once, obtaining every winning file's tree (via the cache when
 /// supplied, else by parsing) and extracting its facts.
@@ -134,9 +139,10 @@ fn gather_facts(
     {
         fill_calls(&order, &mut facts, cache, &names.targets())?;
     }
-    // Interface scripts get their own pass 2 (name-gated template/type refs).
-    fill_gui_refs(&order, &mut facts, schema)?;
-    Ok((order, facts, names))
+    // Interface scripts get their own pass 2 (name-gated template/type refs
+    // plus the mined completion vocabulary).
+    let vocab = fill_gui_refs(&order, &mut facts, schema)?;
+    Ok((order, facts, names, vocab))
 }
 
 /// Owns the scripted effect/trigger/value name sets (a whole-corpus fact).
@@ -251,21 +257,26 @@ fn fill_gui_refs(
     order: &[FileKey],
     facts: &mut HashMap<String, FileFacts>,
     schema: &Schema,
-) -> io::Result<()> {
+) -> io::Result<Option<pdxl_gui::vocab::GuiVocab>> {
     let Some(kinds) = schema.gui_kinds() else {
-        return Ok(());
+        return Ok(None);
     };
     let mut names = pdxl_gui::GuiNames::default();
+    let mut any_gui = false;
     for key in order {
         if key.rel.ends_with(".gui")
             && let Some(f) = facts.get(&key.rel)
         {
+            any_gui = true;
             names.add_facts(f, kinds);
         }
     }
-    if names.templates.is_empty() && names.types.is_empty() {
-        return Ok(());
+    if !any_gui {
+        return Ok(None);
     }
+    // One walk per file feeds both the name-gated refs and the mined
+    // key/value vocabulary (completion's data source).
+    let mut vocab = pdxl_gui::vocab::GuiVocab::default();
     for key in order {
         if !key.rel.ends_with(".gui") {
             continue;
@@ -273,11 +284,12 @@ fn fill_gui_refs(
         let full = key.full.to_string_lossy().into_owned();
         let src = std::fs::read(&key.full)?;
         let (tree, _) = pdxl_gui::parse(full.clone(), src).into_parts();
+        vocab.add_tree(&tree);
         if let Some(f) = facts.get_mut(&key.rel) {
             f.calls = pdxl_gui::gui_refs(&tree, &full, &names, kinds);
         }
     }
-    Ok(())
+    Ok(Some(vocab))
 }
 
 /// Data-parallel pass-1 gather for the no-cache path: one rayon task per winning
@@ -389,13 +401,15 @@ pub struct Project {
     /// Scripted effect/trigger names, so incremental re-extraction of one file
     /// recognizes the same call-by-name references as the initial build.
     call_names: Option<CallNames>,
+    /// The mined gui key/value vocabulary (present when `.gui` files exist).
+    gui_vocab: Option<pdxl_gui::vocab::GuiVocab>,
 }
 
 impl Project {
     /// Gathers facts for every winning file in `fs` and builds the initial
     /// table and diagnostics.
     pub fn new(fs: &FileSet, schema: Schema) -> io::Result<Project> {
-        let (order, facts, call_names) = gather_facts(fs, &schema, None)?;
+        let (order, facts, call_names, gui_vocab) = gather_facts(fs, &schema, None)?;
         let mut p = Project {
             schema,
             order,
@@ -403,6 +417,7 @@ impl Project {
             table: SymbolTable::new(),
             diags: Vec::new(),
             call_names,
+            gui_vocab,
         };
         p.rebuild();
         Ok(p)
@@ -411,6 +426,11 @@ impl Project {
     /// The schema this project was built with (e.g. for presentation hints).
     pub fn schema(&self) -> &Schema {
         &self.schema
+    }
+
+    /// The mined gui key/value vocabulary, when `.gui` files are tracked.
+    pub fn gui_vocab(&self) -> Option<&pdxl_gui::vocab::GuiVocab> {
+        self.gui_vocab.as_ref()
     }
 
     /// The FileSet `RelPath` key of a project file (drives directory-keyed

@@ -830,6 +830,11 @@ impl ServerState {
             return Vec::new();
         };
         let off = position_to_offset(&src, pos);
+        // Interface scripts use their own contexts (widget properties, mined
+        // values, datafunction chains) — nothing below applies to them.
+        if path.extension().is_some_and(|e| e == "gui") {
+            return crate::gui_completion::items(project, &src, off);
+        }
         let cursor = cursor_context(&src, off);
         if let Some(member) = scope_member_context(&src, off) {
             let mut items = crate::completion::scope_link_items(&member.scope, &member.name_prefix);

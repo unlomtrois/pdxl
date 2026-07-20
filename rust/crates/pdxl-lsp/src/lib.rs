@@ -20,6 +20,7 @@
 #[macro_use]
 mod log;
 mod completion;
+mod gui_completion;
 mod position;
 mod semantic;
 mod state;
@@ -89,7 +90,12 @@ pub fn run_stdio(opts: Options) -> Result<(), Box<dyn std::error::Error + Sync +
         completion_provider: Some(lsp_types::CompletionOptions {
             // Scope links are written as `title:name`; request completion as
             // soon as the colon is typed instead of waiting for Ctrl+Space.
-            trigger_characters: Some(vec!["=".to_string(), ":".to_string(), ".".to_string()]),
+            trigger_characters: Some(vec![
+                "=".to_string(),
+                ":".to_string(),
+                ".".to_string(),
+                "[".to_string(),
+            ]),
             ..lsp_types::CompletionOptions::default()
         }),
         definition_provider: Some(OneOf::Left(true)),

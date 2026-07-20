@@ -1914,3 +1914,72 @@ fn gui_semantic_tokens_color_keywords_types_and_datafns() {
     // The instantiation key `my_marker = {}` is a resolved gui ref (9).
     assert_eq!(at(6, 1).unwrap().3, 9, "instantiation ref: {abs:?}");
 }
+
+#[test]
+fn gui_completion_keys_values_and_datafns() {
+    let t = TempTree::new();
+    // Corpus files the vocabulary is mined from.
+    t.write(
+        "gui/corpus.gui",
+        "template Base {\n}\n\
+         window = {\n\
+         \ticon = {\n\t\tparentanchor = center\n\t\tsize = { 34 34 }\n\t\ttexture = \"x.dds\"\n\t}\n\
+         \ticon = {\n\t\tparentanchor = top\n\t\ttexture = \"y.dds\"\n\t}\n\
+         }\n",
+    );
+    let src = "window = {\n\ticon = {\n\t\t\n\t}\n\tvisible = [GetPl\n}\n";
+    t.write("gui/edit.gui", src);
+    let (mut server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "gui/edit.gui");
+    server.did_open(uri.clone(), src.to_string());
+
+    // Key position inside `icon = { … }`: mined icon properties, ranked.
+    let items = server.completion(
+        &uri,
+        Position {
+            line: 2,
+            character: 2,
+        },
+    );
+    let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    for k in ["parentanchor", "texture", "size", "block", "using"] {
+        assert!(labels.contains(&k), "missing `{k}`: {labels:?}");
+    }
+
+    // Value position: `parentanchor = ` offers mined values.
+    let vsrc = "window = {\n\ticon = {\n\t\tparentanchor = \n\t}\n}\n";
+    server.did_open(uri.clone(), vsrc.to_string());
+    let items = server.completion(&uri, pos_after(vsrc, "parentanchor = "));
+    let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    assert!(labels.contains(&"center"), "{labels:?}");
+    assert!(labels.contains(&"top"), "{labels:?}");
+
+    // `using = ` offers defined templates.
+    let usrc = "window = {\n\tusing = \n}\n";
+    server.did_open(uri.clone(), usrc.to_string());
+    let items = server.completion(&uri, pos_after(usrc, "using = "));
+    assert!(
+        items.iter().any(|i| i.label == "Base"),
+        "{:?}",
+        items.iter().map(|i| &i.label).collect::<Vec<_>>()
+    );
+
+    // Datafunction root: `[GetPl` offers GetPlayer (registry global).
+    server.did_open(uri.clone(), src.to_string());
+    let items = server.completion(&uri, pos_after(src, "[GetPl"));
+    assert!(
+        items.iter().any(|i| i.label == "GetPlayer"),
+        "{:?}",
+        items.iter().take(8).map(|i| &i.label).collect::<Vec<_>>()
+    );
+
+    // Datafunction member: `[GetPlayer.` offers Character members.
+    let dsrc = "window = {\n\tvisible = [GetPlayer.\n}\n";
+    server.did_open(uri.clone(), dsrc.to_string());
+    let items = server.completion(&uri, pos_after(dsrc, "[GetPlayer."));
+    assert!(
+        items.iter().any(|i| i.label == "GetLiege"),
+        "{:?}",
+        items.iter().take(8).map(|i| &i.label).collect::<Vec<_>>()
+    );
+}
