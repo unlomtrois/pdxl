@@ -16,7 +16,7 @@ use lsp_types::{
     CompletionItem, CompletionItemKind, Documentation, InsertTextFormat, MarkupContent, MarkupKind,
 };
 use pdxl_analysis::context::{ClauseKind, Fallback, StructSpec};
-use pdxl_analysis::{IconHint, Schema, SymbolKind, SymbolTable};
+use pdxl_analysis::{IconHint, KindId, Schema, SymbolTable};
 use pdxl_ck3::tables::{DocRow, EFFECTS, MODIFIERS, SCOPE_LINKS, TRIGGERS};
 
 /// Control keywords legal inside effect clauses (not in the doc tables:
@@ -88,7 +88,7 @@ pub fn items_for(ctx: ClauseKind, table: &SymbolTable, scope: Option<&str>) -> V
 /// Defined symbols matching a schema reference query, for value completion.
 pub fn symbol_value_items<I>(table: &SymbolTable, schema: &Schema, kinds: I) -> Vec<CompletionItem>
 where
-    I: IntoIterator<Item = SymbolKind>,
+    I: IntoIterator<Item = KindId>,
 {
     symbol_value_items_matching(table, schema, kinds, "")
 }
@@ -103,7 +103,7 @@ pub fn symbol_value_items_matching<I>(
     name_prefix: &str,
 ) -> Vec<CompletionItem>
 where
-    I: IntoIterator<Item = SymbolKind>,
+    I: IntoIterator<Item = KindId>,
 {
     let mut items = Vec::new();
     for kind in kinds {
@@ -115,7 +115,7 @@ where
             items.push(CompletionItem {
                 label: name.to_string(),
                 kind: Some(completion_kind(schema.icon(kind))),
-                detail: Some(format!("{} · defined in {}", kind.as_str(), symbol.file)),
+                detail: Some(format!("{} · defined in {}", kind.name(), symbol.file)),
                 sort_text: Some(format!("0_{name}")),
                 ..CompletionItem::default()
             });
@@ -230,7 +230,12 @@ fn push_struct_items(
 }
 
 fn push_effect_items(items: &mut Vec<CompletionItem>, table: &SymbolTable, scope: Option<&str>) {
-    push_scripted(items, table, SymbolKind::ScriptedEffect, "scripted effect");
+    push_scripted(
+        items,
+        table,
+        pdxl_ck3::kinds::SCRIPTED_EFFECT,
+        "scripted effect",
+    );
     push_keywords(items, EFFECT_CONTROL, "effect control");
     push_doc_rows(items, EFFECTS, "effect", scope);
 }
@@ -239,19 +244,14 @@ fn push_trigger_items(items: &mut Vec<CompletionItem>, table: &SymbolTable, scop
     push_scripted(
         items,
         table,
-        SymbolKind::ScriptedTrigger,
+        pdxl_ck3::kinds::SCRIPTED_TRIGGER,
         "scripted trigger",
     );
     push_keywords(items, TRIGGER_CONTROL, "trigger control");
     push_doc_rows(items, TRIGGERS, "trigger", scope);
 }
 
-fn push_scripted(
-    items: &mut Vec<CompletionItem>,
-    table: &SymbolTable,
-    kind: SymbolKind,
-    detail: &str,
-) {
+fn push_scripted(items: &mut Vec<CompletionItem>, table: &SymbolTable, kind: KindId, detail: &str) {
     for name in table.names(kind) {
         items.push(CompletionItem {
             label: name.to_string(),

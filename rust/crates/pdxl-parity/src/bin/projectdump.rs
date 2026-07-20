@@ -68,9 +68,10 @@ fn main() -> ExitCode {
         }
     }
 
-    match pdxl_project::analyze(&fs, &pdxl_ck3::schema()) {
+    let schema = pdxl_ck3::schema();
+    match pdxl_project::analyze(&fs, &schema) {
         Ok((table, diags)) => {
-            print!("{}", dump_project(&table, &diags));
+            print!("{}", dump_project(&table, &diags, schema.kinds()));
             ExitCode::SUCCESS
         }
         Err(e) => {

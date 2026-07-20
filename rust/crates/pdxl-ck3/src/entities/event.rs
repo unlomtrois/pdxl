@@ -1,12 +1,13 @@
 //! Events (`events/`) — schema row (event/loc references) plus the rich
 //! `_events.info` structural context (option, portraits, widgets, overrides).
 
+use crate::kinds;
 use pdxl_analysis::context::ClauseKind::{
     self, DynamicDesc, Effect, ScriptValue, ScriptedModifier, Trigger,
 };
 use pdxl_analysis::context::ScalarKind::{LocKey, Setting, Target};
 use pdxl_analysis::context::{Fallback, StructSpec, block, scalar, scalar_or_block};
-use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, SymbolKind};
+use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern};
 
 use super::Entity;
 use super::common::{DURATION, OPAQUE, TRIGGERED_ASSET, anywhere, in_on_action};
@@ -281,7 +282,7 @@ pub(crate) struct Event;
 
 impl Entity for Event {
     const KINDS: &'static [KindSpec] = &[KindSpec {
-        kind: SymbolKind::Event,
+        kind: kinds::EVENT,
         icon: IconHint::Event,
         defs: Some(DefSource {
             dir_prefix: "events/",

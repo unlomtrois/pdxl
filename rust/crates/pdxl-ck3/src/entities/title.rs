@@ -2,7 +2,8 @@
 //! definitions, referenced by `title:x` scope literals and (inside the tree)
 //! by the `capital` attribute.
 
-use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule, SymbolKind};
+use crate::kinds;
+use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
 use super::common::anywhere;
@@ -22,7 +23,7 @@ pub(crate) struct Title;
 
 impl Entity for Title {
     const KINDS: &'static [KindSpec] = &[KindSpec {
-        kind: SymbolKind::Title,
+        kind: kinds::TITLE,
         icon: IconHint::Hierarchy,
         defs: Some(DefSource {
             dir_prefix: LANDED_TITLES_DIR,

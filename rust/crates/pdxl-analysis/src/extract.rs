@@ -9,7 +9,8 @@ use std::sync::Arc;
 
 use pdxl_ast::{NodeId, NodeKind, SyntaxTree};
 
-use crate::model::{CallTargets, FileFacts, Ref, Symbol, SymbolKind};
+use crate::kind::KindId;
+use crate::model::{CallTargets, FileFacts, Ref, Symbol};
 use crate::schema::{KeyForm, Schema};
 
 /// Walks a parsed file once, collecting its definitions, aliases, and
@@ -37,7 +38,7 @@ pub fn extract_facts(
     // of directory, so these are harvested before — and instead of — the
     // directory rule, which would otherwise mis-kind them (e.g. as events).
     let rule = schema.rule_for(rel_path);
-    let mut pending_typed: Option<SymbolKind> = None;
+    let mut pending_typed: Option<KindId> = None;
     for node in tree.children(tree.root()) {
         let kind = tree.node(node).kind;
         if kind == NodeKind::Scalar {
@@ -134,9 +135,9 @@ fn walk_calls(
             // Key position: scripted effect/trigger call (not at top level).
             if !is_top && let Ok(key) = std::str::from_utf8(tree.node_text(children[0])) {
                 let kind = if targets.effects.contains(key) {
-                    Some(SymbolKind::ScriptedEffect)
+                    Some(targets.kinds.effect)
                 } else if targets.triggers.contains(key) {
-                    Some(SymbolKind::ScriptedTrigger)
+                    Some(targets.kinds.trigger)
                 } else {
                     None
                 };
@@ -177,14 +178,14 @@ fn push_script_value(
     if let Ok(val) = std::str::from_utf8(tree.node_text(value_id))
         && targets.script_values.contains(val)
     {
-        push_name_ref(tree, SymbolKind::ScriptValue, value_id, path, calls);
+        push_name_ref(tree, targets.kinds.value, value_id, path, calls);
     }
 }
 
 /// Records a name-gated reference covering exactly the `node_id` scalar's range.
 fn push_name_ref(
     tree: &SyntaxTree,
-    kind: SymbolKind,
+    kind: KindId,
     node_id: NodeId,
     path: &str,
     calls: &mut Vec<Ref>,
@@ -203,7 +204,7 @@ fn harvest_container_defs(
     tree: &SyntaxTree,
     node_id: NodeId,
     containers: &[&str],
-    kind: SymbolKind,
+    kind: KindId,
     rel_path: &str,
     schema: &Schema,
     facts: &mut FileFacts,
@@ -239,7 +240,7 @@ fn harvest_grouped_defs(
     tree: &SyntaxTree,
     node_id: NodeId,
     exclude: &[&str],
-    kind: SymbolKind,
+    kind: KindId,
     rel_path: &str,
     schema: &Schema,
     facts: &mut FileFacts,
@@ -288,7 +289,7 @@ fn harvest_grouped_defs(
 fn harvest_def(
     tree: &SyntaxTree,
     node_id: NodeId,
-    kind: SymbolKind,
+    kind: KindId,
     rel_path: &str,
     schema: &Schema,
     facts: &mut FileFacts,
@@ -343,7 +344,7 @@ fn harvest_def(
 
 /// The keyed-value kind of a top-level `KEY = value` field (`namespace = X` →
 /// Namespace), or `None` if `KEY` isn't a keyed-value key.
-fn keyed_value_kind(tree: &SyntaxTree, node_id: NodeId, schema: &Schema) -> Option<SymbolKind> {
+fn keyed_value_kind(tree: &SyntaxTree, node_id: NodeId, schema: &Schema) -> Option<KindId> {
     let children = tree.child_ids(node_id);
     if children.len() != 2 {
         return None;
@@ -358,7 +359,7 @@ fn keyed_value_kind(tree: &SyntaxTree, node_id: NodeId, schema: &Schema) -> Opti
 fn harvest_keyed_value_def(
     tree: &SyntaxTree,
     node_id: NodeId,
-    kind: SymbolKind,
+    kind: KindId,
     rel_path: &str,
     facts: &mut FileFacts,
 ) {
@@ -387,7 +388,7 @@ fn harvest_keyed_value_def(
 fn harvest_valued_def(
     tree: &SyntaxTree,
     node_id: NodeId,
-    kind: SymbolKind,
+    kind: KindId,
     rel_path: &str,
     facts: &mut FileFacts,
 ) {
@@ -426,7 +427,7 @@ fn harvest_nested_defs(
     tree: &SyntaxTree,
     node_id: NodeId,
     prefixes: &[&str],
-    kind: SymbolKind,
+    kind: KindId,
     rel_path: &str,
     facts: &mut FileFacts,
 ) {
@@ -620,7 +621,7 @@ fn extract_field_refs(
 /// numeric value (`100 = 0`) means "no event".
 fn extract_weighted_refs(
     tree: &SyntaxTree,
-    kind: SymbolKind,
+    kind: KindId,
     block_id: NodeId,
     path: &str,
     schema: &Schema,
@@ -645,7 +646,7 @@ fn extract_weighted_refs(
 /// quote-strip, macro-concatenation, and scope/macro skips.
 fn append_ref(
     tree: &SyntaxTree,
-    kind: SymbolKind,
+    kind: KindId,
     value_id: NodeId,
     path: &str,
     schema: &Schema,

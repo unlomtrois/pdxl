@@ -2,23 +2,24 @@
 //! byte-for-byte: symbol counts by kind (stable order), duplicates in merge
 //! order, unresolved-reference diagnostics in walk order.
 
-use pdxl_analysis::{RefDiag, SymbolKind, SymbolTable};
+use pdxl_analysis::{KindId, RefDiag, SymbolTable};
 
 /// Project dump schema version. Bump on any format change.
 pub const PROJECT_DUMP_VERSION: u32 = 1;
 
-/// Renders the canonical dump of one whole-project analysis.
-pub fn dump_project(table: &SymbolTable, diags: &[RefDiag]) -> String {
+/// Renders the canonical dump of one whole-project analysis. `kinds` is the
+/// schema's kind order (stable counts ordering).
+pub fn dump_project(table: &SymbolTable, diags: &[RefDiag], kinds: &[KindId]) -> String {
     let mut out = String::new();
     out.push_str("{\n\"version\":");
     out.push_str(&PROJECT_DUMP_VERSION.to_string());
     out.push_str(",\n\"counts\":{");
-    for (i, kind) in SymbolKind::ALL.iter().enumerate() {
+    for (i, kind) in kinds.iter().enumerate() {
         if i > 0 {
             out.push(',');
         }
         out.push('"');
-        out.push_str(kind.as_str());
+        out.push_str(kind.name());
         out.push_str("\":");
         out.push_str(&table.count(*kind).to_string());
     }
@@ -29,7 +30,7 @@ pub fn dump_project(table: &SymbolTable, diags: &[RefDiag]) -> String {
         out.push('\n');
         for (i, d) in table.duplicates.iter().enumerate() {
             out.push_str("{\"kind\":\"");
-            out.push_str(d.kind.as_str());
+            out.push_str(d.kind.name());
             out.push_str("\",\"name\":\"");
             push_escaped(&mut out, &d.name);
             out.push_str("\",\"first_file\":\"");

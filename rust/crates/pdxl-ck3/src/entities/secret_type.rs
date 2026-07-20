@@ -3,10 +3,11 @@
 //! effects and iterators (`add_secret`, `any_secret`, `random_secret`, …), so
 //! the rule is gated to those keys — a bare `type =` is far too common.
 
+use crate::kinds;
 use pdxl_analysis::context::ClauseKind::{self, Effect, Trigger};
 use pdxl_analysis::context::ScalarKind::Setting;
 use pdxl_analysis::context::{Fallback, StructSpec, block, scalar};
-use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule, SymbolKind};
+use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
 use super::common::anywhere;
@@ -78,7 +79,7 @@ pub(crate) struct SecretType;
 
 impl Entity for SecretType {
     const KINDS: &'static [KindSpec] = &[KindSpec {
-        kind: SymbolKind::SecretType,
+        kind: kinds::SECRET_TYPE,
         icon: IconHint::Object,
         defs: Some(DefSource {
             dir_prefix: "common/secret_types/",

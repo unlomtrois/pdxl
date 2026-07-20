@@ -1,6 +1,7 @@
 //! Cultures (`common/culture/cultures/`), referenced by `culture:x`.
 
-use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, SymbolKind};
+use crate::kinds;
+use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern};
 
 use super::Entity;
 use super::common::anywhere;
@@ -9,7 +10,7 @@ pub(crate) struct Culture;
 
 impl Entity for Culture {
     const KINDS: &'static [KindSpec] = &[KindSpec {
-        kind: SymbolKind::Culture,
+        kind: kinds::CULTURE,
         icon: IconHint::Object,
         defs: Some(DefSource {
             dir_prefix: "common/culture/cultures/",

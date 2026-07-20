@@ -5,12 +5,13 @@
 //! `scheme_type = X`, `start_scheme = { type = X }`, and the bare `scheme = X`
 //! trigger idiom.
 
+use crate::kinds;
 use pdxl_analysis::context::ClauseKind::{
     self, DynamicDesc, Effect, ScriptValue, ScriptedModifier, Trigger,
 };
 use pdxl_analysis::context::ScalarKind::{LocKey, Setting};
 use pdxl_analysis::context::{Fallback, StructSpec, block, block_scoped, scalar, scalar_or_block};
-use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, SymbolKind};
+use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern};
 
 use super::Entity;
 use super::common::{DURATION, OPAQUE, anywhere};
@@ -219,7 +220,7 @@ pub(crate) struct Scheme;
 
 impl Entity for Scheme {
     const KINDS: &'static [KindSpec] = &[KindSpec {
-        kind: SymbolKind::Scheme,
+        kind: kinds::SCHEME,
         icon: IconHint::Action,
         defs: Some(DefSource {
             dir_prefix: "common/schemes/scheme_types/",

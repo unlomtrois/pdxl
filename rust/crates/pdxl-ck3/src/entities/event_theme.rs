@@ -6,9 +6,10 @@
 //! `background` channel's `reference` names an event background — that
 //! reference is owned by the event-background entity (gated to this directory).
 
+use crate::kinds;
 use pdxl_analysis::context::ClauseKind;
 use pdxl_analysis::context::{Fallback, StructSpec, block};
-use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, SymbolKind};
+use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern};
 
 use super::Entity;
 use super::common::{TRIGGERED_ASSET, anywhere};
@@ -52,7 +53,7 @@ pub(crate) struct EventTheme;
 
 impl Entity for EventTheme {
     const KINDS: &'static [KindSpec] = &[KindSpec {
-        kind: SymbolKind::EventTheme,
+        kind: kinds::EVENT_THEME,
         icon: IconHint::Object,
         defs: Some(DefSource {
             dir_prefix: "common/event_themes/",

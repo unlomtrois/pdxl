@@ -13,12 +13,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::model::{Symbol, SymbolKind};
+use crate::kind::KindId;
+use crate::model::Symbol;
 
 /// A redefinition of an already-defined symbol.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Duplicate {
-    pub kind: SymbolKind,
+    pub kind: KindId,
     pub name: String,
     /// The previously registered (winning) definition.
     pub first: Symbol,
@@ -29,7 +30,7 @@ pub struct Duplicate {
 /// All collected definitions, indexed by kind and name.
 #[derive(Default)]
 pub struct SymbolTable {
-    by_kind: HashMap<SymbolKind, HashMap<String, Symbol>>,
+    by_kind: HashMap<KindId, HashMap<String, Symbol>>,
     pub duplicates: Vec<Duplicate>,
 }
 
@@ -56,7 +57,7 @@ impl SymbolTable {
 
     /// Registers an additional resolvable name for a kind without duplicate
     /// tracking — gap-fill only (an existing entry always wins).
-    pub fn add_alias(&mut self, kind: SymbolKind, name: &str, symbol: Symbol) {
+    pub fn add_alias(&mut self, kind: KindId, name: &str, symbol: Symbol) {
         let bucket = self.by_kind.entry(kind).or_default();
         if !bucket.contains_key(name) {
             bucket.insert(name.to_string(), symbol);
@@ -64,7 +65,7 @@ impl SymbolTable {
     }
 
     /// Number of symbols of the given kind.
-    pub fn count(&self, kind: SymbolKind) -> usize {
+    pub fn count(&self, kind: KindId) -> usize {
         self.by_kind.get(&kind).map_or(0, HashMap::len)
     }
 
@@ -74,12 +75,12 @@ impl SymbolTable {
     }
 
     /// The symbol of the given kind and name, if present.
-    pub fn lookup(&self, kind: SymbolKind, name: &str) -> Option<&Symbol> {
+    pub fn lookup(&self, kind: KindId, name: &str) -> Option<&Symbol> {
         self.by_kind.get(&kind)?.get(name)
     }
 
     /// All defined names of a kind, in arbitrary order (completion sources).
-    pub fn names(&self, kind: SymbolKind) -> impl Iterator<Item = &str> {
+    pub fn names(&self, kind: KindId) -> impl Iterator<Item = &str> {
         self.by_kind
             .get(&kind)
             .into_iter()

@@ -1,6 +1,7 @@
 //! Character traits (`common/traits/`).
 
-use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, SymbolKind};
+use crate::kinds;
+use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern};
 
 use super::Entity;
 use super::common::anywhere;
@@ -9,7 +10,7 @@ pub(crate) struct Traits;
 
 impl Entity for Traits {
     const KINDS: &'static [KindSpec] = &[KindSpec {
-        kind: SymbolKind::Trait,
+        kind: kinds::TRAIT,
         icon: IconHint::Tag,
         defs: Some(DefSource {
             dir_prefix: "common/traits/",

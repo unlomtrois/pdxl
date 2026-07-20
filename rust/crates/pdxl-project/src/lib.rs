@@ -36,8 +36,8 @@ use std::path::{Path, PathBuf};
 use std::collections::HashSet;
 
 use pdxl_analysis::{
-    CallTargets, FileFacts, Ref, RefDiag, Schema, SymbolKind, SymbolTable, extract_calls,
-    extract_facts, merge_and_resolve,
+    CallKinds, CallTargets, FileFacts, KindId, LOC_KEY, Ref, RefDiag, Schema, SymbolTable,
+    extract_calls, extract_facts, merge_and_resolve,
 };
 use pdxl_fileset::FileSet;
 
@@ -77,13 +77,17 @@ pub fn analyze_with(
     Ok(merge_and_resolve(&rels, &facts))
 }
 
+/// The output of a whole-project gather: file order, per-file facts, and the
+/// call-by-name name sets (absent when the game declares no call kinds).
+type Gathered = (Vec<FileKey>, HashMap<String, FileFacts>, Option<CallNames>);
+
 /// Walks `fs` once, obtaining every winning file's tree (via the cache when
 /// supplied, else by parsing) and extracting its facts.
 fn gather_facts(
     fs: &FileSet,
     schema: &Schema,
     cache: Option<&pdxl_cache::Store>,
-) -> io::Result<(Vec<FileKey>, HashMap<String, FileFacts>, CallNames)> {
+) -> io::Result<Gathered> {
     // Pass 1: definitions + references (no calls yet).
     //
     // Fast path: with no cache, every winning file is independent — read,
@@ -119,18 +123,23 @@ fn gather_facts(
     // inline typed defs harvested from event files — is a whole-project fact,
     // known only now that every file's definitions are in. Pass 2 re-derives
     // each file's call-by-name references against it.
-    let names = CallNames::from_facts(&facts);
-    if !names.is_empty() {
+    // Call-by-name harvesting only when the game declares its call kinds.
+    let names = schema
+        .call_kinds()
+        .map(|kinds| CallNames::from_facts(&facts, kinds));
+    if let Some(names) = &names
+        && !names.is_empty()
+    {
         fill_calls(&order, &mut facts, cache, &names.targets())?;
     }
     Ok((order, facts, names))
 }
 
-/// Owns the scripted effect/trigger name sets (a whole-corpus fact). Borrowed as
-/// [`CallTargets`] for extraction; kept on the [`Project`] so incremental
-/// re-extraction of one file recognizes the same calls.
-#[derive(Default)]
+/// Owns the scripted effect/trigger/value name sets (a whole-corpus fact).
+/// Borrowed as [`CallTargets`] for extraction; kept on the [`Project`] so
+/// incremental re-extraction of one file recognizes the same calls.
 struct CallNames {
+    kinds: CallKinds,
     effects: HashSet<String>,
     triggers: HashSet<String>,
     script_values: HashSet<String>,
@@ -139,6 +148,7 @@ struct CallNames {
 impl CallNames {
     fn targets(&self) -> CallTargets<'_> {
         CallTargets {
+            kinds: self.kinds,
             effects: &self.effects,
             triggers: &self.triggers,
             script_values: &self.script_values,
@@ -153,21 +163,21 @@ impl CallNames {
     /// Collects every name-gated definition from gathered facts: scripted
     /// effects/triggers (matched in key position) and script values (matched in
     /// value position), directory-defined and inline typed defs alike.
-    fn from_facts(facts: &HashMap<String, FileFacts>) -> CallNames {
-        let mut names = CallNames::default();
+    fn from_facts(facts: &HashMap<String, FileFacts>, kinds: CallKinds) -> CallNames {
+        let mut names = CallNames {
+            kinds,
+            effects: HashSet::new(),
+            triggers: HashSet::new(),
+            script_values: HashSet::new(),
+        };
         for f in facts.values() {
             for def in &f.defs {
-                match def.kind {
-                    SymbolKind::ScriptedEffect => {
-                        names.effects.insert(def.name.clone());
-                    }
-                    SymbolKind::ScriptedTrigger => {
-                        names.triggers.insert(def.name.clone());
-                    }
-                    SymbolKind::ScriptValue => {
-                        names.script_values.insert(def.name.clone());
-                    }
-                    _ => {}
+                if def.kind == kinds.effect {
+                    names.effects.insert(def.name.clone());
+                } else if def.kind == kinds.trigger {
+                    names.triggers.insert(def.name.clone());
+                } else if def.kind == kinds.value {
+                    names.script_values.insert(def.name.clone());
                 }
             }
         }
@@ -274,7 +284,7 @@ fn loc_facts(src: &[u8], rel_path: &str) -> FileFacts {
     for e in loc.entries {
         facts.defs.push(pdxl_analysis::Symbol {
             name: e.key,
-            kind: SymbolKind::LocKey,
+            kind: LOC_KEY,
             file: file.clone(),
             offset: e.key_start,
             end_offset: e.key_end,
@@ -323,7 +333,7 @@ pub struct Project {
     diags: Vec<RefDiag>,
     /// Scripted effect/trigger names, so incremental re-extraction of one file
     /// recognizes the same call-by-name references as the initial build.
-    call_names: CallNames,
+    call_names: Option<CallNames>,
 }
 
 impl Project {
@@ -401,12 +411,13 @@ impl Project {
         } else {
             let full = key.full.to_string_lossy().into_owned();
             let parsed = pdxl_parser::parse(full.clone(), src);
+            let targets = self.call_names.as_ref().map(CallNames::targets);
             extract_facts(
                 parsed.tree(),
                 &key.rel,
                 &full,
                 &self.schema,
-                Some(&self.call_names.targets()),
+                targets.as_ref(),
             )
         };
         self.facts.insert(key.rel.clone(), facts);
@@ -444,7 +455,7 @@ impl Project {
     }
 
     /// Every reference to `(kind, name)` across the project, in walk order.
-    pub fn references(&self, kind: SymbolKind, name: &str) -> Vec<&Ref> {
+    pub fn references(&self, kind: KindId, name: &str) -> Vec<&Ref> {
         let mut out = Vec::new();
         for key in &self.order {
             if let Some(f) = self.facts.get(&key.rel) {

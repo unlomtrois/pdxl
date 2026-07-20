@@ -10,8 +10,9 @@
 //! stored in `FileFacts.calls` (never diagnosed — see `pdxl_analysis::extract`
 //! and `CallTargets`). Hence `refs` below stays empty.
 
+use crate::kinds;
 use pdxl_analysis::context::ClauseKind::{self, Effect, ScriptValue, ScriptedModifier, Trigger};
-use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, SymbolKind};
+use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec};
 
 use super::Entity;
 
@@ -20,7 +21,7 @@ pub(crate) struct Scripted;
 impl Entity for Scripted {
     const KINDS: &'static [KindSpec] = &[
         KindSpec {
-            kind: SymbolKind::ScriptedTrigger,
+            kind: kinds::SCRIPTED_TRIGGER,
             icon: IconHint::Function,
             defs: Some(DefSource {
                 dir_prefix: "common/scripted_triggers/",
@@ -30,7 +31,7 @@ impl Entity for Scripted {
             aliases: &[],
         },
         KindSpec {
-            kind: SymbolKind::ScriptedEffect,
+            kind: kinds::SCRIPTED_EFFECT,
             icon: IconHint::Function,
             defs: Some(DefSource {
                 dir_prefix: "common/scripted_effects/",
@@ -40,7 +41,7 @@ impl Entity for Scripted {
             aliases: &[],
         },
         KindSpec {
-            kind: SymbolKind::ScriptValue,
+            kind: kinds::SCRIPT_VALUE,
             icon: IconHint::Object,
             defs: Some(DefSource {
                 dir_prefix: "common/script_values/",

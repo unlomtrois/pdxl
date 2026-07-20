@@ -2,10 +2,11 @@
 //! laws) plus the `_laws.info` structural context, with per-field root
 //! scopes and hover documentation.
 
+use crate::kinds;
 use pdxl_analysis::context::ClauseKind::{self, Effect, ScriptValue, Trigger};
 use pdxl_analysis::context::ScalarKind::Setting;
 use pdxl_analysis::context::{Fallback, StructSpec, block, block_scoped, scalar};
-use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule, SymbolKind};
+use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
 use super::common::{COST, OPAQUE, anywhere};
@@ -230,7 +231,7 @@ pub(crate) struct Law;
 
 impl Entity for Law {
     const KINDS: &'static [KindSpec] = &[KindSpec {
-        kind: SymbolKind::Law,
+        kind: kinds::LAW,
         icon: IconHint::Tag,
         defs: Some(DefSource {
             dir_prefix: LAWS_DIR,

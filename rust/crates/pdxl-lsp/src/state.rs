@@ -24,7 +24,7 @@ use lsp_types::{
     PublishDiagnosticsParams, Range, Url,
 };
 use pdxl_analysis::context::ClauseKind;
-use pdxl_analysis::{RefDiag, SymbolKind};
+use pdxl_analysis::{KindId, LOC_KEY, RefDiag, Schema};
 use pdxl_project::Project;
 
 use crate::position::{
@@ -98,7 +98,7 @@ impl ServerState {
                 .as_ref()
                 .unwrap()
                 .table()
-                .count(SymbolKind::Title),
+                .count(pdxl_ck3::kinds::TITLE),
             self.project.as_ref().unwrap().diags().len(),
             self.docs.len()
         );
@@ -362,9 +362,12 @@ impl ServerState {
                 })
             })
             .unwrap_or_default();
+        // The schema (present once built) lets `![kind:Name]` doc refs color
+        // only the name past the qualifier.
+        let schema = self.project.as_ref().map(Project::schema);
         Some(lsp_types::SemanticTokens {
             result_id: None,
-            data: crate::semantic::tokens(&src, &resolved),
+            data: crate::semantic::tokens(&src, &resolved, schema),
         })
     }
 
@@ -466,7 +469,7 @@ impl ServerState {
                 #[allow(deprecated)] // `deprecated` is a required struct field
                 lsp_types::DocumentSymbol {
                     name: d.name.clone(),
-                    detail: Some(d.kind.as_str().to_string()),
+                    detail: Some(d.kind.name().to_string()),
                     kind: lsp_symbol_kind(project.schema().icon(d.kind)),
                     tags: None,
                     deprecated: None,
@@ -490,10 +493,10 @@ impl ServerState {
         let off = position_to_offset(&src, pos);
 
         if let Some((kind, name)) = symbol_at(facts, off) {
-            let mut text = format!("```pdxscript\n{} {}\n```", kind.as_str(), name);
+            let mut text = format!("```pdxscript\n{} {}\n```", kind.name(), name);
             if let Some(symbol) = project.table().lookup(kind, name) {
                 // Loc keys carry their user-visible text — show it.
-                if kind == SymbolKind::LocKey
+                if kind == LOC_KEY
                     && let Some(loc_text) = self.loc_text(project, symbol)
                 {
                     text.push_str(&format!("\n\n> {loc_text}"));
@@ -581,7 +584,7 @@ impl ServerState {
         project: &Project,
         cache: &mut HashMap<PathBuf, Option<Vec<u8>>>,
     ) -> String {
-        let (kind, off) = parse_doc_ref(content.as_bytes());
+        let (kind, off) = parse_doc_ref(content.as_bytes(), project.schema());
         let name = &content[off..];
         match self.resolve_doc_ref(kind, name, project, cache) {
             Some((full, line)) => format!("[{name}]({}#L{line})", path_to_uri(&full)),
@@ -604,7 +607,7 @@ impl ServerState {
         let mut links = Vec::new();
         for (start, end) in doc_ref_ranges(&src) {
             let content = &src[start as usize..end as usize];
-            let (kind, off) = parse_doc_ref(content);
+            let (kind, off) = parse_doc_ref(content, project.schema());
             let Ok(name) = std::str::from_utf8(&content[off..]) else {
                 continue;
             };
@@ -636,7 +639,7 @@ impl ServerState {
     /// falls back to the definition's own line.
     fn resolve_doc_ref(
         &self,
-        kind: Option<SymbolKind>,
+        kind: Option<KindId>,
         name: &str,
         project: &Project,
         cache: &mut HashMap<PathBuf, Option<Vec<u8>>>,
@@ -667,18 +670,18 @@ impl ServerState {
     /// loc-last default order. No file read (table lookup only).
     fn lookup_symbol(
         &self,
-        kind: Option<SymbolKind>,
+        kind: Option<KindId>,
         name: &str,
         project: &Project,
     ) -> Option<(PathBuf, u32)> {
-        let find = |k: SymbolKind| {
+        let find = |k: KindId| {
             let sym = project.table().lookup(k, name)?;
             let full = project.rel_to_full(&sym.file)?;
             Some((full.to_path_buf(), sym.offset))
         };
         match kind {
             Some(k) => find(k),
-            None => doc_ref_lookup_order().find_map(find),
+            None => doc_ref_lookup_order(project.schema()).find_map(find),
         }
     }
 
@@ -719,7 +722,7 @@ impl ServerState {
         let end = position_to_offset(src, range.end);
         let mut hints = Vec::new();
         for r in &facts.refs {
-            if r.kind != SymbolKind::LocKey || r.start < start || r.end > end {
+            if r.kind != LOC_KEY || r.start < start || r.end > end {
                 continue;
             }
             let Some(symbol) = project.table().lookup(r.kind, &r.name) else {
@@ -925,52 +928,29 @@ fn extract_doc_block(src: &[u8], def_offset: u32) -> Option<String> {
     Some(docs.join("\n"))
 }
 
-/// Splits a `![…]` ref's inner text into an optional explicit kind and the
-/// byte offset where the referenced name begins. `scheme:Name` →
-/// `(Some(Scheme), 7)`; a bare or unknown-prefix text → `(None, 0)`.
-pub(crate) fn parse_doc_ref(content: &[u8]) -> (Option<SymbolKind>, usize) {
+/// Splits a `![…]` ref's inner text into an optional explicit kind (resolved
+/// against the schema's aliases) and the byte offset where the referenced name
+/// begins. `scheme:Name` → `(Some(scheme kind), 7)`; a bare or unknown-prefix
+/// text → `(None, 0)`.
+pub(crate) fn parse_doc_ref(content: &[u8], schema: &Schema) -> (Option<KindId>, usize) {
     if let Some(colon) = content.iter().position(|&b| b == b':')
         && let Ok(prefix) = std::str::from_utf8(&content[..colon])
-        && let Some(kind) = doc_ref_alias(prefix)
+        && let Some(kind) = schema.kind_by_alias(prefix)
     {
         return (Some(kind), colon + 1);
     }
     (None, 0)
 }
 
-/// The kind a `![kind:…]` prefix names, using short modder-friendly aliases.
-fn doc_ref_alias(prefix: &str) -> Option<SymbolKind> {
-    use SymbolKind as K;
-    Some(match prefix {
-        "effect" => K::ScriptedEffect,
-        "trigger" => K::ScriptedTrigger,
-        "value" => K::ScriptValue,
-        "trait" => K::Trait,
-        "event" => K::Event,
-        "decision" => K::Decision,
-        "on_action" => K::OnAction,
-        "character" => K::Character,
-        "title" => K::Title,
-        "culture" => K::Culture,
-        "faith" => K::Faith,
-        "law" => K::Law,
-        "scheme" => K::Scheme,
-        "modifier" => K::Modifier,
-        "animation" => K::PortraitAnimation,
-        "background" => K::EventBackground,
-        "theme" => K::EventTheme,
-        "loc" => K::LocKey,
-        _ => return None,
-    })
-}
-
-/// Kinds to try for an unqualified `![Name]`: every definition kind before
-/// `LocKey`, since a loc string almost always just shadows the object it names.
-fn doc_ref_lookup_order() -> impl Iterator<Item = SymbolKind> {
-    SymbolKind::ALL
-        .into_iter()
-        .filter(|k| *k != SymbolKind::LocKey)
-        .chain(std::iter::once(SymbolKind::LocKey))
+/// Kinds to try for an unqualified `![Name]`: every kind before `LOC_KEY`, since
+/// a loc string almost always just shadows the object it names.
+fn doc_ref_lookup_order(schema: &Schema) -> impl Iterator<Item = KindId> + '_ {
+    schema
+        .kinds()
+        .iter()
+        .copied()
+        .filter(|k| *k != LOC_KEY)
+        .chain(std::iter::once(LOC_KEY))
 }
 
 /// Byte ranges of the `Name` in every `![Name]` inside a `#!` doc comment.
@@ -1964,10 +1944,7 @@ fn cursor_context(src: &[u8], off: u32) -> CursorContext {
 /// The (kind, name) of the definition name or reference spanning byte offset
 /// `off`. Definitions are checked first so the cursor on a `NAME = {}` name
 /// resolves to that symbol (Go's `symbolAt`).
-fn symbol_at(
-    facts: &pdxl_analysis::FileFacts,
-    off: u32,
-) -> Option<(pdxl_analysis::SymbolKind, &str)> {
+fn symbol_at(facts: &pdxl_analysis::FileFacts, off: u32) -> Option<(pdxl_analysis::KindId, &str)> {
     for d in &facts.defs {
         if d.offset <= off && off < d.end_offset {
             return Some((d.kind, &d.name));

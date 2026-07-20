@@ -16,7 +16,7 @@ use std::io::{self, Write};
 use std::path::Path;
 use std::process::ExitCode;
 
-use pdxl_analysis::{RefDiag, SymbolKind};
+use pdxl_analysis::{KindId, RefDiag};
 use pdxl_fileset::{FileKind, FileSet};
 
 /// `file:line:col` for a diagnostic, derived on demand (the value pdxl used to
@@ -48,11 +48,12 @@ pub fn run(
     _no_cache: bool, // accepted for Go interface compatibility; no effect
 ) -> io::Result<ExitCode> {
     let fs = build_project_fileset(game, mod_arg)?;
-    let (table, diags) = pdxl_project::analyze(&fs, &pdxl_ck3::schema())?;
+    let schema = pdxl_ck3::schema();
+    let (table, diags) = pdxl_project::analyze(&fs, &schema)?;
 
     match file {
         Some(target) => report_file(&fs, &diags, target),
-        None => report_project(&table, &diags),
+        None => report_project(&table, &diags, schema.kinds()),
     }
 }
 
@@ -102,11 +103,12 @@ fn build_project_fileset(game: Option<&str>, mod_arg: Option<&str>) -> io::Resul
 fn report_project(
     table: &pdxl_analysis::SymbolTable,
     diags: &[pdxl_analysis::RefDiag],
+    kinds: &[KindId],
 ) -> io::Result<ExitCode> {
     let stdout = io::stdout();
     let mut w = io::BufWriter::new(stdout.lock());
-    for kind in SymbolKind::ALL {
-        writeln!(w, "{:<18} {:>6}", kind.as_str(), table.count(kind))?;
+    for kind in kinds {
+        writeln!(w, "{:<18} {:>6}", kind.name(), table.count(*kind))?;
     }
     writeln!(w, "{:<18} {:>6}", "total", table.total())?;
 
@@ -116,7 +118,7 @@ fn report_project(
             writeln!(
                 w,
                 "  {} {:?} redefined in {} (first in {})",
-                d.kind.as_str(),
+                d.kind.name(),
                 d.name,
                 d.file,
                 d.first.file

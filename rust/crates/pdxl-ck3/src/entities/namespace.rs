@@ -4,7 +4,8 @@
 //! the file's `#!` doc. This row only supplies the presentation icon; it has no
 //! `defs` (directory) or `refs`.
 
-use pdxl_analysis::{IconHint, KindSpec, SymbolKind};
+use crate::kinds;
+use pdxl_analysis::{IconHint, KindSpec};
 
 use super::Entity;
 
@@ -12,7 +13,7 @@ pub(crate) struct Namespace;
 
 impl Entity for Namespace {
     const KINDS: &'static [KindSpec] = &[KindSpec {
-        kind: SymbolKind::Namespace,
+        kind: kinds::NAMESPACE,
         icon: IconHint::Object,
         defs: None,
         refs: &[],

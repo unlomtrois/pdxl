@@ -3,7 +3,8 @@
 //! `DefSource`), referenced by the text-bearing fields of events and
 //! decisions.
 
-use pdxl_analysis::{IconHint, KindSpec, RefPattern, RefRule, SymbolKind};
+use crate::kinds;
+use pdxl_analysis::{IconHint, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
 use super::common::anywhere;
@@ -12,7 +13,7 @@ pub(crate) struct Loc;
 
 impl Entity for Loc {
     const KINDS: &'static [KindSpec] = &[KindSpec {
-        kind: SymbolKind::LocKey,
+        kind: kinds::LOC_KEY,
         icon: IconHint::Text,
         defs: None,
         refs: &[

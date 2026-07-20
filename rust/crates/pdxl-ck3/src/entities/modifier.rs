@@ -12,8 +12,9 @@
 //! Corpus-validated at ~0.7% unresolved (macro-interpolated names), so no gate
 //! beyond the add-key is needed.
 
+use crate::kinds;
 use pdxl_analysis::context::ClauseKind;
-use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule, SymbolKind};
+use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
 use super::common::anywhere;
@@ -32,7 +33,7 @@ pub(crate) struct Modifier;
 
 impl Entity for Modifier {
     const KINDS: &'static [KindSpec] = &[KindSpec {
-        kind: SymbolKind::Modifier,
+        kind: kinds::MODIFIER,
         icon: IconHint::Object,
         defs: Some(DefSource {
             dir_prefix: "common/modifiers/",

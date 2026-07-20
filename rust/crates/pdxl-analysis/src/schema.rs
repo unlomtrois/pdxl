@@ -14,7 +14,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::model::SymbolKind;
+use crate::kind::{CallKinds, KindId};
 
 /// A presentation hint for a symbol kind, neutral to any editor protocol.
 /// The LSP layer maps these onto `lsp_types::SymbolKind`; other frontends can
@@ -121,11 +121,11 @@ pub struct RefRule {
 }
 
 /// ALL knowledge about one game concept, co-located: adding a kind to a game
-/// is one row here (plus its `SymbolKind` variant while the enum remains the
-/// ID — Phase 2 of the scaling plan replaces that with an open registry).
+/// is one row here (one KindId const in the game crate, referenced
+/// here).
 #[derive(Clone, Debug)]
 pub struct KindSpec {
-    pub kind: SymbolKind,
+    pub kind: KindId,
     pub icon: IconHint,
     /// Where definitions live, if this kind is definable from script files.
     pub defs: Option<DefSource>,
@@ -141,7 +141,7 @@ pub struct KindSpec {
 #[derive(Clone, Debug)]
 pub struct DefRule {
     pub prefix: &'static str,
-    pub kind: SymbolKind,
+    pub kind: KindId,
     pub shape: DefShape,
 }
 
@@ -149,7 +149,7 @@ pub struct DefRule {
 /// [`RefPattern`], with the key hoisted into the index).
 #[derive(Clone, Debug)]
 pub(crate) struct KeyRule {
-    pub(crate) kind: SymbolKind,
+    pub(crate) kind: KindId,
     pub(crate) form: KeyForm,
     pub(crate) gate: Option<&'static str>,
 }
@@ -169,7 +169,7 @@ pub(crate) enum KeyForm {
 #[derive(Clone, Debug)]
 pub(crate) struct ScopeRule {
     pub(crate) prefix: &'static str,
-    pub(crate) kind: SymbolKind,
+    pub(crate) kind: KindId,
     pub(crate) gate: Option<&'static str>,
 }
 
@@ -186,20 +186,28 @@ pub struct Schema {
     /// Scope-literal prefixes, checked against every scalar.
     scope_rules: Vec<ScopeRule>,
     /// kind → its alias field keys.
-    alias_keys: HashMap<SymbolKind, &'static [&'static str]>,
+    alias_keys: HashMap<KindId, &'static [&'static str]>,
     /// kind → its presentation hint.
-    icons: HashMap<SymbolKind, IconHint>,
+    icons: HashMap<KindId, IconHint>,
     /// Relative-scope keywords a reference value may be at runtime
     /// (`has_trait = prev`); unresolvable without scope tracking, so skipped.
     scope_keywords: HashSet<&'static str>,
     /// Typed-definition keywords: a top-level `KEYWORD NAME = { … }` defines
     /// `NAME` of the mapped kind regardless of directory (CK3:
     /// `scripted_effect` / `scripted_trigger`, used inline in event files).
-    typed_defs: HashMap<&'static str, SymbolKind>,
+    typed_defs: HashMap<&'static str, KindId>,
     /// Keyed-value definitions: a top-level `KEY = value` where `KEY` maps here
     /// defines `value` of that kind (CK3: `namespace = X`). The definition is
     /// the declaration's value, so nothing else in the file is affected.
-    keyed_value_defs: HashMap<&'static str, SymbolKind>,
+    keyed_value_defs: HashMap<&'static str, KindId>,
+    /// Every kind in registration order — the stable order for reports and the
+    /// doc-ref default lookup (replaces the old `SymbolKind::ALL`).
+    kinds: Vec<KindId>,
+    /// Doc-comment reference aliases (`![scheme:X]` → the scheme kind).
+    by_alias: HashMap<&'static str, KindId>,
+    /// Which kinds call-by-name references resolve to. `None` for schemas with
+    /// no call-by-name convention.
+    call_kinds: Option<CallKinds>,
 }
 
 impl Schema {
@@ -208,16 +216,25 @@ impl Schema {
     pub fn new(
         specs: &[KindSpec],
         scope_keywords: &[&'static str],
-        typed_defs: &[(&'static str, SymbolKind)],
-        keyed_value_defs: &[(&'static str, SymbolKind)],
+        typed_defs: &[(&'static str, KindId)],
+        keyed_value_defs: &[(&'static str, KindId)],
+        doc_ref_aliases: &[(&'static str, KindId)],
+        call_kinds: Option<CallKinds>,
     ) -> Schema {
         let mut schema = Schema {
             scope_keywords: scope_keywords.iter().copied().collect(),
             typed_defs: typed_defs.iter().copied().collect(),
             keyed_value_defs: keyed_value_defs.iter().copied().collect(),
+            by_alias: doc_ref_aliases.iter().copied().collect(),
+            call_kinds,
             ..Schema::default()
         };
         for spec in specs {
+            // A kind may appear in several rows (e.g. one per def directory);
+            // register it once, in first-seen order.
+            if !schema.kinds.contains(&spec.kind) {
+                schema.kinds.push(spec.kind);
+            }
             schema.icons.insert(spec.kind, spec.icon);
             if let Some(defs) = &spec.defs {
                 schema.def_rules.push(DefRule {
@@ -264,7 +281,7 @@ impl Schema {
 
     /// The presentation hint for a kind ([`IconHint::Object`] when the kind
     /// has no spec — a neutral "some game object" fallback).
-    pub fn icon(&self, kind: SymbolKind) -> IconHint {
+    pub fn icon(&self, kind: KindId) -> IconHint {
         self.icons.get(&kind).copied().unwrap_or(IconHint::Object)
     }
 
@@ -275,7 +292,7 @@ impl Schema {
         &'a self,
         key: &'a str,
         rel_path: &'a str,
-    ) -> impl Iterator<Item = SymbolKind> + 'a {
+    ) -> impl Iterator<Item = KindId> + 'a {
         self.key_rules(key).into_iter().flat_map(move |rules| {
             rules.iter().filter_map(move |rule| {
                 (rule.form == KeyForm::Value && rule.applies(rel_path)).then_some(rule.kind)
@@ -288,7 +305,7 @@ impl Schema {
         &'a self,
         key: &'a str,
         rel_path: &'a str,
-    ) -> impl Iterator<Item = SymbolKind> + 'a {
+    ) -> impl Iterator<Item = KindId> + 'a {
         self.key_rules(key).into_iter().flat_map(move |rules| {
             rules.iter().filter_map(move |rule| {
                 (matches!(rule.form, KeyForm::List | KeyForm::Weighted) && rule.applies(rel_path))
@@ -302,7 +319,7 @@ impl Schema {
         &'a self,
         prefix: &'a str,
         rel_path: &'a str,
-    ) -> impl Iterator<Item = SymbolKind> + 'a {
+    ) -> impl Iterator<Item = KindId> + 'a {
         self.scope_rules.iter().filter_map(move |rule| {
             (rule.prefix == prefix && rule.applies(rel_path)).then_some(rule.kind)
         })
@@ -324,15 +341,30 @@ impl Schema {
     }
 
     /// The kind a typed-definition keyword introduces (`scripted_effect` →
-    /// [`SymbolKind::ScriptedEffect`]), or `None` for a non-keyword scalar.
-    pub fn typed_def_kind(&self, keyword: &str) -> Option<SymbolKind> {
+    /// [`KindId::ScriptedEffect`]), or `None` for a non-keyword scalar.
+    pub fn typed_def_kind(&self, keyword: &str) -> Option<KindId> {
         self.typed_defs.get(keyword).copied()
     }
 
     /// The kind a top-level `KEY = value` defines through `KEY` (`namespace` →
-    /// [`SymbolKind::Namespace`]), the definition being `value`; `None` otherwise.
-    pub fn keyed_value_def_kind(&self, key: &str) -> Option<SymbolKind> {
+    /// the namespace kind), the definition being `value`; `None` otherwise.
+    pub fn keyed_value_def_kind(&self, key: &str) -> Option<KindId> {
         self.keyed_value_defs.get(key).copied()
+    }
+
+    /// Every kind in registration order (stable report / doc-ref ordering).
+    pub fn kinds(&self) -> &[KindId] {
+        &self.kinds
+    }
+
+    /// The kind a doc-comment reference alias names (`scheme` → the scheme kind).
+    pub fn kind_by_alias(&self, alias: &str) -> Option<KindId> {
+        self.by_alias.get(alias).copied()
+    }
+
+    /// Which kinds call-by-name references resolve to, if this game has any.
+    pub fn call_kinds(&self) -> Option<CallKinds> {
+        self.call_kinds
     }
 
     pub(crate) fn key_rules(&self, key: &str) -> Option<&[KeyRule]> {
@@ -343,7 +375,7 @@ impl Schema {
         &self.scope_rules
     }
 
-    pub(crate) fn alias_keys(&self, kind: SymbolKind) -> Option<&'static [&'static str]> {
+    pub(crate) fn alias_keys(&self, kind: KindId) -> Option<&'static [&'static str]> {
         self.alias_keys.get(&kind).copied()
     }
 }

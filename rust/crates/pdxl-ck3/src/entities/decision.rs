@@ -1,12 +1,13 @@
 //! Decisions (`common/decisions/`) — schema row plus the `_decisions.info`
 //! structural context.
 
+use crate::kinds;
 use pdxl_analysis::context::ClauseKind::{
     self, DynamicDesc, Effect, ScriptValue, ScriptedModifier, Trigger,
 };
 use pdxl_analysis::context::ScalarKind::{LocKey, Setting};
 use pdxl_analysis::context::{Fallback, StructSpec, block, scalar, scalar_or_block};
-use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, SymbolKind};
+use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec};
 
 use super::Entity;
 use super::common::{COST, OPAQUE, TRIGGERED_ASSET};
@@ -82,7 +83,7 @@ pub(crate) struct Decision;
 
 impl Entity for Decision {
     const KINDS: &'static [KindSpec] = &[KindSpec {
-        kind: SymbolKind::Decision,
+        kind: kinds::DECISION,
         icon: IconHint::Action,
         defs: Some(DefSource {
             dir_prefix: "common/decisions/",

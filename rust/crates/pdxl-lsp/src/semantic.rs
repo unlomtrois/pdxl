@@ -22,6 +22,7 @@ use std::collections::HashSet;
 use std::sync::OnceLock;
 
 use lsp_types::{SemanticToken, SemanticTokenModifier, SemanticTokenType, SemanticTokensLegend};
+use pdxl_analysis::Schema;
 use pdxl_lexer::TokenKind as T;
 
 use crate::position::offsets_to_positions;
@@ -151,7 +152,13 @@ fn in_resolved(resolved: &[(u32, u32)], off: u32) -> bool {
 /// Emits semantic tokens for a single `#!` doc comment run `[start, end)`:
 /// each `![Name]`'s name is colored as a reference ([`TYPE`]); everything else,
 /// including the `![` / `]` markers, stays [`COMMENT`].
-fn emit_doc_comment(src: &[u8], start: usize, end: usize, emit: &mut Vec<(u32, u32, u32, u32)>) {
+fn emit_doc_comment(
+    src: &[u8],
+    start: usize,
+    end: usize,
+    schema: Option<&Schema>,
+    emit: &mut Vec<(u32, u32, u32, u32)>,
+) {
     let mut seg = start; // start of the current pending comment segment
     let mut k = start;
     while k + 1 < end {
@@ -160,7 +167,9 @@ fn emit_doc_comment(src: &[u8], start: usize, end: usize, emit: &mut Vec<(u32, u
             if let Some(rel) = src[bracket..end].iter().position(|&b| b == b']') {
                 let content_end = bracket + rel;
                 // Color only the name; a `kind:` qualifier stays comment.
-                let (_, off) = crate::state::parse_doc_ref(&src[bracket..content_end]);
+                let off = schema.map_or(0, |sc| {
+                    crate::state::parse_doc_ref(&src[bracket..content_end], sc).1
+                });
                 let name_start = bracket + off;
                 emit.push((seg as u32, name_start as u32, COMMENT, 0));
                 if content_end > name_start {
@@ -178,7 +187,7 @@ fn emit_doc_comment(src: &[u8], start: usize, end: usize, emit: &mut Vec<(u32, u
     }
 }
 
-pub fn tokens(src: &[u8], resolved: &[(u32, u32)]) -> Vec<SemanticToken> {
+pub fn tokens(src: &[u8], resolved: &[(u32, u32)], schema: Option<&Schema>) -> Vec<SemanticToken> {
     let lexed = pdxl_lexer::tokenize(src);
 
     // (start, end, type, modifiers)
@@ -225,7 +234,7 @@ pub fn tokens(src: &[u8], resolved: &[(u32, u32)]) -> Vec<SemanticToken> {
                 // A `#!` doc comment: color each `![Name]`'s name like a
                 // reference; the rest stays comment.
                 if src.get(i + 1) == Some(&b'!') {
-                    emit_doc_comment(src, i, j, emit);
+                    emit_doc_comment(src, i, j, schema, emit);
                 } else {
                     emit.push((i as u32, j as u32, COMMENT, 0));
                 }
