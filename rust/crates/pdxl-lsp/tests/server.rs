@@ -524,6 +524,37 @@ fn hover_shows_builtin_effect_trigger_and_scope_link_docs() {
 }
 
 #[test]
+fn modifier_body_completion_and_hover() {
+    let t = TempTree::new();
+    let src =
+        "murder_advice_modifier = {\n\ticon = intrigue_positive\n\tscheme_success_chance = 5\n}\n";
+    t.write("common/modifiers/00_x.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/modifiers/00_x.txt");
+
+    // Hover on the built-in modifier tag.
+    let hover = server
+        .hover(&uri, pos_of(src, "scheme_success_chance"))
+        .expect("modifier hover");
+    let lsp_types::HoverContents::Markup(markup) = hover.contents else {
+        panic!("markup");
+    };
+    assert!(
+        markup.value.contains("modifier scheme_success_chance"),
+        "{}",
+        markup.value
+    );
+
+    // Completion inside the body offers modifier tags.
+    let items = server.completion(&uri, pos_of(src, "scheme_success_chance"));
+    let names: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    assert!(
+        names.contains(&"scheme_success_chance"),
+        "modifier tags offered"
+    );
+}
+
+#[test]
 fn hover_builtin_effect_under_struct_fallback() {
     // `start_scheme` is not a named `option` field — it falls under the
     // option struct's effect fallback, so built-in effect hover must still fire.

@@ -64,5 +64,8 @@ impl Entity for Modifier {
         aliases: &[],
     }];
 
-    const ROOTS: &'static [(&'static str, ClauseKind)] = &[];
+    // A definition body is a static-modifier clause: keys are built-in modifier
+    // tags, so the editor can complete and document them.
+    const ROOTS: &'static [(&'static str, ClauseKind)] =
+        &[("common/modifiers/", ClauseKind::StaticModifier)];
 }

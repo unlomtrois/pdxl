@@ -17,7 +17,7 @@ use lsp_types::{
 };
 use pdxl_analysis::context::{ClauseKind, Fallback, StructSpec};
 use pdxl_analysis::{IconHint, Schema, SymbolKind, SymbolTable};
-use pdxl_ck3::tables::{DocRow, EFFECTS, SCOPE_LINKS, TRIGGERS};
+use pdxl_ck3::tables::{DocRow, EFFECTS, MODIFIERS, SCOPE_LINKS, TRIGGERS};
 
 /// Control keywords legal inside effect clauses (not in the doc tables:
 /// they are flow structure, not effects).
@@ -78,6 +78,7 @@ pub fn items_for(ctx: ClauseKind, table: &SymbolTable, scope: Option<&str>) -> V
         ClauseKind::DynamicDesc => {
             push_keywords(&mut items, DYNAMIC_DESC_KEYS, "dynamic description");
         }
+        ClauseKind::StaticModifier => push_modifier_items(&mut items),
         ClauseKind::Struct(spec) => push_struct_items(&mut items, spec, table, scope),
         ClauseKind::Config | ClauseKind::Unknown => {}
     }
@@ -263,6 +264,22 @@ fn push_keywords(items: &mut Vec<CompletionItem>, keys: &[&str], what: &str) {
             kind: Some(CompletionItemKind::KEYWORD),
             detail: Some(what.to_string()),
             sort_text: Some(format!("2_{key}")),
+            ..CompletionItem::default()
+        });
+    }
+}
+
+/// Built-in stat modifiers for a `common/modifiers/` body. Templated tags
+/// (`$CULTURE$_opinion`) can't be completed literally, so they are skipped.
+fn push_modifier_items(items: &mut Vec<CompletionItem>) {
+    for row in MODIFIERS {
+        if row.tag.contains('$') {
+            continue;
+        }
+        items.push(CompletionItem {
+            label: row.tag.to_string(),
+            kind: Some(CompletionItemKind::PROPERTY),
+            detail: Some(format!("modifier · {}", row.use_areas.join(", "))),
             ..CompletionItem::default()
         });
     }

@@ -28,6 +28,9 @@ pub enum ClauseKind {
     /// `base` + weighted `modifier = { <triggers> }` blocks (`ai_chance`,
     /// `common/scripted_modifiers/` bodies).
     ScriptedModifier,
+    /// A static-modifier body: `<modifier tag> = <number>` lines plus `icon`
+    /// (`common/modifiers/` definitions). Keys are built-in modifier tags.
+    StaticModifier,
     /// The dynamic-description mini-language (`desc`, `triggered_desc`,
     /// `first_valid`, `random_valid`, `switch`).
     DynamicDesc,
@@ -295,6 +298,8 @@ fn step(ctx: ClauseKind, key: &[u8], value_is_block: bool) -> ClauseKind {
                 ClauseKind::ScriptedModifier
             }
         }
+        // Static modifiers are flat `tag = number` data; nothing scoped inside.
+        ClauseKind::StaticModifier => ClauseKind::Config,
         // Dynamic descriptions nest arbitrarily; only `trigger` escapes into
         // trigger context. Unknown keys stay (switch cases are dynamic).
         ClauseKind::DynamicDesc => match key {

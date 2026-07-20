@@ -1261,6 +1261,21 @@ fn builtin_hover(src: &[u8], off: u32, rel_path: &str) -> Option<lsp_types::Hove
             text,
         ));
     }
+    // In a static-modifier body, a key is a built-in modifier tag.
+    if matches!(ctx, ClauseKind::StaticModifier) {
+        let row = pdxl_ck3::tables::MODIFIERS
+            .iter()
+            .find(|row| row.tag == name)?;
+        let text = format!(
+            "```pdxscript\nmodifier {name}\n```\n\nUsed in: {}",
+            row.use_areas.join(", ")
+        );
+        return Some(markdown_hover(
+            src,
+            (token.range.start, token.range.end),
+            text,
+        ));
+    }
     // Classify the key itself: within a struct context (e.g. an event
     // `option`), an unknown key resolves through the struct's fallback — so
     // `start_scheme` in an option is an effect, not a structural field.
