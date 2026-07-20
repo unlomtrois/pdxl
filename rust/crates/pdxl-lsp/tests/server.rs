@@ -727,7 +727,7 @@ fn inlay_hints_show_best_effort_scope_at_block_openers() {
         labels,
         [
             ": character (effect)",  // immediate — first surfaces character
-            ": character",           // option (a struct, not a clause)
+            ": character (effect)",  // option — a struct whose loose keys are effects
             ": character (trigger)", // trigger — first surfaces it in this subtree
             // any_child inherits character (already shown by trigger) → no repeat
             ": landed_title", // title:e_test — scope change
@@ -754,7 +754,7 @@ fn inlay_hints_no_repeat_for_inherited_scope() {
         })
         .collect();
     // Only `option` surfaces character; random_list / 25 / add_trait_xp inherit.
-    assert_eq!(labels, [": character"]);
+    assert_eq!(labels, [": character (effect)"]);
 }
 
 #[test]

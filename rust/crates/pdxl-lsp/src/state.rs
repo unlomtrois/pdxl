@@ -1174,11 +1174,19 @@ fn position_in_range(position: Position, range: Range) -> bool {
 /// Short clause-kind tag for scope inlay hints (`character (trigger)`), or
 /// `None` for non-clause blocks (structs, config) where a tag adds no value.
 fn clause_suffix(ctx: ClauseKind) -> Option<&'static str> {
+    use pdxl_analysis::context::Fallback;
     match ctx {
         ClauseKind::Effect => Some("effect"),
         ClauseKind::Trigger => Some("trigger"),
         ClauseKind::ScriptValue => Some("value"),
         ClauseKind::ScriptedModifier => Some("modifier"),
+        // A struct whose loose keys are effects/triggers reads as that clause
+        // (an event `option` holds effects → `: character (effect)`).
+        ClauseKind::Struct(spec) => match spec.fallback {
+            Fallback::Effect => Some("effect"),
+            Fallback::Trigger => Some("trigger"),
+            _ => None,
+        },
         _ => None,
     }
 }
