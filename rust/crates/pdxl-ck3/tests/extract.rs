@@ -412,12 +412,135 @@ fn character_template_ref_gated_to_create_character() {
     assert_eq!(ref_names(&f), vec!["my_char"]);
     assert_eq!(f.refs[0].kind, pdxl_ck3::kinds::SCRIPTED_CHARACTER_TEMPLATE);
 
-    // … but `create_artifact = { template = X }` (artifact template) is not.
+    // … while `create_artifact = { template = X }` is an *artifact* template.
     let art = extract(
         "e = { create_artifact = { template = regalia_template } }\n",
         "events/x.txt",
     );
-    assert!(art.refs.is_empty());
+    assert_eq!(ref_names(&art), vec!["regalia_template"]);
+    assert_eq!(art.refs[0].kind, pdxl_ck3::kinds::ARTIFACT_TEMPLATE);
+}
+
+#[test]
+fn artifact_defs_and_refs() {
+    // Each artifacts subdirectory yields its own kind of def.
+    for (src, dir, kind) in [
+        (
+            "helmet = { slot = helmet }\n",
+            "common/artifacts/types/00.txt",
+            pdxl_ck3::kinds::ARTIFACT_TYPE,
+        ),
+        (
+            "general_unique_template = { unique = yes }\n",
+            "common/artifacts/templates/00.txt",
+            pdxl_ck3::kinds::ARTIFACT_TEMPLATE,
+        ),
+        (
+            "spear = { icon = \"spear.dds\" }\n",
+            "common/artifacts/visuals/00.txt",
+            pdxl_ck3::kinds::ARTIFACT_VISUAL,
+        ),
+        (
+            "decoration_pattern_wolf = { group = decoration_pattern }\n",
+            "common/artifacts/features/00.txt",
+            pdxl_ck3::kinds::ARTIFACT_FEATURE,
+        ),
+        (
+            "decoration_pattern = {}\n",
+            "common/artifacts/feature_groups/00.txt",
+            pdxl_ck3::kinds::ARTIFACT_FEATURE_GROUP,
+        ),
+        (
+            "reforge_spear = { in_type = spear }\n",
+            "common/artifacts/blueprints/00.txt",
+            pdxl_ck3::kinds::ARTIFACT_BLUEPRINT,
+        ),
+        (
+            "crown = { type = \"helmet\" category = inventory }\n",
+            "common/artifacts/slots/00.txt",
+            pdxl_ck3::kinds::ARTIFACT_SLOT,
+        ),
+    ] {
+        let d = extract(src, dir);
+        assert_eq!(d.defs.len(), 1, "one def expected in {dir}");
+        assert_eq!(d.defs[0].kind, kind, "kind mismatch in {dir}");
+    }
+
+    // create_artifact direct-child fields reference type/visuals/template;
+    // the nested history `type` is a different `type` and must NOT resolve.
+    let f = extract(
+        "e = { create_artifact = {\n\
+         \ttype = sword\n\
+         \tvisuals = easteregg_radzig_sword\n\
+         \ttemplate = general_unique_template\n\
+         \thistory = { type = created_before_history }\n\
+         } }\n",
+        "common/scripted_effects/x.txt",
+    );
+    // (kind-registration order: type, template, visual)
+    assert_eq!(
+        ref_names(&f),
+        vec!["sword", "general_unique_template", "easteregg_radzig_sword"]
+    );
+    assert_eq!(f.refs[0].kind, pdxl_ck3::kinds::ARTIFACT_TYPE);
+    assert_eq!(f.refs[1].kind, pdxl_ck3::kinds::ARTIFACT_TEMPLATE);
+    assert_eq!(f.refs[2].kind, pdxl_ck3::kinds::ARTIFACT_VISUAL);
+
+    // Blueprint fields reference types/visuals, gated to the blueprints dir.
+    let bp = extract(
+        "reforge_spear = {\n\
+         \tin_type = spear\n\
+         \tout_type = wall_big\n\
+         \tin_visuals = spear\n\
+         \tout_visuals = spear\n\
+         }\n",
+        "common/artifacts/blueprints/00.txt",
+    );
+    assert_eq!(
+        bp.refs
+            .iter()
+            .map(|r| r.kind)
+            .collect::<std::collections::HashSet<_>>(),
+        [
+            pdxl_ck3::kinds::ARTIFACT_TYPE,
+            pdxl_ck3::kinds::ARTIFACT_VISUAL
+        ]
+        .into_iter()
+        .collect()
+    );
+    // … but outside the blueprints dir the same keys mean nothing.
+    let elsewhere = extract("e = { in_type = spear }\n", "events/x.txt");
+    assert!(elsewhere.refs.is_empty());
+
+    // Feature `group` and type `required_features` items → feature groups.
+    let feat = extract(
+        "decoration_pattern_wolf = { group = decoration_pattern }\n",
+        "common/artifacts/features/00.txt",
+    );
+    assert_eq!(ref_names(&feat), vec!["decoration_pattern"]);
+    assert_eq!(feat.refs[0].kind, pdxl_ck3::kinds::ARTIFACT_FEATURE_GROUP);
+
+    let ty = extract(
+        "helmet = {\n\
+         \tslot = helmet\n\
+         \trequired_features = { crown_decoration decoration_material_wire }\n\
+         \toptional_features = { decoration_material_gem }\n\
+         }\n",
+        "common/artifacts/types/00.txt",
+    );
+    assert_eq!(
+        ref_names(&ty),
+        vec![
+            "crown_decoration",
+            "decoration_material_wire",
+            "decoration_material_gem"
+        ]
+    );
+    assert!(
+        ty.refs
+            .iter()
+            .all(|r| r.kind == pdxl_ck3::kinds::ARTIFACT_FEATURE_GROUP)
+    );
 }
 
 #[test]

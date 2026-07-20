@@ -11,10 +11,16 @@ use pdxl_analysis::context::{ContextSchema, StructSpec};
 
 /// Built-in effects whose block is a documented structure, so completion and
 /// hover work inside them (`create_character = { … }`).
-const EFFECT_STRUCTS: &[(&str, &StructSpec)] = &[(
-    "create_character",
-    &crate::entities::create_character::CREATE_CHARACTER,
-)];
+const EFFECT_STRUCTS: &[(&str, &StructSpec)] = &[
+    (
+        "create_character",
+        &crate::entities::create_character::CREATE_CHARACTER,
+    ),
+    (
+        "create_artifact",
+        &crate::entities::artifact::CREATE_ARTIFACT,
+    ),
+];
 
 /// The CK3 structural-context schema. Assembled once from every entity's
 /// declared roots (see [`crate::entities`]); cheap to call thereafter.

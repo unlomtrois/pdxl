@@ -1,6 +1,6 @@
 {
 "version":1,
-"counts":{"scripted_trigger":0,"scripted_effect":1,"script_value":0,"trait":3,"decision":0,"on_action":2,"event":1,"character":0,"title":0,"culture":0,"faith":0,"law":0,"scheme":0,"event_background":0,"event_theme":0,"modifier":0,"portrait_animation":0,"scripted_character_template":0,"character_interaction":0,"interaction_category":0,"namespace":1,"secret_type":0,"loc_key":0,"total":8},
+"counts":{"scripted_trigger":0,"scripted_effect":1,"script_value":0,"trait":3,"decision":0,"on_action":2,"event":1,"character":0,"title":0,"culture":0,"faith":0,"law":0,"scheme":0,"event_background":0,"event_theme":0,"modifier":0,"portrait_animation":0,"scripted_character_template":0,"character_interaction":0,"interaction_category":0,"namespace":1,"secret_type":0,"artifact_type":0,"artifact_template":0,"artifact_visual":0,"artifact_feature":0,"artifact_feature_group":0,"artifact_blueprint":0,"artifact_slot":0,"loc_key":0,"total":8},
 "duplicates":[],
 "unresolved":[
 {"file":"<root0>/common/on_action/oa.txt","start":40,"end":43,"msg":"unknown event \"t.9\""},

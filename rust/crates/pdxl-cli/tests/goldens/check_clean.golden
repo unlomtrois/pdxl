@@ -20,5 +20,12 @@ character_interaction      0
 interaction_category      0
 namespace               0
 secret_type             0
+artifact_type           0
+artifact_template       0
+artifact_visual         0
+artifact_feature        0
+artifact_feature_group      0
+artifact_blueprint      0
+artifact_slot           0
 loc_key                 0
 total                   2
