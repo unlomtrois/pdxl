@@ -27,6 +27,7 @@ mod character_interaction;
 mod character_template;
 pub(crate) mod create_character;
 mod culture;
+mod death_reason;
 mod decision;
 mod dynasty;
 mod event;
@@ -100,5 +101,6 @@ registry!(
     casus_belli::CasusBelli,
     dynasty::Dynasty,
     nickname::Nickname,
+    death_reason::DeathReason,
     loc::Loc,
 );

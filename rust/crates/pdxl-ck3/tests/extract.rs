@@ -469,6 +469,42 @@ fn history_character_body_refs() {
 }
 
 #[test]
+fn death_reason_defs_and_refs() {
+    let d = extract(
+        "death_murder = { icon = \"death_murder.dds\" }\n\
+         death_duel = { public_knowledge = yes use_equipped_artifact_in_slot = weapon }\n",
+        "common/deathreasons/00.txt",
+    );
+    assert_eq!(def_names(&d), vec!["death_murder", "death_duel"]);
+    assert!(
+        d.defs
+            .iter()
+            .all(|s| s.kind == pdxl_ck3::kinds::DEATH_REASON)
+    );
+    // … and the slot key inside a death reason references an artifact slot.
+    assert_eq!(ref_names(&d), vec!["weapon"]);
+    assert_eq!(d.refs[0].kind, pdxl_ck3::kinds::ARTIFACT_SLOT);
+
+    // `death_reason` resolves anywhere: the death effect and history blocks.
+    let f = extract(
+        "e = { death = { death_reason = death_murder killer = scope:killer } }\n",
+        "events/x.txt",
+    );
+    assert_eq!(ref_names(&f), vec!["death_murder"]);
+    assert_eq!(f.refs[0].kind, pdxl_ck3::kinds::DEATH_REASON);
+
+    // In history, `killer` is a character reference too.
+    let h = extract(
+        "1 = { 1089.1.1 = { death = { death_reason = death_murder killer = 20816 } } }\n",
+        "history/characters/x.txt",
+    );
+    let kinds: Vec<(&str, pdxl_analysis::KindId)> =
+        h.refs.iter().map(|r| (r.name.as_str(), r.kind)).collect();
+    assert!(kinds.contains(&("death_murder", pdxl_ck3::kinds::DEATH_REASON)));
+    assert!(kinds.contains(&("20816", pdxl_ck3::kinds::CHARACTER)));
+}
+
+#[test]
 fn nickname_defs_and_refs() {
     let d = extract(
         "nick_the_bald = { is_bad = yes }\nnick_bluetooth = {}\n",

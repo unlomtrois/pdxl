@@ -40,3 +40,4 @@ pub const CASUS_BELLI_GROUP: KindId = KindId::new("casus_belli_group");
 pub const DYNASTY: KindId = KindId::new("dynasty");
 pub const DYNASTY_HOUSE: KindId = KindId::new("dynasty_house");
 pub const NICKNAME: KindId = KindId::new("nickname");
+pub const DEATH_REASON: KindId = KindId::new("death_reason");

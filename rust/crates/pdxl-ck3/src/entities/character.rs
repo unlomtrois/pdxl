@@ -236,6 +236,8 @@ impl Entity for Character {
             in_history("add_same_sex_spouse"),
             in_history("add_concubine"),
             in_history("remove_spouse"),
+            // `death = { killer = X }` (488 corpus refs, 0 unresolved).
+            in_history("killer"),
         ],
         aliases: &[],
     }];

@@ -505,9 +505,12 @@ impl Entity for Artifact {
             kind: kinds::ARTIFACT_SLOT,
             icon: IconHint::Object,
             defs: defs(SLOTS_DIR),
-            // No refs: `slot = X` in types names the slot *type* attribute,
-            // not these slot keys.
-            refs: &[],
+            // `slot = X` in types names the slot *type* attribute, not these
+            // slot keys — but death reasons name a slot key directly.
+            refs: &[in_dir(
+                "common/deathreasons/",
+                RefPattern::KeyValue("use_equipped_artifact_in_slot"),
+            )],
             aliases: &[],
         },
     ];
