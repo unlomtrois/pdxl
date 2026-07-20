@@ -86,6 +86,13 @@ pub struct FieldSpec {
     /// Human documentation for this field, distilled from the game's
     /// `_*.info` docs; surfaced on hover. `None` when undocumented.
     pub doc: Option<&'static str>,
+    /// The known scalar values of this field, when the vocabulary is a fixed
+    /// (or near-fixed) enum — `category = inventory/court`, `rarity = common/
+    /// masterwork/famed/illustrious`. Surfaced as value completion and listed
+    /// on hover. **Suggestions, not validation**: mods can extend some of
+    /// these vocabularies (e.g. new artifact slot types), so an unlisted
+    /// value is never diagnosed.
+    pub values: Option<&'static [&'static str]>,
 }
 
 /// A block-valued field.
@@ -95,6 +102,7 @@ pub const fn block(kind: ClauseKind) -> FieldSpec {
         block: Some(kind),
         scope: None,
         doc: None,
+        values: None,
     }
 }
 
@@ -105,6 +113,7 @@ pub const fn block_scoped(kind: ClauseKind, scope: &'static str) -> FieldSpec {
         block: Some(kind),
         scope: Some(scope),
         doc: None,
+        values: None,
     }
 }
 
@@ -115,6 +124,7 @@ pub const fn scalar(kind: ScalarKind) -> FieldSpec {
         block: None,
         scope: None,
         doc: None,
+        values: None,
     }
 }
 
@@ -125,6 +135,7 @@ pub const fn scalar_or_block(s: ScalarKind, b: ClauseKind) -> FieldSpec {
         block: Some(b),
         scope: None,
         doc: None,
+        values: None,
     }
 }
 
@@ -132,10 +143,18 @@ impl FieldSpec {
     /// Attaches hover documentation to a field spec (chainable in `const`).
     pub const fn doc(self, doc: &'static str) -> FieldSpec {
         FieldSpec {
-            scalar: self.scalar,
-            block: self.block,
-            scope: self.scope,
             doc: Some(doc),
+            ..self
+        }
+    }
+
+    /// Attaches the field's known scalar values (chainable in `const`).
+    /// Suggestions for completion/hover, never validation — see
+    /// [`FieldSpec::values`].
+    pub const fn values(self, values: &'static [&'static str]) -> FieldSpec {
+        FieldSpec {
+            values: Some(values),
+            ..self
         }
     }
 }

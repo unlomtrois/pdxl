@@ -771,6 +771,55 @@ fn character_interaction_body_completion_and_hover() {
 }
 
 #[test]
+fn artifact_enum_field_values_complete_and_hover() {
+    let t = TempTree::new();
+    let src = "my_crown = {\n\tslot = \n}\n";
+    t.write("common/artifacts/types/00.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/artifacts/types/00.txt");
+
+    // `slot = ` completes the known slot types (suggestions, not validation).
+    let names: Vec<String> = server
+        .completion(&uri, pos_after(src, "slot = "))
+        .iter()
+        .map(|i| i.label.clone())
+        .collect();
+    for v in ["helmet", "primary_armament", "wall_big"] {
+        assert!(names.iter().any(|n| n == v), "missing `{v}`: {names:?}");
+    }
+    // Hover on the field lists the vocabulary.
+    let hover = hover_md(&server, &uri, pos_of(src, "slot = "));
+    assert!(hover.contains("artifact_type field slot"), "{hover}");
+    assert!(hover.contains("Values:"), "{hover}");
+    assert!(hover.contains("`journal`"), "{hover}");
+
+    // Effect-struct fields get the same treatment: `rarity = ` inside
+    // `create_artifact`, and the nested history `type = `.
+    let esrc = "e = {\n\tcreate_artifact = {\n\t\trarity = \n\t\thistory = { type = \
+                 }\n\t}\n}\n";
+    t.write("common/scripted_effects/x.txt", esrc);
+    let (server, _rx) = server_over(&t);
+    let euri = uri_for(&t, "common/scripted_effects/x.txt");
+    let rarity: Vec<String> = server
+        .completion(&euri, pos_after(esrc, "rarity = "))
+        .iter()
+        .map(|i| i.label.clone())
+        .collect();
+    for v in ["common", "masterwork", "famed", "illustrious"] {
+        assert!(rarity.iter().any(|n| n == v), "missing `{v}`: {rarity:?}");
+    }
+    let history: Vec<String> = server
+        .completion(&euri, pos_after(esrc, "history = { type = "))
+        .iter()
+        .map(|i| i.label.clone())
+        .collect();
+    assert!(
+        history.iter().any(|n| n == "created_before_history"),
+        "{history:?}"
+    );
+}
+
+#[test]
 fn secret_type_body_completion_and_hover() {
     let t = TempTree::new();
     let src = "secret_deviant = {\n\tcategory = deviancy\n\t\n}\n";

@@ -57,15 +57,34 @@ const fn defs(dir: &'static str) -> Option<DefSource> {
 
 // ── structural bodies (from the `_*.info` files) ────────────────────────────
 
+/// The slot types vanilla declares in `common/artifacts/slots/` (`type = "…"`).
+/// Suggestions only — mods add their own (T4N: `throne_corona`).
+const SLOT_TYPES: &[&str] = &[
+    "helmet",
+    "regalia",
+    "armor",
+    "primary_armament",
+    "miscellaneous",
+    "wall_big",
+    "wall_small",
+    "throne",
+    "sculpture",
+    "book",
+    "pedestal",
+    "journal",
+];
+
 /// The body of one artifact **type** (`_types.info`).
 static ARTIFACT_TYPE: StructSpec = StructSpec {
     name: "artifact_type",
     fields: &[
         (
             "slot",
-            scalar(Setting).doc(
-                "The inventory slot *type* this artifact occupies (e.g. `helmet`, `wall_big`).",
-            ),
+            scalar(Setting)
+                .doc(
+                    "The inventory slot *type* this artifact occupies (e.g. `helmet`, `wall_big`).",
+                )
+                .values(SLOT_TYPES),
         ),
         (
             "required_features",
@@ -245,11 +264,15 @@ static ARTIFACT_SLOT: StructSpec = StructSpec {
     fields: &[
         (
             "type",
-            scalar(Setting).doc("The slot type artifact types refer to via `slot =`."),
+            scalar(Setting)
+                .doc("The slot type artifact types refer to via `slot =`.")
+                .values(SLOT_TYPES),
         ),
         (
             "category",
-            scalar(Setting).doc("`inventory` (character) or `court` (royal court furniture)."),
+            scalar(Setting)
+                .doc("`inventory` (character) or `court` (royal court furniture).")
+                .values(&["inventory", "court"]),
         ),
         ("icon", scalar(Setting).doc("Optional icon override.")),
     ],
@@ -271,11 +294,27 @@ static ARTIFACT_HISTORY: StructSpec = StructSpec {
     fields: &[
         (
             "type",
-            scalar(Setting).doc(
-                "The history entry type: `created_before_history`, `created`, `discovered`, \
-                 `given`, `stolen`, `inherited`, `conquest`, `won_in_duel`, `purchased`, \
-                 `reforged`, ….",
-            ),
+            scalar(Setting)
+                .doc("The history entry type (the full list from `effects.log`).")
+                .values(&[
+                    "created_before_history",
+                    "created",
+                    "prize_created",
+                    "discovered",
+                    "creator_discovered",
+                    "claimed_by_house",
+                    "given",
+                    "stolen",
+                    "inherited",
+                    "conquest",
+                    "taken_in_siege",
+                    "taken_in_battle",
+                    "won_in_duel",
+                    "purchased",
+                    "prize_awarded",
+                    "ransomed",
+                    "reforged",
+                ]),
         ),
         ("date", scalar(Setting).doc("When this event took place.")),
         (
@@ -312,7 +351,8 @@ pub(crate) static CREATE_ARTIFACT: StructSpec = StructSpec {
         (
             "rarity",
             scalar(Setting)
-                .doc("`common` / `masterwork` / `famed` / `illustrious` (artifact rarity)."),
+                .doc("`common` / `masterwork` / `famed` / `illustrious` (artifact rarity).")
+                .values(&["common", "masterwork", "famed", "illustrious"]),
         ),
         (
             "type",

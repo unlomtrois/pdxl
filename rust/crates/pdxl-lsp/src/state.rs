@@ -815,11 +815,30 @@ impl ServerState {
             return items;
         }
         if let Some(key) = cursor.value_key.as_deref() {
-            return crate::completion::symbol_value_items(
+            let items = crate::completion::symbol_value_items(
                 project.table(),
                 project.schema(),
                 project.schema().value_kinds(key, &rel),
             );
+            if !items.is_empty() {
+                return items;
+            }
+            // No symbol kind resolves this key: if the enclosing struct
+            // declares an enum-like vocabulary for it (`slot = helmet/…`),
+            // offer those values.
+            let ctx = pdxl_analysis::context::context_of_chain_rooted(
+                cursor.chain.iter().map(Vec::as_slice),
+                cursor.root_override,
+                &rel,
+                pdxl_ck3::contexts::context_schema(),
+            );
+            if let pdxl_analysis::context::ClauseKind::Struct(spec) = ctx
+                && let Some(field) = spec.field(key)
+                && let Some(values) = field.values
+            {
+                return crate::completion::enum_value_items(key, values);
+            }
+            return Vec::new();
         }
         if let Some(key) = cursor
             .chain
@@ -1592,6 +1611,14 @@ fn builtin_hover(src: &[u8], off: u32, rel_path: &str) -> Option<lsp_types::Hove
         }
         if let Some(doc) = field.doc {
             text.push_str(&format!("\n\n{doc}"));
+        }
+        if let Some(values) = field.values {
+            let list = values
+                .iter()
+                .map(|v| format!("`{v}`"))
+                .collect::<Vec<_>>()
+                .join(" · ");
+            text.push_str(&format!("\n\nValues: {list}"));
         }
         return Some(markdown_hover(
             src,

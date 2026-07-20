@@ -85,6 +85,22 @@ pub fn items_for(ctx: ClauseKind, table: &SymbolTable, scope: Option<&str>) -> V
     items
 }
 
+/// The known values of an enum-like structural field (`category =
+/// inventory/court`), for value completion. Suggestions, not validation —
+/// see `FieldSpec::values`.
+pub fn enum_value_items(field_name: &str, values: &[&str]) -> Vec<CompletionItem> {
+    values
+        .iter()
+        .map(|value| CompletionItem {
+            label: (*value).to_string(),
+            kind: Some(CompletionItemKind::ENUM_MEMBER),
+            detail: Some(format!("{field_name} value")),
+            sort_text: Some(format!("0_{value}")),
+            ..CompletionItem::default()
+        })
+        .collect()
+}
+
 /// Defined symbols matching a schema reference query, for value completion.
 pub fn symbol_value_items<I>(table: &SymbolTable, schema: &Schema, kinds: I) -> Vec<CompletionItem>
 where
