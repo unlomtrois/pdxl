@@ -22,6 +22,7 @@ pub(crate) mod common;
 
 mod character;
 mod character_template;
+pub(crate) mod create_character;
 mod culture;
 mod decision;
 mod event;

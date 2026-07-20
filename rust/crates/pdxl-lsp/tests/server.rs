@@ -713,6 +713,41 @@ fn option_field_completion_carries_docs() {
 }
 
 #[test]
+fn create_character_block_completion_and_hover() {
+    let t = TempTree::new();
+    // `create_character` is a built-in effect with a documented block structure.
+    let src = "t.1 = {\n\ttype = character_event\n\timmediate = {\n\t\tcreate_character = {\n\t\t\tage = 20\n\t\t\t\n\t\t}\n\t}\n}\n";
+    t.write("events/e.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "events/e.txt");
+
+    // Completion inside the block offers its fields.
+    let items = server.completion(&uri, pos_after(src, "age = 20"));
+    let names: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    for f in [
+        "age",
+        "gender",
+        "faith",
+        "culture",
+        "after_creation",
+        "trait",
+    ] {
+        assert!(names.contains(&f), "missing `{f}`: {names:?}");
+    }
+    // A field carries its documentation.
+    let after = items.iter().find(|i| i.label == "after_creation").unwrap();
+    let Some(lsp_types::Documentation::MarkupContent(doc)) = &after.documentation else {
+        panic!("field should carry docs");
+    };
+    assert!(doc.value.contains("after creation"), "{}", doc.value);
+
+    // Hover on a field key shows its doc.
+    let hover = hover_md(&server, &uri, pos_of(src, "age = 20"));
+    assert!(hover.contains("create_character field age"), "{hover}");
+    assert!(hover.contains("Starting age"), "{hover}");
+}
+
+#[test]
 fn modifier_body_completion_and_hover() {
     let t = TempTree::new();
     let src =

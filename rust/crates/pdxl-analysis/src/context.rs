@@ -160,6 +160,11 @@ impl StructSpec {
 #[derive(Debug)]
 pub struct ContextSchema {
     pub roots: &'static [(&'static str, ClauseKind)],
+    /// Built-in effects whose block value is a documented structure
+    /// (`create_character = { … }`). Consulted when a key resolves to effect
+    /// context, so the block reads as [`ClauseKind::Struct`] rather than a bare
+    /// effect clause.
+    pub effect_structs: &'static [(&'static str, &'static StructSpec)],
 }
 
 impl ContextSchema {
@@ -168,6 +173,13 @@ impl ContextSchema {
             .iter()
             .find(|(p, _)| rel_path.starts_with(p))
             .map(|(_, k)| *k)
+    }
+
+    fn effect_struct(&self, key: &[u8]) -> Option<&'static StructSpec> {
+        self.effect_structs
+            .iter()
+            .find(|(k, _)| k.as_bytes() == key)
+            .map(|(_, spec)| *spec)
     }
 }
 
@@ -256,7 +268,14 @@ where
     for key in keys {
         ctx = Some(match ctx {
             None => body_kind, // the outermost block is a definition body
-            Some(c) => step(c, key, true),
+            // A key that resolves to effect context and names a structured
+            // built-in effect (`create_character`) opens that struct instead.
+            Some(c) => match step(c, key, true) {
+                ClauseKind::Effect => schema
+                    .effect_struct(key)
+                    .map_or(ClauseKind::Effect, ClauseKind::Struct),
+                other => other,
+            },
         });
     }
     ctx.unwrap_or(ClauseKind::Config)
