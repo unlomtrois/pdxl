@@ -726,14 +726,35 @@ fn inlay_hints_show_best_effort_scope_at_block_openers() {
     assert_eq!(
         labels,
         [
-            ": character (effect)",  // immediate
+            ": character (effect)",  // immediate — first surfaces character
             ": character",           // option (a struct, not a clause)
-            ": character (trigger)", // trigger
-            ": character (trigger)", // any_child inside the trigger
-            ": landed_title",        // title:e_test — scope known, clause not
-            ": faith"                // title:e_test.faith
+            ": character (trigger)", // trigger — first surfaces it in this subtree
+            // any_child inherits character (already shown by trigger) → no repeat
+            ": landed_title", // title:e_test — scope change
+            ": faith"         // title:e_test.faith — scope change
         ]
     );
+}
+
+#[test]
+fn inlay_hints_no_repeat_for_inherited_scope() {
+    // Nested effect blocks that don't change scope show the hint only once, on
+    // the outermost (the user's random_list / add_trait_xp case).
+    let t = TempTree::new();
+    let src = "t.1 = {\n\ttype = character_event\n\toption = {\n\t\trandom_list = {\n\t\t\t25 = { add_trait_xp = { trait = brave } }\n\t\t}\n\t}\n}\n";
+    t.write("events/e.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "events/e.txt");
+    let labels: Vec<String> = server
+        .inlay_hints(&uri, Range::new(Position::new(0, 0), Position::new(99, 0)))
+        .iter()
+        .filter_map(|h| match &h.label {
+            InlayHintLabel::String(l) => Some(l.clone()),
+            InlayHintLabel::LabelParts(_) => None,
+        })
+        .collect();
+    // Only `option` surfaces character; random_list / 25 / add_trait_xp inherit.
+    assert_eq!(labels, [": character"]);
 }
 
 #[test]

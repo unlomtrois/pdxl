@@ -760,7 +760,12 @@ fn markdown_hover(src: &[u8], span: (u32, u32), text: String) -> lsp_types::Hove
 #[derive(Clone, Default)]
 struct ScopeFrame {
     key: Vec<u8>,
+    /// The resolved scope inside this block (inherited unless changed).
     scope: Option<String>,
+    /// The scope actually *displayed* by an inlay hint at or above this frame,
+    /// so a descendant with the same scope doesn't repeat it. `None` in
+    /// `scope_at` (which has no hints).
+    shown: Option<String>,
 }
 
 /// Folds explicit scope declarations plus documented iterator and scope-link
@@ -803,6 +808,7 @@ fn scope_hints(src: &[u8], rel_path: &str, requested: Range) -> Vec<InlayHint> {
             T::LBrace => {
                 let key = block_key(src, &recent, &is_scalar, &is_op);
                 let parent_scope = stack.last().and_then(|frame| frame.scope.clone());
+                let parent_shown = stack.last().and_then(|frame| frame.shown.clone());
                 let scope = block_scope(
                     &tokens[..i],
                     src,
@@ -812,8 +818,7 @@ fn scope_hints(src: &[u8], rel_path: &str, requested: Range) -> Vec<InlayHint> {
                     rel_path,
                     parent_scope.clone(),
                 );
-                if let Some(scope) = &scope {
-                    let position = offset_to_position(src, token.range.end);
+                let shown = if let Some(scope) = &scope {
                     // The clause kind of this block's contents, used both to
                     // decide whether a scope hint is meaningful and to suffix
                     // it: `: character (trigger)`, `: landed_title (effect)`.
@@ -828,33 +833,42 @@ fn scope_hints(src: &[u8], rel_path: &str, requested: Range) -> Vec<InlayHint> {
                         )
                     };
                     // Show a hint when this block *changes* the scope (a
-                    // `title:`/`scope:` literal, `root`, a named scope) — that's
-                    // the useful signal — or when its clause bears scope-using
-                    // script. A structural block that merely inherits its parent
-                    // scope (an event `cooldown`, a `widget`) is just noise.
-                    let inherited = parent_scope.as_deref() == Some(scope.as_str());
-                    if position_in_range(position, requested)
-                        && (!inherited || scope_hint_meaningful(clause))
-                    {
-                        let label = match clause_suffix(clause) {
-                            Some(c) => format!(": {scope} ({c})"),
-                            None => format!(": {scope}"),
-                        };
-                        hints.push(InlayHint {
-                            position,
-                            label: label.into(),
-                            kind: Some(InlayHintKind::TYPE),
-                            text_edits: None,
-                            tooltip: Some(InlayHintTooltip::String(
-                                "Current CK3 scope type (best effort)".into(),
-                            )),
-                            padding_left: Some(true),
-                            padding_right: None,
-                            data: None,
-                        });
+                    // `title:`/`scope:` literal, an iterator) — always the useful
+                    // signal — or when a scope-bearing clause surfaces a scope
+                    // not yet displayed above, so nested effect/trigger blocks
+                    // that merely inherit it (`random_list`, `add_trait_xp`) and
+                    // structural blocks (`cooldown`) stay quiet.
+                    let changed = parent_scope.as_deref() != Some(scope.as_str());
+                    let already_shown = parent_shown.as_deref() == Some(scope.as_str());
+                    let show = changed || (scope_hint_meaningful(clause) && !already_shown);
+                    if show {
+                        let position = offset_to_position(src, token.range.end);
+                        if position_in_range(position, requested) {
+                            let label = match clause_suffix(clause) {
+                                Some(c) => format!(": {scope} ({c})"),
+                                None => format!(": {scope}"),
+                            };
+                            hints.push(InlayHint {
+                                position,
+                                label: label.into(),
+                                kind: Some(InlayHintKind::TYPE),
+                                text_edits: None,
+                                tooltip: Some(InlayHintTooltip::String(
+                                    "Current CK3 scope type (best effort)".into(),
+                                )),
+                                padding_left: Some(true),
+                                padding_right: None,
+                                data: None,
+                            });
+                        }
+                        Some(scope.clone())
+                    } else {
+                        parent_shown
                     }
-                }
-                stack.push(ScopeFrame { key, scope });
+                } else {
+                    parent_shown
+                };
+                stack.push(ScopeFrame { key, scope, shown });
                 recent.clear();
             }
             T::RBrace => {
@@ -936,7 +950,12 @@ pub(crate) fn scope_at(src: &[u8], rel_path: &str, off: u32) -> Option<String> {
                     rel_path,
                     inherited,
                 );
-                stack.push(ScopeFrame { key, scope });
+                // `shown` is a hint-display concern; unused in scope_at.
+                stack.push(ScopeFrame {
+                    key,
+                    scope,
+                    shown: None,
+                });
                 recent.clear();
             }
             T::RBrace => {
