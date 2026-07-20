@@ -39,9 +39,38 @@
         "pdxl.logLevel": {
           "type": "string",
           "default": "info",
-          "enum": ["debug", "info", "warn", "error"],
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ],
           "description": "Log level for the pdxl language server."
         }
+      }
+    },
+    "languages": [
+      {
+        "id": "pdxl-gui",
+        "aliases": [
+          "Paradox GUI",
+          "pdxgui"
+        ],
+        "extensions": [
+          ".gui"
+        ],
+        "configuration": "./language-configuration-gui.json"
+      }
+    ],
+    "configurationDefaults": {
+      "[pdxl-gui]": {
+        "editor.quickSuggestions": {
+          "other": "on",
+          "comments": "off",
+          "strings": "on"
+        },
+        "editor.wordBasedSuggestions": "off",
+        "editor.semanticHighlighting.enabled": true
       }
     }
   },

@@ -1983,3 +1983,28 @@ fn gui_completion_keys_values_and_datafns() {
         items.iter().take(8).map(|i| &i.label).collect::<Vec<_>>()
     );
 }
+
+#[test]
+fn gui_datafn_completion_inside_quoted_string() {
+    let t = TempTree::new();
+    let src = "window = {\n\tdatacontext = \"[Ge\n}\n";
+    t.write("gui/edit.gui", src);
+    let (mut server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "gui/edit.gui");
+    server.did_open(uri.clone(), src.to_string());
+    let items = server.completion(&uri, pos_after(src, "\"[Ge"));
+    assert!(
+        items.iter().any(|i| i.label == "GetPlayer"),
+        "{:?}",
+        items.iter().take(8).map(|i| &i.label).collect::<Vec<_>>()
+    );
+    // … and member completion after a dot inside the quotes.
+    let src2 = "window = {\n\tdatacontext = \"[GetTitleByKey( 'k_x' ).\n}\n";
+    server.did_open(uri.clone(), src2.to_string());
+    let items = server.completion(&uri, pos_after(src2, ")."));
+    assert!(
+        items.iter().any(|i| i.label == "GetHolder"),
+        "{:?}",
+        items.iter().take(8).map(|i| &i.label).collect::<Vec<_>>()
+    );
+}
