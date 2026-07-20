@@ -573,34 +573,25 @@ impl ServerState {
         out
     }
 
-    /// A single `![Name]` reference: a link to its definition, else `` `Name` ``.
+    /// A single `![…]` reference (its inner text, possibly `kind:name`): a link
+    /// to the definition, else `` `name` ``.
     fn render_doc_ref(
         &self,
-        name: &str,
+        content: &str,
         project: &Project,
         cache: &mut HashMap<PathBuf, Option<Vec<u8>>>,
     ) -> String {
-        for kind in SymbolKind::ALL {
-            let Some(sym) = project.table().lookup(kind, name) else {
-                continue;
-            };
-            let Some(full) = project.rel_to_full(&sym.file) else {
-                continue;
-            };
-            let src = cache
-                .entry(full.to_path_buf())
-                .or_insert_with(|| self.read_file(full).ok());
-            if let Some(src) = src {
-                // Editors expect a 1-based line in the `#L` fragment.
-                let line = offset_to_position(src, sym.offset).line + 1;
-                return format!("[{name}]({}#L{line})", path_to_uri(full));
-            }
+        let (kind, off) = parse_doc_ref(content.as_bytes());
+        let name = &content[off..];
+        match self.resolve_doc_ref(kind, name, project, cache) {
+            Some((full, line)) => format!("[{name}]({}#L{line})", path_to_uri(&full)),
+            None => format!("`{name}`"),
         }
-        format!("`{name}`")
     }
 
     /// `textDocument/documentLink`: makes every `![Name]` inside a `#!` doc
     /// comment clickable, targeting `Name`'s definition (resolved refs only).
+    /// The link covers the name, not any `kind:` qualifier.
     pub fn document_links(&self, uri: &Url) -> Vec<lsp_types::DocumentLink> {
         let path = uri_to_path(uri);
         let Some(project) = &self.project else {
@@ -612,15 +603,20 @@ impl ServerState {
         let mut cache: HashMap<PathBuf, Option<Vec<u8>>> = HashMap::new();
         let mut links = Vec::new();
         for (start, end) in doc_ref_ranges(&src) {
-            let Ok(name) = std::str::from_utf8(&src[start as usize..end as usize]) else {
+            let content = &src[start as usize..end as usize];
+            let (kind, off) = parse_doc_ref(content);
+            let Ok(name) = std::str::from_utf8(&content[off..]) else {
                 continue;
             };
-            let Some(target) = self.doc_ref_target(name, project, &mut cache) else {
+            let Some((full, line)) = self.resolve_doc_ref(kind, name, project, &mut cache) else {
                 continue;
             };
+            let mut target = path_to_uri(&full);
+            target.set_fragment(Some(&format!("L{line}")));
+            let name_start = start + off as u32;
             links.push(lsp_types::DocumentLink {
                 range: Range {
-                    start: offset_to_position(&src, start),
+                    start: offset_to_position(&src, name_start),
                     end: offset_to_position(&src, end),
                 },
                 target: Some(target),
@@ -631,32 +627,38 @@ impl ServerState {
         links
     }
 
-    /// A `file://…#L<line>` URL pointing at `name`'s definition, first matching
-    /// kind, or `None` if it doesn't resolve.
-    fn doc_ref_target(
+    /// Resolves a doc ref `name` to its definition's file + 1-based line.
+    /// A pinned `kind` looks up only that kind; otherwise every definition kind
+    /// is tried before `LocKey` (a loc string usually just shadows its object).
+    fn resolve_doc_ref(
         &self,
+        kind: Option<SymbolKind>,
         name: &str,
         project: &Project,
         cache: &mut HashMap<PathBuf, Option<Vec<u8>>>,
-    ) -> Option<Url> {
-        for kind in SymbolKind::ALL {
-            let Some(sym) = project.table().lookup(kind, name) else {
-                continue;
-            };
-            let Some(full) = project.rel_to_full(&sym.file) else {
-                continue;
-            };
-            let src = cache
-                .entry(full.to_path_buf())
-                .or_insert_with(|| self.read_file(full).ok());
-            if let Some(src) = src {
-                let line = offset_to_position(src, sym.offset).line + 1;
-                let mut url = path_to_uri(full);
-                url.set_fragment(Some(&format!("L{line}")));
-                return Some(url);
+    ) -> Option<(PathBuf, u32)> {
+        match kind {
+            Some(k) => self.lookup_doc_ref(k, name, project, cache),
+            None => {
+                doc_ref_lookup_order().find_map(|k| self.lookup_doc_ref(k, name, project, cache))
             }
         }
-        None
+    }
+
+    fn lookup_doc_ref(
+        &self,
+        kind: SymbolKind,
+        name: &str,
+        project: &Project,
+        cache: &mut HashMap<PathBuf, Option<Vec<u8>>>,
+    ) -> Option<(PathBuf, u32)> {
+        let sym = project.table().lookup(kind, name)?;
+        let full = project.rel_to_full(&sym.file)?;
+        let src = cache
+            .entry(full.to_path_buf())
+            .or_insert_with(|| self.read_file(full).ok());
+        let line = offset_to_position(src.as_ref()?, sym.offset).line + 1;
+        Some((full.to_path_buf(), line))
     }
 
     /// `textDocument/inlayHint`: lightweight dynamic-scope annotations at
@@ -900,6 +902,54 @@ fn extract_doc_block(src: &[u8], def_offset: u32) -> Option<String> {
     }
     docs.reverse();
     Some(docs.join("\n"))
+}
+
+/// Splits a `![…]` ref's inner text into an optional explicit kind and the
+/// byte offset where the referenced name begins. `scheme:Name` →
+/// `(Some(Scheme), 7)`; a bare or unknown-prefix text → `(None, 0)`.
+pub(crate) fn parse_doc_ref(content: &[u8]) -> (Option<SymbolKind>, usize) {
+    if let Some(colon) = content.iter().position(|&b| b == b':')
+        && let Ok(prefix) = std::str::from_utf8(&content[..colon])
+        && let Some(kind) = doc_ref_alias(prefix)
+    {
+        return (Some(kind), colon + 1);
+    }
+    (None, 0)
+}
+
+/// The kind a `![kind:…]` prefix names, using short modder-friendly aliases.
+fn doc_ref_alias(prefix: &str) -> Option<SymbolKind> {
+    use SymbolKind as K;
+    Some(match prefix {
+        "effect" => K::ScriptedEffect,
+        "trigger" => K::ScriptedTrigger,
+        "value" => K::ScriptValue,
+        "trait" => K::Trait,
+        "event" => K::Event,
+        "decision" => K::Decision,
+        "on_action" => K::OnAction,
+        "character" => K::Character,
+        "title" => K::Title,
+        "culture" => K::Culture,
+        "faith" => K::Faith,
+        "law" => K::Law,
+        "scheme" => K::Scheme,
+        "modifier" => K::Modifier,
+        "animation" => K::PortraitAnimation,
+        "background" => K::EventBackground,
+        "theme" => K::EventTheme,
+        "loc" => K::LocKey,
+        _ => return None,
+    })
+}
+
+/// Kinds to try for an unqualified `![Name]`: every definition kind before
+/// `LocKey`, since a loc string almost always just shadows the object it names.
+fn doc_ref_lookup_order() -> impl Iterator<Item = SymbolKind> {
+    SymbolKind::ALL
+        .into_iter()
+        .filter(|k| *k != SymbolKind::LocKey)
+        .chain(std::iter::once(SymbolKind::LocKey))
 }
 
 /// Byte ranges of the `Name` in every `![Name]` inside a `#!` doc comment.

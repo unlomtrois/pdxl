@@ -555,6 +555,59 @@ fn doc_block_shown_on_definition_and_call_site() {
 }
 
 #[test]
+fn doc_ref_prefers_definition_over_loc_and_honors_explicit_kind() {
+    // Name collision: a script value AND a loc key both named `my_val`.
+    let t = TempTree::new();
+    t.write("common/script_values/v.txt", "my_val = 10\n");
+    t.write(
+        "localization/english/l.yml",
+        "\u{feff}l_english:\n my_val: \"some text\"\n",
+    );
+    let src = "#! bare ![my_val], loc ![loc:my_val], val ![value:my_val]\nfx = { }\n";
+    t.write("events/e.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "events/e.txt");
+
+    // Links are in source order: bare, loc:, value:.
+    let links = server.document_links(&uri);
+    let all: Vec<String> = links
+        .iter()
+        .map(|l| l.target.as_ref().unwrap().as_str().to_string())
+        .collect();
+    assert_eq!(links.len(), 3, "{all:?}");
+    assert!(
+        all[0].contains("common/script_values/v.txt"),
+        "bare → def: {all:?}"
+    );
+    assert!(
+        all[1].contains("localization/english/l.yml"),
+        "loc: → loc: {all:?}"
+    );
+    assert!(
+        all[2].contains("common/script_values/v.txt"),
+        "value: → def: {all:?}"
+    );
+
+    // The `value:` link range covers `my_val`, not the `value:` qualifier.
+    let val_link = &links[2];
+    let range_start = position_to_off(src, val_link.range.start);
+    assert_eq!(
+        &src[range_start as usize..range_start as usize + 6],
+        "my_val"
+    );
+}
+
+/// Byte offset of an LSP position on line 0 of a single-hover fixture.
+fn position_to_off(src: &str, pos: Position) -> u32 {
+    let line_start: usize = src
+        .split_inclusive('\n')
+        .take(pos.line as usize)
+        .map(str::len)
+        .sum();
+    (line_start + pos.character as usize) as u32
+}
+
+#[test]
 fn doc_ref_is_clickable_document_link() {
     let t = TempTree::new();
     t.write("common/traits/00.txt", "brave = { }\n");

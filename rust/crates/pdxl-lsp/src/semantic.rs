@@ -156,15 +156,18 @@ fn emit_doc_comment(src: &[u8], start: usize, end: usize, emit: &mut Vec<(u32, u
     let mut k = start;
     while k + 1 < end {
         if src[k] == b'!' && src[k + 1] == b'[' {
-            let name_start = k + 2;
-            if let Some(rel) = src[name_start..end].iter().position(|&b| b == b']') {
-                let name_end = name_start + rel;
+            let bracket = k + 2;
+            if let Some(rel) = src[bracket..end].iter().position(|&b| b == b']') {
+                let content_end = bracket + rel;
+                // Color only the name; a `kind:` qualifier stays comment.
+                let (_, off) = crate::state::parse_doc_ref(&src[bracket..content_end]);
+                let name_start = bracket + off;
                 emit.push((seg as u32, name_start as u32, COMMENT, 0));
-                if name_end > name_start {
-                    emit.push((name_start as u32, name_end as u32, TYPE, 0));
+                if content_end > name_start {
+                    emit.push((name_start as u32, content_end as u32, TYPE, 0));
                 }
-                seg = name_end; // the `]` and beyond resume as comment
-                k = name_end;
+                seg = content_end; // the `]` and beyond resume as comment
+                k = content_end;
                 continue;
             }
         }
