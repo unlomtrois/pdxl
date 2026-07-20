@@ -1,10 +1,11 @@
 //! On-actions (`common/on_action/`) — schema row (fire-list references) plus
 //! the `_on_actions.info` structural context.
 
+use crate::kinds;
 use pdxl_analysis::context::ClauseKind::{self, Effect, ScriptValue, ScriptedModifier, Trigger};
 use pdxl_analysis::context::ScalarKind::Setting;
 use pdxl_analysis::context::{Fallback, StructSpec, block, scalar, scalar_or_block};
-use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, SymbolKind};
+use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern};
 
 use super::Entity;
 use super::common::{DURATION, anywhere, in_on_action};
@@ -58,7 +59,7 @@ pub(crate) struct OnAction;
 
 impl Entity for OnAction {
     const KINDS: &'static [KindSpec] = &[KindSpec {
-        kind: SymbolKind::OnAction,
+        kind: kinds::ON_ACTION,
         icon: IconHint::Event,
         defs: Some(DefSource {
             dir_prefix: "common/on_action/",

@@ -10,8 +10,9 @@
 //! animation reference lives under `events/`, so the rule is gated there — which
 //! excludes both overloaded uses cleanly.
 
+use crate::kinds;
 use pdxl_analysis::context::ClauseKind;
-use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule, SymbolKind};
+use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 pub(crate) struct PortraitAnimation;
 
@@ -19,7 +20,7 @@ impl super::Entity for PortraitAnimation {
     const KINDS: &'static [KindSpec] = &[
         // Portrait animations — carries the `animation = X` reference rule.
         KindSpec {
-            kind: SymbolKind::PortraitAnimation,
+            kind: kinds::PORTRAIT_ANIMATION,
             icon: IconHint::Object,
             defs: Some(DefSource {
                 dir_prefix: "gfx/portraits/portrait_animations/",
@@ -34,7 +35,7 @@ impl super::Entity for PortraitAnimation {
         // Scripted animations — same kind, so `animation = X` resolves against
         // them too (defs only; the reference rule above is shared).
         KindSpec {
-            kind: SymbolKind::PortraitAnimation,
+            kind: kinds::PORTRAIT_ANIMATION,
             icon: IconHint::Object,
             defs: Some(DefSource {
                 dir_prefix: "common/scripted_animations/",

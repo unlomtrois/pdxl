@@ -25,8 +25,9 @@ fn scenario_dump(roots: &[(&TempTree, FileKind)]) -> String {
     for (tree, kind) in roots {
         fs.add(&tree.path, *kind).expect("add root");
     }
-    let (table, diags) = pdxl_project::analyze(&fs, &pdxl_ck3::schema()).expect("analyze");
-    let mut dump = dump_project(&table, &diags);
+    let schema = pdxl_ck3::schema();
+    let (table, diags) = pdxl_project::analyze(&fs, &schema).expect("analyze");
+    let mut dump = dump_project(&table, &diags, schema.kinds());
     for (i, (tree, _)) in roots.iter().enumerate() {
         dump = dump.replace(
             &tree.path.to_string_lossy().into_owned(),

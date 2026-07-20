@@ -21,7 +21,7 @@ pub fn dump_facts(facts: &FileFacts, rel_path: &str) -> String {
         out.push('\n');
         for (i, r) in facts.refs.iter().enumerate() {
             out.push_str("{\"kind\":\"");
-            out.push_str(r.kind.as_str());
+            out.push_str(r.kind.name());
             out.push_str("\",\"name\":\"");
             push_escaped(&mut out, &r.name);
             out.push_str("\",\"file\":\"");
@@ -50,7 +50,7 @@ fn push_symbols(out: &mut String, symbols: &[Symbol]) {
         out.push_str("{\"name\":\"");
         push_escaped(out, &s.name);
         out.push_str("\",\"kind\":\"");
-        out.push_str(s.kind.as_str());
+        out.push_str(s.kind.name());
         out.push_str("\",\"file\":\"");
         push_escaped(out, &s.file);
         out.push_str("\",\"offset\":");

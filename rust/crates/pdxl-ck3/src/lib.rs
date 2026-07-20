@@ -19,11 +19,12 @@
 //!
 //! [`KindSpec`]: pdxl_analysis::KindSpec
 
-use pdxl_analysis::{Schema, SymbolKind};
+use pdxl_analysis::{CallKinds, KindId, Schema};
 
 mod entities;
 
 pub mod contexts;
+pub mod kinds;
 pub mod tables;
 
 /// Relative-scope keywords a reference value may hold at runtime
@@ -42,14 +43,47 @@ const SCOPE_KEYWORDS: &[&str] = &[
 /// given kind regardless of directory. CK3 uses these inline in event files
 /// (`scripted_effect elope_outcome_effect = { … }`), and the same names are
 /// invoked as call-by-name references (`NAME = yes`).
-const TYPED_DEFS: &[(&str, SymbolKind)] = &[
-    ("scripted_effect", SymbolKind::ScriptedEffect),
-    ("scripted_trigger", SymbolKind::ScriptedTrigger),
+const TYPED_DEFS: &[(&str, KindId)] = &[
+    ("scripted_effect", kinds::SCRIPTED_EFFECT),
+    ("scripted_trigger", kinds::SCRIPTED_TRIGGER),
 ];
 
 /// Keyed-value definitions: a top-level `KEY = value` whose *value* is the
 /// symbol. `namespace = X` declares event namespace `X`.
-const KEYED_VALUE_DEFS: &[(&str, SymbolKind)] = &[("namespace", SymbolKind::Namespace)];
+const KEYED_VALUE_DEFS: &[(&str, KindId)] = &[("namespace", kinds::NAMESPACE)];
+
+/// Doc-comment reference aliases: `![scheme:X]` pins the lookup to a kind.
+const DOC_REF_ALIASES: &[(&str, KindId)] = &[
+    ("effect", kinds::SCRIPTED_EFFECT),
+    ("trigger", kinds::SCRIPTED_TRIGGER),
+    ("value", kinds::SCRIPT_VALUE),
+    ("trait", kinds::TRAIT),
+    ("event", kinds::EVENT),
+    ("decision", kinds::DECISION),
+    ("on_action", kinds::ON_ACTION),
+    ("character", kinds::CHARACTER),
+    ("title", kinds::TITLE),
+    ("culture", kinds::CULTURE),
+    ("faith", kinds::FAITH),
+    ("law", kinds::LAW),
+    ("scheme", kinds::SCHEME),
+    ("modifier", kinds::MODIFIER),
+    ("animation", kinds::PORTRAIT_ANIMATION),
+    ("background", kinds::EVENT_BACKGROUND),
+    ("theme", kinds::EVENT_THEME),
+    ("template", kinds::SCRIPTED_CHARACTER_TEMPLATE),
+    ("secret", kinds::SECRET_TYPE),
+    ("namespace", kinds::NAMESPACE),
+    ("loc", kinds::LOC_KEY),
+];
+
+/// The kinds call-by-name references resolve to (scripted effects/triggers in
+/// key position, script values in value position).
+const CALL_KINDS: CallKinds = CallKinds {
+    effect: kinds::SCRIPTED_EFFECT,
+    trigger: kinds::SCRIPTED_TRIGGER,
+    value: kinds::SCRIPT_VALUE,
+};
 
 /// Builds the CK3 schema from the entity registry. Cheap to construct; build
 /// once and share.
@@ -59,5 +93,7 @@ pub fn schema() -> Schema {
         SCOPE_KEYWORDS,
         TYPED_DEFS,
         KEYED_VALUE_DEFS,
+        DOC_REF_ALIASES,
+        Some(CALL_KINDS),
     )
 }

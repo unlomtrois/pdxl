@@ -6,10 +6,11 @@
 //! `background` / `override_background` block (an event theme's background, or
 //! an event's `override_background`).
 
+use crate::kinds;
 use pdxl_analysis::context::ClauseKind::{self, Trigger};
 use pdxl_analysis::context::ScalarKind::Setting;
 use pdxl_analysis::context::{Fallback, StructSpec, block, scalar};
-use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule, SymbolKind};
+use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
 use super::common::anywhere;
@@ -62,7 +63,7 @@ pub(crate) struct EventBackground;
 
 impl Entity for EventBackground {
     const KINDS: &'static [KindSpec] = &[KindSpec {
-        kind: SymbolKind::EventBackground,
+        kind: kinds::EVENT_BACKGROUND,
         icon: IconHint::Object,
         defs: Some(DefSource {
             dir_prefix: "common/event_backgrounds/",

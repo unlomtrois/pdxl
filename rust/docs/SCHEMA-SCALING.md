@@ -73,10 +73,15 @@ decision, not an architecture prerequisite.
 - **Phase 1** (behavior-identical): KindSpec + unified RefRule/RefPattern +
   per-rule gates + compiled indices. Keep the SymbolKind enum as the ID.
   Goldens unchanged.
-- **Phase 2** (on real pressure: >~20 kinds or a second game): replace the
-  enum with KindId/KindInfo. Touches dumps + table; golden regen +
-  ANALYSIS_VERSION bump. Costs exhaustive matching on kinds — dead at that
-  scale anyway; IconHint (small, closed) carries presentation.
+- **Phase 2** (DONE, ANALYSIS_VERSION 20): the closed `SymbolKind` enum is
+  replaced by an opaque `KindId` (a `&'static str` newtype) plus the engine's
+  one well-known `LOC_KEY`. Each game crate owns its vocabulary (`pdxl_ck3::kinds`,
+  one `const` per concept) and supplies doc-ref aliases + call-by-name kinds to
+  `Schema::new`; the engine (`pdxl-analysis`, `pdxl-project`) names no kind.
+  Dumps/reports iterate `Schema::kinds()` (registration order, `loc_key` last).
+  Presentation stays on the closed `IconHint`. `KindId` is opaque, so its
+  encoding can later become a `u16` + interned-name table with no call-site
+  change (reclaiming the ~6 MB of fat pointers).
 
 ## Trade-offs accepted
 

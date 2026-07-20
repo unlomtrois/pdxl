@@ -71,7 +71,7 @@ pub fn resolve_refs<'a>(
                 end: r.end,
                 // Matches Go's `unknown %s %q` for the identifier-shaped names
                 // that reach this point (skip rules filter the rest).
-                msg: format!("unknown {} {:?}", r.kind.as_str(), r.name),
+                msg: format!("unknown {} {:?}", r.kind.name(), r.name),
             });
         }
     }

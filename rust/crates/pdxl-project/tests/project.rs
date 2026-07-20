@@ -5,7 +5,6 @@
 
 use std::path::PathBuf;
 
-use pdxl_analysis::SymbolKind;
 use pdxl_fileset::{FileKind, FileSet};
 use pdxl_project::{Project, analyze};
 use pdxl_testutil::TempTree;
@@ -141,7 +140,7 @@ fn project_initial_diags() {
     );
     let p = project(&d);
     assert!(p.diags().is_empty(), "{:?}", p.diags());
-    assert_eq!(p.table().count(SymbolKind::Trait), 1);
+    assert_eq!(p.table().count(pdxl_ck3::kinds::TRAIT), 1);
 }
 
 #[test]
@@ -163,8 +162,8 @@ fn project_incremental_update() {
     p.update(&trait_path).unwrap();
 
     assert_eq!(p.diags().len(), 1, "{:?}", p.diags());
-    assert_eq!(p.table().count(SymbolKind::Trait), 1);
-    assert!(p.table().lookup(SymbolKind::Trait, "bold").is_some());
+    assert_eq!(p.table().count(pdxl_ck3::kinds::TRAIT), 1);
+    assert!(p.table().lookup(pdxl_ck3::kinds::TRAIT, "bold").is_some());
 }
 
 #[test]
@@ -246,7 +245,7 @@ fn references_and_rel_to_full() {
         "e = { has_trait = brave }\n",
     );
     let p = project(&d);
-    assert_eq!(p.references(SymbolKind::Trait, "brave").len(), 2);
+    assert_eq!(p.references(pdxl_ck3::kinds::TRAIT, "brave").len(), 2);
     let full = p.rel_to_full("common/traits/00_t.txt").expect("tracked");
     assert!(full.ends_with("common/traits/00_t.txt"));
 }
@@ -276,7 +275,7 @@ fn incremental_equals_fresh_analysis() {
         incremental.table().duplicates.len(),
         fresh.table().duplicates.len()
     );
-    for kind in SymbolKind::ALL {
+    for kind in pdxl_ck3::schema().kinds().iter().copied() {
         assert_eq!(
             incremental.table().count(kind),
             fresh.table().count(kind),
@@ -306,7 +305,7 @@ fn analyze_with_cache_matches_uncached() {
     assert_eq!(cold_diags, populate_diags);
     assert_eq!(cold_diags, warm_diags);
     assert_eq!(cold_table.total(), warm_table.total());
-    for kind in SymbolKind::ALL {
+    for kind in pdxl_ck3::schema().kinds().iter().copied() {
         assert_eq!(cold_table.count(kind), warm_table.count(kind), "{kind:?}");
     }
 }
@@ -327,14 +326,14 @@ fn localization_keys_resolve_event_text_refs() {
     fs.set_localization_language(pdxl_project::DEFAULT_LOC_LANGUAGE);
     fs.add(&t.path, pdxl_fileset::FileKind::Mod).unwrap();
     let (table, diags) = analyze(&fs, &pdxl_ck3::schema()).expect("analyze");
-    assert_eq!(table.count(pdxl_analysis::SymbolKind::LocKey), 2);
+    assert_eq!(table.count(pdxl_analysis::LOC_KEY), 2);
     let missing: Vec<&str> = diags.iter().map(|d| d.msg.as_str()).collect();
     assert_eq!(missing.len(), 1, "{missing:?}");
     assert!(missing[0].contains("unknown loc_key \"my.1.missing\""));
 
     // Definitions carry the yml rel path + key offsets (goto-def target).
     let sym = table
-        .lookup(pdxl_analysis::SymbolKind::LocKey, "my.1.t")
+        .lookup(pdxl_analysis::LOC_KEY, "my.1.t")
         .expect("loc symbol");
     assert_eq!(&*sym.file, "localization/english/my_events_l_english.yml");
 }

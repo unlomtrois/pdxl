@@ -8,7 +8,7 @@
 
 use std::collections::HashSet;
 
-use pdxl_analysis::{CallTargets, FileFacts, SymbolKind, extract_facts};
+use pdxl_analysis::{CallKinds, CallTargets, FileFacts, KindId, extract_facts};
 
 /// Extracts facts from `src` as if it lived at `rel_path`.
 fn extract(src: &str, rel_path: &str) -> FileFacts {
@@ -34,6 +34,11 @@ fn extract_with_names(
     let triggers: HashSet<String> = triggers.iter().map(|s| s.to_string()).collect();
     let script_values: HashSet<String> = script_values.iter().map(|s| s.to_string()).collect();
     let targets = CallTargets {
+        kinds: CallKinds {
+            effect: pdxl_ck3::kinds::SCRIPTED_EFFECT,
+            trigger: pdxl_ck3::kinds::SCRIPTED_TRIGGER,
+            value: pdxl_ck3::kinds::SCRIPT_VALUE,
+        },
         effects: &effects,
         triggers: &triggers,
         script_values: &script_values,
@@ -55,7 +60,7 @@ fn ref_names(f: &FileFacts) -> Vec<&str> {
     f.refs.iter().map(|r| r.name.as_str()).collect()
 }
 
-fn call_names(f: &FileFacts) -> Vec<(&str, SymbolKind)> {
+fn call_names(f: &FileFacts) -> Vec<(&str, KindId)> {
     f.calls.iter().map(|r| (r.name.as_str(), r.kind)).collect()
 }
 
@@ -81,8 +86,8 @@ test.1 = {
     assert_eq!(
         call_names(&f),
         vec![
-            ("my_effect", SymbolKind::ScriptedEffect),
-            ("my_trigger", SymbolKind::ScriptedTrigger),
+            ("my_effect", pdxl_ck3::kinds::SCRIPTED_EFFECT),
+            ("my_trigger", pdxl_ck3::kinds::SCRIPTED_TRIGGER),
         ],
         "only nested invocations of known scripted names are calls"
     );
@@ -101,14 +106,13 @@ fn inline_typed_scripted_defs_kinded_not_as_events() {
          actual.1 = { type = character_event }\n",
         "events/scheme_events/x.txt",
     );
-    let by_kind: Vec<(&str, SymbolKind)> =
-        f.defs.iter().map(|d| (d.name.as_str(), d.kind)).collect();
+    let by_kind: Vec<(&str, KindId)> = f.defs.iter().map(|d| (d.name.as_str(), d.kind)).collect();
     assert_eq!(
         by_kind,
         vec![
-            ("my_eff", SymbolKind::ScriptedEffect),
-            ("my_trig", SymbolKind::ScriptedTrigger),
-            ("actual.1", SymbolKind::Event),
+            ("my_eff", pdxl_ck3::kinds::SCRIPTED_EFFECT),
+            ("my_trig", pdxl_ck3::kinds::SCRIPTED_TRIGGER),
+            ("actual.1", pdxl_ck3::kinds::EVENT),
         ]
     );
     // The def offset points at the NAME, not the keyword.
@@ -124,13 +128,12 @@ fn script_value_defs_scalar_and_block() {
         "minor_stress_gain = 10\nmy_formula = { value = 3 add = 2 }\n",
         "common/script_values/00_x.txt",
     );
-    let by_kind: Vec<(&str, SymbolKind)> =
-        f.defs.iter().map(|d| (d.name.as_str(), d.kind)).collect();
+    let by_kind: Vec<(&str, KindId)> = f.defs.iter().map(|d| (d.name.as_str(), d.kind)).collect();
     assert_eq!(
         by_kind,
         vec![
-            ("minor_stress_gain", SymbolKind::ScriptValue),
-            ("my_formula", SymbolKind::ScriptValue),
+            ("minor_stress_gain", pdxl_ck3::kinds::SCRIPT_VALUE),
+            ("my_formula", pdxl_ck3::kinds::SCRIPT_VALUE),
         ]
     );
 }
@@ -150,17 +153,16 @@ fn script_value_refs_in_value_positions() {
         &[],
         &["minor_stress_gain", "my_formula", "another_value"],
     );
-    let names: Vec<(&str, SymbolKind)> =
-        f.calls.iter().map(|c| (c.name.as_str(), c.kind)).collect();
+    let names: Vec<(&str, KindId)> = f.calls.iter().map(|c| (c.name.as_str(), c.kind)).collect();
     // The scalar value, the nested `value =`, and both list items — but NOT the
     // `minor_stress_gain = 5` KEY (a key is never a script-value reference).
     assert_eq!(
         names,
         vec![
-            ("minor_stress_gain", SymbolKind::ScriptValue),
-            ("my_formula", SymbolKind::ScriptValue),
-            ("minor_stress_gain", SymbolKind::ScriptValue),
-            ("another_value", SymbolKind::ScriptValue),
+            ("minor_stress_gain", pdxl_ck3::kinds::SCRIPT_VALUE),
+            ("my_formula", pdxl_ck3::kinds::SCRIPT_VALUE),
+            ("minor_stress_gain", pdxl_ck3::kinds::SCRIPT_VALUE),
+            ("another_value", pdxl_ck3::kinds::SCRIPT_VALUE),
         ]
     );
 }
@@ -185,8 +187,8 @@ fn collects_definitions_including_namespace() {
     // `namespace = test` declares a Namespace named `test` (its value); the
     // event is a separate Event definition.
     assert_eq!(def_names(&f), vec!["test", "test.0001"]);
-    assert_eq!(f.defs[0].kind, SymbolKind::Namespace);
-    assert_eq!(f.defs[1].kind, SymbolKind::Event);
+    assert_eq!(f.defs[0].kind, pdxl_ck3::kinds::NAMESPACE);
+    assert_eq!(f.defs[1].kind, pdxl_ck3::kinds::EVENT);
     // The namespace symbol points at the value, so hover/doc land on the name.
     let d = &f.defs[0];
     assert_eq!(&src[d.offset as usize..d.end_offset as usize], "test");
@@ -199,7 +201,11 @@ fn collects_multiple_triggers() {
         "common/scripted_triggers/00_t.txt",
     );
     assert_eq!(def_names(&f), vec!["alpha_trigger", "beta_trigger"]);
-    assert!(f.defs.iter().all(|s| s.kind == SymbolKind::ScriptedTrigger));
+    assert!(
+        f.defs
+            .iter()
+            .all(|s| s.kind == pdxl_ck3::kinds::SCRIPTED_TRIGGER)
+    );
 }
 
 #[test]
@@ -209,7 +215,7 @@ fn collects_faiths_nested_under_religion_type() {
         "common/religion/religion_types/fire.txt",
     );
     assert_eq!(def_names(&f), vec!["sun_spirituality", "fire_lord_cult"]);
-    assert!(f.defs.iter().all(|d| d.kind == SymbolKind::Faith));
+    assert!(f.defs.iter().all(|d| d.kind == pdxl_ck3::kinds::FAITH));
 }
 
 #[test]
@@ -219,7 +225,7 @@ fn collects_characters_including_dotted_ids() {
         "history/characters/afar.txt",
     );
     assert_eq!(def_names(&f), vec!["145665", "bohemia.1"]);
-    assert!(f.defs.iter().all(|s| s.kind == SymbolKind::Character));
+    assert!(f.defs.iter().all(|s| s.kind == pdxl_ck3::kinds::CHARACTER));
 }
 
 #[test]
@@ -258,7 +264,7 @@ fn trait_groups_become_aliases() {
     let names: Vec<&str> = f.aliases.iter().map(|a| a.name.as_str()).collect();
     // One alias per matching key per def — duplicates preserved (merge dedups).
     assert_eq!(names, vec!["personality", "personality", "fearful"]);
-    assert!(f.aliases.iter().all(|a| a.kind == SymbolKind::Trait));
+    assert!(f.aliases.iter().all(|a| a.kind == pdxl_ck3::kinds::TRAIT));
     // Go parity quirk: alias end_offset equals the def's start offset.
     assert_eq!(f.aliases[0].end_offset, f.aliases[0].offset);
 }
@@ -281,7 +287,7 @@ fn scalar_refs_with_quote_stripping() {
         "events/x.txt",
     );
     assert_eq!(ref_names(&f), vec!["brave", "craven", "kind"]);
-    assert!(f.refs.iter().all(|r| r.kind == SymbolKind::Trait));
+    assert!(f.refs.iter().all(|r| r.kind == pdxl_ck3::kinds::TRAIT));
     // The byte range still covers the QUOTED source text.
     let r = &f.refs[1];
     assert_eq!(r.end - r.start, "\"craven\"".len() as u32);
@@ -294,7 +300,7 @@ fn trigger_event_scalar_and_block_id() {
         "events/x.txt",
     );
     assert_eq!(ref_names(&f), vec!["ns.1", "ns.2"]);
-    assert!(f.refs.iter().all(|r| r.kind == SymbolKind::Event));
+    assert!(f.refs.iter().all(|r| r.kind == pdxl_ck3::kinds::EVENT));
 }
 
 #[test]
@@ -337,7 +343,7 @@ fn modifier_block_and_scalar_refs() {
             "shiny_modifier"
         ],
     );
-    assert!(f.refs.iter().all(|r| r.kind == SymbolKind::Modifier));
+    assert!(f.refs.iter().all(|r| r.kind == pdxl_ck3::kinds::MODIFIER));
     // A bare `modifier =` / `type =` outside an add-key block is not a ref.
 }
 
@@ -348,7 +354,7 @@ fn secret_type_def_and_gated_type_ref() {
         "secret_deviant = { category = deviancy }\n",
         "common/secret_types/00.txt",
     );
-    assert_eq!(d.defs[0].kind, SymbolKind::SecretType);
+    assert_eq!(d.defs[0].kind, pdxl_ck3::kinds::SECRET_TYPE);
 
     // `type = X` inside a secret effect references a secret …
     let f = extract(
@@ -356,7 +362,7 @@ fn secret_type_def_and_gated_type_ref() {
         "events/x.txt",
     );
     assert_eq!(ref_names(&f), vec!["secret_deviant"]);
-    assert_eq!(f.refs[0].kind, SymbolKind::SecretType);
+    assert_eq!(f.refs[0].kind, pdxl_ck3::kinds::SECRET_TYPE);
 
     // … but a bare `type = character_event` (event) is not a secret ref.
     let ev = extract("test.1 = { type = character_event }\n", "events/x.txt");
@@ -371,7 +377,7 @@ fn character_template_ref_gated_to_create_character() {
         "events/x.txt",
     );
     assert_eq!(ref_names(&f), vec!["my_char"]);
-    assert_eq!(f.refs[0].kind, SymbolKind::ScriptedCharacterTemplate);
+    assert_eq!(f.refs[0].kind, pdxl_ck3::kinds::SCRIPTED_CHARACTER_TEMPLATE);
 
     // … but `create_artifact = { template = X }` (artifact template) is not.
     let art = extract(
@@ -391,7 +397,7 @@ fn trait_xp_block_references_trait() {
         "events/x.txt",
     );
     assert_eq!(ref_names(&f), vec!["brave", "craven"]);
-    assert!(f.refs.iter().all(|r| r.kind == SymbolKind::Trait));
+    assert!(f.refs.iter().all(|r| r.kind == pdxl_ck3::kinds::TRAIT));
 }
 
 #[test]
@@ -401,9 +407,9 @@ fn portrait_animation_defs_and_gated_refs() {
         "happiness = { male = { } }\n",
         "gfx/portraits/portrait_animations/a.txt",
     );
-    assert_eq!(pa.defs[0].kind, SymbolKind::PortraitAnimation);
+    assert_eq!(pa.defs[0].kind, pdxl_ck3::kinds::PORTRAIT_ANIMATION);
     let sa = extract("bow_closed = { }\n", "common/scripted_animations/a.txt");
-    assert_eq!(sa.defs[0].kind, SymbolKind::PortraitAnimation);
+    assert_eq!(sa.defs[0].kind, pdxl_ck3::kinds::PORTRAIT_ANIMATION);
 
     // `animation = X` is a reference under events/ …
     let ev = extract(
@@ -411,7 +417,7 @@ fn portrait_animation_defs_and_gated_refs() {
         "events/x.txt",
     );
     assert_eq!(ref_names(&ev), vec!["happiness"]);
-    assert_eq!(ev.refs[0].kind, SymbolKind::PortraitAnimation);
+    assert_eq!(ev.refs[0].kind, pdxl_ck3::kinds::PORTRAIT_ANIMATION);
 
     // … but not elsewhere (tutorial `animation = center` is a camera position).
     let tut = extract(
@@ -495,7 +501,7 @@ fn title_tree_harvests_all_tiers_recursively() {
         ],
         "definition order = tree pre-order"
     );
-    assert!(f.defs.iter().all(|d| d.kind == SymbolKind::Title));
+    assert!(f.defs.iter().all(|d| d.kind == pdxl_ck3::kinds::TITLE));
     assert!(f.defs.iter().all(|d| d.params.is_empty()));
 }
 
@@ -522,7 +528,11 @@ fn title_defs_only_in_landed_titles_dir() {
     let f = extract(TITLE_TREE, "common/scripted_effects/x.txt");
     // Outside landed_titles the tier keys are ordinary top-level defs of the
     // dir's own kind (scripted_effect), not titles.
-    assert!(f.defs.iter().all(|d| d.kind == SymbolKind::ScriptedEffect));
+    assert!(
+        f.defs
+            .iter()
+            .all(|d| d.kind == pdxl_ck3::kinds::SCRIPTED_EFFECT)
+    );
 }
 
 #[test]
@@ -539,7 +549,7 @@ fn title_scope_refs_in_all_positions() {
     let names: Vec<&str> = f
         .refs
         .iter()
-        .filter(|r| r.kind == SymbolKind::Title)
+        .filter(|r| r.kind == pdxl_ck3::kinds::TITLE)
         .map(|r| r.name.as_str())
         .collect();
     assert_eq!(
@@ -554,7 +564,11 @@ fn title_ref_range_covers_only_the_name() {
     let src = "x = title:e_empire.holder\n";
     //         0123456789...
     let f = extract(src, "common/scripted_effects/e.txt");
-    let r = f.refs.iter().find(|r| r.kind == SymbolKind::Title).unwrap();
+    let r = f
+        .refs
+        .iter()
+        .find(|r| r.kind == pdxl_ck3::kinds::TITLE)
+        .unwrap();
     assert_eq!(&src[r.start as usize..r.end as usize], "e_empire");
     // The range starts at the name, not the `title:` prefix (byte 10 = col 11).
     assert_eq!(r.start, 10);
@@ -571,7 +585,7 @@ fn title_refs_skip_macros_and_lookalikes() {
         "common/scripted_effects/e.txt",
     );
     assert!(
-        f.refs.iter().all(|r| r.kind != SymbolKind::Title),
+        f.refs.iter().all(|r| r.kind != pdxl_ck3::kinds::TITLE),
         "macros and non-title: prefixes must not extract: {:?}",
         f.refs
     );
@@ -598,7 +612,7 @@ fn title_refs_resolve_against_tree_defs() {
     ];
     let (table, diags) = merge_and_resolve(&order, &facts);
 
-    assert_eq!(table.count(SymbolKind::Title), 7);
+    assert_eq!(table.count(pdxl_ck3::kinds::TITLE), 7);
     assert_eq!(diags.len(), 1, "{diags:?}");
     assert!(
         diags[0].msg.contains("unknown title \"d_gone\""),
@@ -620,7 +634,7 @@ fn capital_in_landed_titles_is_a_title_ref() {
         .iter()
         .find(|r| r.name == "c_shore")
         .expect("capital value extracted as a ref");
-    assert_eq!(r.kind, SymbolKind::Title);
+    assert_eq!(r.kind, pdxl_ck3::kinds::TITLE);
 }
 
 #[test]
@@ -651,7 +665,7 @@ fn on_action_fire_lists_fallback_and_weighted() {
         "common/on_action/oa.txt",
     );
     assert_eq!(ref_names(&f), vec!["oa_a", "oa_b", "oa_c", "oa_d"]);
-    assert!(f.refs.iter().all(|r| r.kind == SymbolKind::OnAction));
+    assert!(f.refs.iter().all(|r| r.kind == pdxl_ck3::kinds::ON_ACTION));
 }
 
 #[test]
@@ -666,7 +680,7 @@ fn on_action_rules_are_gated_to_on_action_files() {
         "events/e.txt",
     );
     assert!(
-        f.refs.iter().all(|r| r.kind != SymbolKind::OnAction),
+        f.refs.iter().all(|r| r.kind != pdxl_ck3::kinds::ON_ACTION),
         "gated rules fired outside on_action: {:?}",
         ref_names(&f)
     );
@@ -686,9 +700,9 @@ fn trigger_event_block_can_fire_an_on_action_anywhere() {
         .iter()
         .find(|r| r.name == "my_oa")
         .expect("on_action ref");
-    assert_eq!(oa.kind, SymbolKind::OnAction);
+    assert_eq!(oa.kind, pdxl_ck3::kinds::ON_ACTION);
     let ev = f.refs.iter().find(|r| r.name == "ns.1").expect("event ref");
-    assert_eq!(ev.kind, SymbolKind::Event);
+    assert_eq!(ev.kind, pdxl_ck3::kinds::EVENT);
 }
 
 // ── localization-key references (ANALYSIS_VERSION 6) ────────────────────────
@@ -706,7 +720,7 @@ fn event_text_fields_are_loc_refs() {
     let loc: Vec<&str> = f
         .refs
         .iter()
-        .filter(|r| r.kind == SymbolKind::LocKey)
+        .filter(|r| r.kind == pdxl_ck3::kinds::LOC_KEY)
         .map(|r| r.name.as_str())
         .collect();
     // Scalar forms extracted at any depth; the desc BLOCK itself is not a ref.
@@ -720,7 +734,7 @@ fn loc_ref_rules_are_gated_by_directory() {
         "v = {\n\tdesc = some_svalue_desc\n\tname = whatever\n}\n",
         "common/script_values/v.txt",
     );
-    assert!(f.refs.iter().all(|r| r.kind != SymbolKind::LocKey));
+    assert!(f.refs.iter().all(|r| r.kind != pdxl_ck3::kinds::LOC_KEY));
 
     // …while decisions expose their own text fields.
     let f = extract(
@@ -730,7 +744,7 @@ fn loc_ref_rules_are_gated_by_directory() {
     let loc: Vec<&str> = f
         .refs
         .iter()
-        .filter(|r| r.kind == SymbolKind::LocKey)
+        .filter(|r| r.kind == pdxl_ck3::kinds::LOC_KEY)
         .map(|r| r.name.as_str())
         .collect();
     assert_eq!(loc, vec!["d.tooltip", "d.confirm"]);
@@ -758,7 +772,7 @@ fn law_group_children_are_laws_minus_attributes() {
         def_names(&f),
         vec!["crown_authority_0", "crown_authority_1"]
     );
-    assert!(f.defs.iter().all(|s| s.kind == SymbolKind::Law));
+    assert!(f.defs.iter().all(|s| s.kind == pdxl_ck3::kinds::LAW));
 }
 
 #[test]
@@ -777,7 +791,7 @@ fn realm_law_references_and_gated_default() {
     let laws: Vec<&str> = f
         .refs
         .iter()
-        .filter(|r| r.kind == SymbolKind::Law)
+        .filter(|r| r.kind == pdxl_ck3::kinds::LAW)
         .map(|r| r.name.as_str())
         .collect();
     // Exact-key rules: the _flag / _in_group variants are NOT law refs.
@@ -799,9 +813,9 @@ fn realm_law_references_and_gated_default() {
     assert!(
         f.refs
             .iter()
-            .any(|r| r.kind == SymbolKind::Law && r.name == "the_law")
+            .any(|r| r.kind == pdxl_ck3::kinds::LAW && r.name == "the_law")
     );
     // …not elsewhere (`default` means other things).
     let f = extract("d = { default = something }\n", "common/decisions/d.txt");
-    assert!(f.refs.iter().all(|r| r.kind != SymbolKind::Law));
+    assert!(f.refs.iter().all(|r| r.kind != pdxl_ck3::kinds::LAW));
 }

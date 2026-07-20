@@ -7,8 +7,9 @@
 //! reference sits inside a `create_character` block, so the rule is gated to
 //! that key (KeyBlockField), which excludes the artifact uses cleanly.
 
+use crate::kinds;
 use pdxl_analysis::context::ClauseKind;
-use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule, SymbolKind};
+use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
 
@@ -16,7 +17,7 @@ pub(crate) struct CharacterTemplate;
 
 impl Entity for CharacterTemplate {
     const KINDS: &'static [KindSpec] = &[KindSpec {
-        kind: SymbolKind::ScriptedCharacterTemplate,
+        kind: kinds::SCRIPTED_CHARACTER_TEMPLATE,
         icon: IconHint::Object,
         defs: Some(DefSource {
             dir_prefix: "common/scripted_character_templates/",

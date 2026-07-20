@@ -1,6 +1,7 @@
 //! History characters (`history/characters/`).
 
-use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, SymbolKind};
+use crate::kinds;
+use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec};
 
 use super::Entity;
 
@@ -8,7 +9,7 @@ pub(crate) struct Character;
 
 impl Entity for Character {
     const KINDS: &'static [KindSpec] = &[KindSpec {
-        kind: SymbolKind::Character,
+        kind: kinds::CHARACTER,
         icon: IconHint::Object,
         defs: Some(DefSource {
             dir_prefix: "history/characters/",
