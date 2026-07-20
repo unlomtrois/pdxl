@@ -9,6 +9,14 @@ use pdxl_analysis::{IconHint, KindSpec, RefPattern, RefRule};
 use super::Entity;
 use super::common::anywhere;
 
+/// A `key = <loc>` scalar loc reference gated to character interactions.
+const fn interaction_loc(key: &'static str) -> RefRule {
+    RefRule {
+        pattern: RefPattern::KeyValue(key),
+        gate: Some("common/character_interactions/"),
+    }
+}
+
 pub(crate) struct Loc;
 
 impl Entity for Loc {
@@ -60,6 +68,17 @@ impl Entity for Loc {
                 pattern: RefPattern::KeyValue("confirm_text"),
                 gate: Some("common/decisions/"),
             },
+            // Character-interaction text fields (from `_character_interactions.info`).
+            // `desc` also catches nested dynamic-description descs. All corpus-
+            // validated at ~0 unresolved.
+            interaction_loc("desc"),
+            interaction_loc("notification_text"),
+            interaction_loc("intermediary_notification_text"),
+            interaction_loc("prompt"),
+            interaction_loc("send_name"),
+            interaction_loc("options_heading"),
+            interaction_loc("highlighted_reason"),
+            interaction_loc("reply_item_key"),
             anywhere(RefPattern::KeyValue("custom_tooltip")),
         ],
         aliases: &[],

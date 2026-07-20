@@ -362,6 +362,22 @@ fn character_interaction_def_and_ref() {
     );
     assert_eq!(ref_names(&r), vec!["my_interaction"]);
     assert_eq!(r.refs[0].kind, pdxl_ck3::kinds::CHARACTER_INTERACTION);
+
+    // The interaction's `desc` / `notification_text` are loc-key references
+    // (so go-to-definition jumps to the .yml), but only inside interactions.
+    let loc = extract(
+        "my_interaction = { desc = my_interaction_desc category = c }\n",
+        "common/character_interactions/00.txt",
+    );
+    let desc = loc
+        .refs
+        .iter()
+        .find(|r| r.name == "my_interaction_desc")
+        .expect("desc loc ref");
+    assert_eq!(desc.kind, pdxl_ck3::kinds::LOC_KEY);
+    // `desc` outside interactions/events/decisions is not a loc ref.
+    let elsewhere = extract("x = { desc = whatever }\n", "common/traits/00.txt");
+    assert!(elsewhere.refs.iter().all(|r| r.name != "whatever"));
 }
 
 #[test]
