@@ -37,6 +37,7 @@ mod law;
 mod loc;
 mod modifier;
 mod namespace;
+mod nickname;
 mod on_action;
 mod portrait_animation;
 mod scheme;
@@ -98,5 +99,6 @@ registry!(
     artifact::Artifact,
     casus_belli::CasusBelli,
     dynasty::Dynasty,
+    nickname::Nickname,
     loc::Loc,
 );

@@ -469,6 +469,27 @@ fn history_character_body_refs() {
 }
 
 #[test]
+fn nickname_defs_and_refs() {
+    let d = extract(
+        "nick_the_bald = { is_bad = yes }\nnick_bluetooth = {}\n",
+        "common/nicknames/00.txt",
+    );
+    assert_eq!(def_names(&d), vec!["nick_the_bald", "nick_bluetooth"]);
+    assert!(d.defs.iter().all(|s| s.kind == pdxl_ck3::kinds::NICKNAME));
+
+    // `give_nickname` (effect) and `has_nickname` (trigger) resolve anywhere.
+    let f = extract(
+        "e = {\n\
+         \tgive_nickname = nick_the_bald\n\
+         \ttrigger = { has_nickname = nick_bluetooth }\n\
+         }\n",
+        "events/x.txt",
+    );
+    assert_eq!(ref_names(&f), vec!["nick_the_bald", "nick_bluetooth"]);
+    assert!(f.refs.iter().all(|r| r.kind == pdxl_ck3::kinds::NICKNAME));
+}
+
+#[test]
 fn dynasty_defs_and_refs() {
     let d = extract(
         "101046 = { name = \"dynn_X\" culture = \"andalusian\" }\n",
