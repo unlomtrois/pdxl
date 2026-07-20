@@ -18,8 +18,22 @@ use pdxl_ast::{Node, NodeId, NodeKind, SyntaxTree};
 /// The tree is always produced; check [`Parse::diagnostics`] rather than trusting
 /// the tree blindly. `filename` is shared into each diagnostic.
 pub fn parse(filename: impl Into<Arc<str>>, source: impl Into<Arc<[u8]>>) -> Parse {
-    let source: Arc<[u8]> = source.into();
-    let mut p = Parser::new(filename.into(), &source);
+    parse_inner(filename.into(), source.into(), false)
+}
+
+/// Parses `source` as an interface script (`.gui`). Identical to [`parse`]
+/// except that an unquoted datafunction — `enabled = [ArmyWindow.CanMerge]` —
+/// is accepted as a scalar value covering the whole `[…]` text. The script
+/// grammar is untouched (it is a Go-parity target); `.gui`'s other extras
+/// (`template NAME { }`, `type x = base { }`, `block "n" { }`) already parse
+/// as sibling scalars + tagged blocks, mirroring the typed-definition shape.
+pub fn parse_gui(filename: impl Into<Arc<str>>, source: impl Into<Arc<[u8]>>) -> Parse {
+    parse_inner(filename.into(), source.into(), true)
+}
+
+fn parse_inner(filename: Arc<str>, source: Arc<[u8]>, gui: bool) -> Parse {
+    let mut p = Parser::new(filename, &source);
+    p.gui = gui;
     p.parse_file();
     let tree = SyntaxTree::from_parts(
         source,
@@ -39,6 +53,8 @@ struct Parser {
     nodes: Vec<Node>,
     index: Vec<NodeId>,
     diags: Vec<Diagnostic>,
+    /// Interface-script dialect: accept `[Datafunction.Chain]` values.
+    gui: bool,
 }
 
 /// A blank node template; fields are overwritten by each `alloc_node` caller.
@@ -63,6 +79,7 @@ impl Parser {
             nodes: Vec::with_capacity(cap),
             index: Vec::with_capacity(cap),
             diags: Vec::new(),
+            gui: false,
         }
     }
 
@@ -330,6 +347,36 @@ impl Parser {
                 operator: TokenKind::Invalid,
                 child_start: idx_start,
                 child_end: idx_end,
+            }));
+        }
+
+        // Interface dialect: `[Datafunction.Chain( … )]` as one scalar value
+        // covering the whole bracketed text. Brackets do not nest in the
+        // datafunction language, so scan to the first `]`.
+        if self.gui && self.peek(0) == TokenKind::LBracket {
+            let start = self.tokens[self.pos].range.start;
+            let mut end = self.tokens[self.pos].range.end;
+            self.advance();
+            while self.peek(0) != TokenKind::RBracket && self.peek(0) != TokenKind::Eof {
+                end = self.tokens[self.pos].range.end;
+                self.advance();
+            }
+            if self.peek(0) == TokenKind::RBracket {
+                end = self.tokens[self.pos].range.end;
+                self.advance();
+            } else {
+                self.add_diag(
+                    start,
+                    Severity::Error,
+                    "unclosed datafunction (missing ']')".to_string(),
+                );
+            }
+            return Some(self.alloc_node(Node {
+                kind: NodeKind::Scalar,
+                range: TextRange::new(start, end),
+                operator: TokenKind::Invalid,
+                child_start: 0,
+                child_end: 0,
             }));
         }
 

@@ -1789,3 +1789,53 @@ fn hover_on_a_law_field_key_describes_it() {
         m.value
     );
 }
+
+#[test]
+fn gui_template_definition_and_references() {
+    let t = TempTree::new();
+    t.write(
+        "gui/shared_templates.gui",
+        "template MyHeader {\n\tsize = { 100% 34 }\n}\n\
+         types Widgets {\n\ttype my_marker = widget {\n\t\tblock \"label\" {}\n\t}\n}\n",
+    );
+    let src = "window = {\n\tusing = MyHeader\n\tmy_marker = {\n\t\tenabled = [Foo.Bar]\n\t}\n}\n";
+    t.write("gui/window_test.gui", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "gui/window_test.gui");
+
+    // Go-to-definition from the `using = MyHeader` value → the template def.
+    let loc = server
+        .definition(&uri, pos_of(src, "MyHeader"))
+        .expect("template definition found");
+    assert!(
+        loc.uri
+            .to_file_path()
+            .unwrap()
+            .ends_with("gui/shared_templates.gui")
+    );
+    assert_eq!(
+        loc.range.start,
+        Position {
+            line: 0,
+            character: 9
+        }
+    );
+
+    // … and from the `my_marker = { … }` instantiation key → the type def.
+    let loc = server
+        .definition(&uri, pos_of(src, "my_marker"))
+        .expect("type definition found");
+    assert!(
+        loc.uri
+            .to_file_path()
+            .unwrap()
+            .ends_with("gui/shared_templates.gui")
+    );
+
+    // The datafunction value produces no parse diagnostics for gui files.
+    let refs = server.references(&uri, pos_of(src, "MyHeader"), true);
+    assert!(
+        refs.len() >= 2,
+        "definition + using site expected: {refs:?}"
+    );
+}

@@ -14,7 +14,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::kind::{CallKinds, KindId};
+use crate::kind::{CallKinds, GuiKinds, KindId};
 
 /// A presentation hint for a symbol kind, neutral to any editor protocol.
 /// The LSP layer maps these onto `lsp_types::SymbolKind`; other frontends can
@@ -214,6 +214,9 @@ pub struct Schema {
     /// Which kinds call-by-name references resolve to. `None` for schemas with
     /// no call-by-name convention.
     call_kinds: Option<CallKinds>,
+    /// Which kinds interface-script (`.gui`) symbols get. `None` disables
+    /// `.gui` analysis.
+    gui_kinds: Option<GuiKinds>,
 }
 
 impl Schema {
@@ -226,6 +229,7 @@ impl Schema {
         keyed_value_defs: &[(&'static str, KindId)],
         doc_ref_aliases: &[(&'static str, KindId)],
         call_kinds: Option<CallKinds>,
+        gui_kinds: Option<GuiKinds>,
     ) -> Schema {
         let mut schema = Schema {
             scope_keywords: scope_keywords.iter().copied().collect(),
@@ -233,6 +237,7 @@ impl Schema {
             keyed_value_defs: keyed_value_defs.iter().copied().collect(),
             by_alias: doc_ref_aliases.iter().copied().collect(),
             call_kinds,
+            gui_kinds,
             ..Schema::default()
         };
         for spec in specs {
@@ -373,6 +378,11 @@ impl Schema {
     /// Which kinds call-by-name references resolve to, if this game has any.
     pub fn call_kinds(&self) -> Option<CallKinds> {
         self.call_kinds
+    }
+
+    /// The interface-script symbol kinds, when the game declares them.
+    pub fn gui_kinds(&self) -> Option<GuiKinds> {
+        self.gui_kinds
     }
 
     pub(crate) fn key_rules(&self, key: &str) -> Option<&[KeyRule]> {

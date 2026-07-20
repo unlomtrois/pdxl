@@ -25,7 +25,7 @@ mod parser;
 mod render;
 
 pub use diagnostic::{Diagnostic, Parse, Severity};
-pub use parser::parse;
+pub use parser::{parse, parse_gui};
 pub use render::render_tree;
 
 // Re-export the tree model so parser consumers get the full vocabulary from one

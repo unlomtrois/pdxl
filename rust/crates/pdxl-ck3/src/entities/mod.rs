@@ -40,6 +40,7 @@ mod event;
 mod event_background;
 mod event_theme;
 mod faith;
+mod gui;
 mod law;
 mod loc;
 mod modifier;
@@ -109,6 +110,7 @@ registry!(
     dynasty::Dynasty,
     nickname::Nickname,
     death_reason::DeathReason,
+    gui::Gui,
     culture_pillar::CulturePillar,
     culture_tradition::CultureTradition,
     culture_era::CultureEra,

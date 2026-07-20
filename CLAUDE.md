@@ -236,6 +236,11 @@ bash ../scripts/parity.sh                                # Go tests + Rust tests
   (defs dir + `RefPattern` rules + gates + icon); shapes needing *logic* get
   bespoke extractors, not new pattern variants —
   see `rust/docs/SCHEMA-SCALING.md` before extending the schema.
+- Interface scripts (`.gui`): `pdxl-gui` crate — dialect parser
+  (`pdxl_parser::parse_gui`, script `parse()` stays parity-locked) plus
+  name-gated template/type symbol extraction into `FileFacts.calls` (never
+  diagnosed; engine builtins aren't enumerable). Routed by extension like
+  `.yml` loc files; FileSet opt-in via `set_include_gui(true)`.
 - Edition 2024: let-chains are used; clippy runs with `-D warnings`.
 - `Stats.shadowed` is always 0 (preserved Go bug, documented in the M3 report).
 - lsp-server crate: use `initialize_start`/`initialize_finish`, NOT

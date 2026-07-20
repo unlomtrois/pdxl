@@ -41,3 +41,13 @@ pub struct CallKinds {
     pub trigger: KindId,
     pub value: KindId,
 }
+
+/// The kinds a game assigns to the two interface-script (`.gui`) symbol
+/// roles — `template NAME { … }` and `type name = base { … }` definitions.
+/// Like [`CallKinds`], the engine defines the *roles*; the game names the
+/// kinds. `None` on the schema disables `.gui` analysis entirely.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GuiKinds {
+    pub template: KindId,
+    pub ty: KindId,
+}

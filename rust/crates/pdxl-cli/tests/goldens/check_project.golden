@@ -33,6 +33,8 @@ dynasty                 0
 dynasty_house           0
 nickname                0
 death_reason            0
+gui_template            0
+gui_type                0
 culture_pillar          0
 culture_tradition       0
 culture_era             0

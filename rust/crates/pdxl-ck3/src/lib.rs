@@ -19,7 +19,7 @@
 //!
 //! [`KindSpec`]: pdxl_analysis::KindSpec
 
-use pdxl_analysis::{CallKinds, KindId, Schema};
+use pdxl_analysis::{CallKinds, GuiKinds, KindId, Schema};
 
 mod entities;
 
@@ -86,6 +86,12 @@ const CALL_KINDS: CallKinds = CallKinds {
     value: kinds::SCRIPT_VALUE,
 };
 
+/// The kinds interface-script (`.gui`) symbols get.
+const GUI_KINDS: GuiKinds = GuiKinds {
+    template: kinds::GUI_TEMPLATE,
+    ty: kinds::GUI_TYPE,
+};
+
 /// Builds the CK3 schema from the entity registry. Cheap to construct; build
 /// once and share.
 pub fn schema() -> Schema {
@@ -96,5 +102,6 @@ pub fn schema() -> Schema {
         KEYED_VALUE_DEFS,
         DOC_REF_ALIASES,
         Some(CALL_KINDS),
+        Some(GUI_KINDS),
     )
 }

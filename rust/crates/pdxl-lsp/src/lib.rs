@@ -68,6 +68,7 @@ pub fn build_project(game: Option<&str>, mod_dir: Option<&str>) -> std::io::Resu
     let mut fs = FileSet::new();
     fs.set_ignore(IGNORE_DIRS, IGNORE_FILES);
     fs.set_localization_language(pdxl_project::DEFAULT_LOC_LANGUAGE);
+    fs.set_include_gui(true);
     if let Some(game) = game {
         fs.add(game, FileKind::Vanilla)?;
     }

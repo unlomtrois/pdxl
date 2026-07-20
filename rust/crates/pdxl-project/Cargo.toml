@@ -9,6 +9,7 @@ description = "Whole-project analysis: gather facts over a FileSet, build the sy
 
 [dependencies]
 pdxl-analysis.workspace = true
+pdxl-gui.workspace = true
 pdxl-fileset.workspace = true
 pdxl-loc.workspace = true
 pdxl-parser.workspace = true

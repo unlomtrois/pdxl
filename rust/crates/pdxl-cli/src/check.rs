@@ -85,6 +85,7 @@ fn build_project_fileset(game: Option<&str>, mod_arg: Option<&str>) -> io::Resul
     let mut fs = FileSet::new();
     fs.set_ignore(IGNORE_DIRS, IGNORE_FILES);
     fs.set_localization_language(pdxl_project::DEFAULT_LOC_LANGUAGE);
+    fs.set_include_gui(true);
     if !replace_paths.is_empty() {
         fs.set_replace_paths(&replace_paths);
     }

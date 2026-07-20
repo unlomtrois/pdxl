@@ -87,6 +87,9 @@ pub struct FileSet {
     /// When set, `localization/<lang>/**/*.yml` files also join the overlay
     /// (opt-in; default scanning is `.txt`-only for Go parity).
     localization_language: Option<String>,
+    /// When set, `gui/**/*.gui` files also join the overlay (opt-in, same as
+    /// localization; default scanning stays `.txt`-only for Go parity).
+    include_gui: bool,
 }
 
 impl FileSet {
@@ -118,6 +121,13 @@ impl FileSet {
     /// [`add`]: FileSet::add
     pub fn set_localization_language(&mut self, language: &str) {
         self.localization_language = Some(language.to_lowercase());
+    }
+
+    /// Opts interface scripts into the scan: `gui/**/*.gui` entries join the
+    /// overlay with normal shadowing. Call before [`add`](Self::add). Off by
+    /// default — plain scans stay `.txt`-only (Go parity).
+    pub fn set_include_gui(&mut self, include: bool) {
+        self.include_gui = include;
     }
 
     pub fn set_replace_paths<I, P>(&mut self, paths: I)
@@ -209,9 +219,18 @@ impl FileSet {
                 .is_some_and(|r| r.starts_with('/'))
     }
 
+    /// Whether `rel` is an interface script under the opted-in `gui/` tree.
+    fn is_gui_file(&self, rel: &str) -> bool {
+        if !self.include_gui {
+            return false;
+        }
+        let key = normalize_key(rel);
+        key.ends_with(".gui") && key.starts_with("gui/")
+    }
+
     /// Considers a single file for registration: `.txt` only (plus opted-in
-    /// localization `.yml`), honoring the file ignore set, keyed by its
-    /// normalized relative path.
+    /// localization `.yml` and interface `.gui`), honoring the file ignore
+    /// set, keyed by its normalized relative path.
     fn visit_file(
         &mut self,
         _full_path: &Path,
@@ -220,7 +239,7 @@ impl FileSet {
         name: &str,
         kind: FileKind,
     ) {
-        if !has_txt_ext(name) && !self.is_localization_file(rel) {
+        if !has_txt_ext(name) && !self.is_localization_file(rel) && !self.is_gui_file(rel) {
             return;
         }
         if self.ignore_files.contains(&to_lower(name)) {

@@ -105,6 +105,8 @@ fn gather_facts(
             let f = if entry.rel_path.ends_with(".yml") {
                 let src = std::fs::read(&entry.full_path)?;
                 loc_facts(&src, &entry.rel_path)
+            } else if entry.rel_path.ends_with(".gui") {
+                gui_defs_for(&entry.full_path, &entry.rel_path, schema)?
             } else {
                 let tree = obtain_tree(&entry.full_path, &full, cache)?;
                 extract_facts(&tree, &entry.rel_path, &full, schema, None)
@@ -132,6 +134,8 @@ fn gather_facts(
     {
         fill_calls(&order, &mut facts, cache, &names.targets())?;
     }
+    // Interface scripts get their own pass 2 (name-gated template/type refs).
+    fill_gui_refs(&order, &mut facts, schema)?;
     Ok((order, facts, names))
 }
 
@@ -199,7 +203,7 @@ fn fill_calls(
         let calls: Vec<(usize, Vec<pdxl_analysis::Ref>)> = order
             .par_iter()
             .enumerate()
-            .filter(|(_, key)| !key.rel.ends_with(".yml"))
+            .filter(|(_, key)| !key.rel.ends_with(".yml") && !key.rel.ends_with(".gui"))
             .map(|(i, key)| -> io::Result<(usize, Vec<pdxl_analysis::Ref>)> {
                 let full = key.full.to_string_lossy().into_owned();
                 let src = std::fs::read(&key.full)?;
@@ -215,13 +219,62 @@ fn fill_calls(
         return Ok(());
     }
     for key in order {
-        if key.rel.ends_with(".yml") {
+        if key.rel.ends_with(".yml") || key.rel.ends_with(".gui") {
             continue;
         }
         let full = key.full.to_string_lossy().into_owned();
         let tree = obtain_tree(&key.full, &full, cache)?;
         if let Some(f) = facts.get_mut(&key.rel) {
             f.calls = extract_calls(&tree, &full, targets);
+        }
+    }
+    Ok(())
+}
+
+/// Pass-1 `.gui` facts: dialect-parse and harvest template/type definitions.
+/// Trees are not cached (a few hundred small files; the parse cache is keyed
+/// for the script parser).
+fn gui_defs_for(path: &Path, rel_path: &str, schema: &Schema) -> io::Result<FileFacts> {
+    let Some(kinds) = schema.gui_kinds() else {
+        return Ok(FileFacts::default());
+    };
+    let src = std::fs::read(path)?;
+    let (tree, _) = pdxl_gui::parse(path.to_string_lossy().into_owned(), src).into_parts();
+    Ok(pdxl_gui::gui_defs(&tree, rel_path, kinds))
+}
+
+/// Pass 2 for `.gui` files: with every template/type name known, re-parse each
+/// interface script and record its name-gated references (`using = X`, type
+/// bases, widget instantiations) into `calls` — the never-diagnosed bucket
+/// that powers find-references and go-to-definition.
+fn fill_gui_refs(
+    order: &[FileKey],
+    facts: &mut HashMap<String, FileFacts>,
+    schema: &Schema,
+) -> io::Result<()> {
+    let Some(kinds) = schema.gui_kinds() else {
+        return Ok(());
+    };
+    let mut names = pdxl_gui::GuiNames::default();
+    for key in order {
+        if key.rel.ends_with(".gui")
+            && let Some(f) = facts.get(&key.rel)
+        {
+            names.add_facts(f, kinds);
+        }
+    }
+    if names.templates.is_empty() && names.types.is_empty() {
+        return Ok(());
+    }
+    for key in order {
+        if !key.rel.ends_with(".gui") {
+            continue;
+        }
+        let full = key.full.to_string_lossy().into_owned();
+        let src = std::fs::read(&key.full)?;
+        let (tree, _) = pdxl_gui::parse(full.clone(), src).into_parts();
+        if let Some(f) = facts.get_mut(&key.rel) {
+            f.calls = pdxl_gui::gui_refs(&tree, &full, &names, kinds);
         }
     }
     Ok(())
@@ -245,6 +298,8 @@ fn gather_facts_parallel(
             let f = if entry.rel_path.ends_with(".yml") {
                 let src = std::fs::read(&entry.full_path)?;
                 loc_facts(&src, &entry.rel_path)
+            } else if entry.rel_path.ends_with(".gui") {
+                gui_defs_for(&entry.full_path, &entry.rel_path, schema)?
             } else {
                 let src = std::fs::read(&entry.full_path)?;
                 let (tree, _) = pdxl_parser::parse(full.clone(), src).into_parts();
@@ -408,6 +463,25 @@ impl Project {
     fn replace_facts(&mut self, key: &FileKey, src: Vec<u8>) {
         let facts = if key.rel.ends_with(".yml") {
             loc_facts(&src, &key.rel)
+        } else if key.rel.ends_with(".gui") {
+            // Defs from the edited buffer, then name-gated refs against the
+            // project-wide template/type sets (rebuilt from all facts so a
+            // renamed def is reflected immediately).
+            let mut facts = FileFacts::default();
+            if let Some(kinds) = self.schema.gui_kinds() {
+                let full = key.full.to_string_lossy().into_owned();
+                let (tree, _) = pdxl_gui::parse(full.clone(), src).into_parts();
+                facts = pdxl_gui::gui_defs(&tree, &key.rel, kinds);
+                let mut names = pdxl_gui::GuiNames::default();
+                for (rel, f) in &self.facts {
+                    if rel.ends_with(".gui") && rel != &key.rel {
+                        names.add_facts(f, kinds);
+                    }
+                }
+                names.add_facts(&facts, kinds);
+                facts.calls = pdxl_gui::gui_refs(&tree, &full, &names, kinds);
+            }
+            facts
         } else {
             let full = key.full.to_string_lossy().into_owned();
             let parsed = pdxl_parser::parse(full.clone(), src);

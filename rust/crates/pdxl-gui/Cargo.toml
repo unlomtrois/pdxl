@@ -1,0 +1,16 @@
+[package]
+name = "pdxl-gui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Interface-script (.gui) analysis: dialect parsing plus template/type symbol extraction over the shared engine."
+
+[dependencies]
+pdxl-analysis.workspace = true
+pdxl-ast.workspace = true
+pdxl-parser.workspace = true
+
+[lints.rust]
+unsafe_code = "forbid"

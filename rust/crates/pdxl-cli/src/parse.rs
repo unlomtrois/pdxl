@@ -6,12 +6,17 @@
 use std::io::{self, Write};
 use std::process::ExitCode;
 
-use pdxl_parser::{NodeId, NodeKind, SyntaxTree, parse};
+use pdxl_parser::{NodeId, NodeKind, SyntaxTree, parse, parse_gui};
 
 pub fn run(file: &str, tree_mode: bool) -> io::Result<ExitCode> {
     let data = std::fs::read(file)
         .map_err(|e| io::Error::new(e.kind(), format!("reading {file}: {e}")))?;
-    let parsed = parse(file.to_string(), data.clone());
+    // `.gui` files use the interface dialect (`[Datafunction]` values).
+    let parsed = if file.ends_with(".gui") {
+        parse_gui(file.to_string(), data.clone())
+    } else {
+        parse(file.to_string(), data.clone())
+    };
     for d in parsed.diagnostics() {
         let (line, col) = pdxl_src::line_col(&data, d.offset);
         eprintln!("{}:{line}:{col}: {}", d.filename, d.message);
