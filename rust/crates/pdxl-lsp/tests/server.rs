@@ -2008,3 +2008,21 @@ fn gui_datafn_completion_inside_quoted_string() {
         items.iter().take(8).map(|i| &i.label).collect::<Vec<_>>()
     );
 }
+
+#[test]
+fn gui_datafn_completion_with_closed_bracket() {
+    // Auto-closing pairs mean the user types inside `"[GetTi]"` — the `]`
+    // and `"` already sit after the cursor.
+    let t = TempTree::new();
+    let src = "text_single = {\n\tdatacontext = \"[GetTi]\"\n\tmax_width = 300\n}\n";
+    t.write("gui/edit.gui", src);
+    let (mut server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "gui/edit.gui");
+    server.did_open(uri.clone(), src.to_string());
+    let items = server.completion(&uri, pos_after(src, "[GetTi"));
+    assert!(
+        items.iter().any(|i| i.label == "GetTitleByKey"),
+        "{:?}",
+        items.iter().take(8).map(|i| &i.label).collect::<Vec<_>>()
+    );
+}
