@@ -73,6 +73,7 @@ const DOC_REF_ALIASES: &[(&str, KindId)] = &[
     ("theme", kinds::EVENT_THEME),
     ("template", kinds::SCRIPTED_CHARACTER_TEMPLATE),
     ("secret", kinds::SECRET_TYPE),
+    ("interaction", kinds::CHARACTER_INTERACTION),
     ("namespace", kinds::NAMESPACE),
     ("loc", kinds::LOC_KEY),
 ];

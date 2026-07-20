@@ -348,6 +348,23 @@ fn modifier_block_and_scalar_refs() {
 }
 
 #[test]
+fn character_interaction_def_and_ref() {
+    let d = extract(
+        "my_interaction = { category = interaction_category_hostile }\n",
+        "common/character_interactions/00.txt",
+    );
+    assert_eq!(d.defs[0].kind, pdxl_ck3::kinds::CHARACTER_INTERACTION);
+
+    // `interaction = X` resolves anywhere (an important-action, effect, …).
+    let r = extract(
+        "e = { open_interaction_window = { interaction = my_interaction } }\n",
+        "common/important_actions/x.txt",
+    );
+    assert_eq!(ref_names(&r), vec!["my_interaction"]);
+    assert_eq!(r.refs[0].kind, pdxl_ck3::kinds::CHARACTER_INTERACTION);
+}
+
+#[test]
 fn secret_type_def_and_gated_type_ref() {
     // Def in common/secret_types/.
     let d = extract(

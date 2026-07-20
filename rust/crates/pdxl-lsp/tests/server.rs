@@ -727,6 +727,31 @@ fn option_field_completion_carries_docs() {
 }
 
 #[test]
+fn character_interaction_body_completion_and_hover() {
+    let t = TempTree::new();
+    let src = "my_interaction = {\n\tcategory = interaction_category_hostile\n\t\n}\n";
+    t.write("common/character_interactions/00.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/character_interactions/00.txt");
+
+    let items = server.completion(&uri, pos_after(src, "interaction_category_hostile"));
+    let names: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    for f in ["is_valid", "is_shown", "on_accept", "ai_accept", "cost"] {
+        assert!(names.contains(&f), "missing `{f}`: {names:?}");
+    }
+    let hover = hover_md(
+        &server,
+        &uri,
+        pos_of(src, "category = interaction_category_hostile"),
+    );
+    assert!(
+        hover.contains("character_interaction field category"),
+        "{hover}"
+    );
+    assert!(hover.contains("interaction menu category"), "{hover}");
+}
+
+#[test]
 fn secret_type_body_completion_and_hover() {
     let t = TempTree::new();
     let src = "secret_deviant = {\n\tcategory = deviancy\n\t\n}\n";

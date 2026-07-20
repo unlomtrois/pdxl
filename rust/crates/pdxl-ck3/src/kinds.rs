@@ -26,3 +26,4 @@ pub const PORTRAIT_ANIMATION: KindId = KindId::new("portrait_animation");
 pub const SCRIPTED_CHARACTER_TEMPLATE: KindId = KindId::new("scripted_character_template");
 pub const NAMESPACE: KindId = KindId::new("namespace");
 pub const SECRET_TYPE: KindId = KindId::new("secret_type");
+pub const CHARACTER_INTERACTION: KindId = KindId::new("character_interaction");

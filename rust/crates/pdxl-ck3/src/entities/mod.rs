@@ -21,6 +21,7 @@ use pdxl_analysis::context::ClauseKind;
 pub(crate) mod common;
 
 mod character;
+mod character_interaction;
 mod character_template;
 pub(crate) mod create_character;
 mod culture;
@@ -88,6 +89,7 @@ registry!(
     modifier::Modifier,
     portrait_animation::PortraitAnimation,
     character_template::CharacterTemplate,
+    character_interaction::CharacterInteraction,
     namespace::Namespace,
     secret_type::SecretType,
     loc::Loc,
