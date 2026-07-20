@@ -229,6 +229,9 @@ bash ../scripts/parity.sh                                # Go tests + Rust tests
 
 - Bump `pdxl_analysis::ANALYSIS_VERSION` whenever schema/extraction semantics
   change; `pdxl_ast::SYNTAX_VERSION` for lexer/parser/tree changes (cache keys).
+- Bump the workspace crate version (`[workspace.package] version` in
+  `rust/Cargo.toml`, all crates inherit via `version.workspace = true`) on each
+  new feature; keep it as `0.<ANALYSIS_VERSION>.0`.
 - Schema growth: one `KindSpec` row per game concept in `pdxl-ck3`
   (defs dir + `RefPattern` rules + gates + icon); shapes needing *logic* get
   bespoke extractors, not new pattern variants —
