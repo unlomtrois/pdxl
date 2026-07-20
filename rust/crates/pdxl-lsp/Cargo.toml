@@ -9,10 +9,12 @@ description = "PDXScript language server (port of internal/lsp): live diagnostic
 
 [dependencies]
 pdxl-analysis.workspace = true
+pdxl-ast.workspace = true
 pdxl-ck3.workspace = true
 pdxl-fileset.workspace = true
 pdxl-fmt.workspace = true
 pdxl-lexer.workspace = true
+pdxl-parser.workspace = true
 pdxl-path.workspace = true
 pdxl-project.workspace = true
 lsp-server.workspace = true

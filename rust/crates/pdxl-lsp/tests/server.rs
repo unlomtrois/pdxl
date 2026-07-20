@@ -555,6 +555,31 @@ fn doc_block_shown_on_definition_and_call_site() {
 }
 
 #[test]
+fn doc_ref_jumps_to_nested_field() {
+    let t = TempTree::new();
+    t.write(
+        "common/scripted_effects/fx.txt",
+        "my_fx = {\n\tadd_gold = 1\n\tinner = {\n\t\tdeep = 2\n\t}\n}\n",
+    );
+    let src = "#! ![effect:my_fx.inner] ![effect:my_fx.inner.deep] ![effect:my_fx.nope]\nd = { }\n";
+    t.write("events/doc.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "events/doc.txt");
+
+    let links = server.document_links(&uri);
+    let fragments: Vec<String> = links
+        .iter()
+        .map(|l| {
+            let u = l.target.as_ref().unwrap().as_str();
+            assert!(u.contains("common/scripted_effects/fx.txt"), "{u}");
+            u.rsplit('#').next().unwrap().to_string()
+        })
+        .collect();
+    // inner → line 3, inner.deep → line 4, nope (missing) → def line 1.
+    assert_eq!(fragments, ["L3", "L4", "L1"]);
+}
+
+#[test]
 fn doc_ref_prefers_definition_over_loc_and_honors_explicit_kind() {
     // Name collision: a script value AND a loc key both named `my_val`.
     let t = TempTree::new();

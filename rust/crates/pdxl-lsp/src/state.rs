@@ -627,9 +627,13 @@ impl ServerState {
         links
     }
 
-    /// Resolves a doc ref `name` to its definition's file + 1-based line.
-    /// A pinned `kind` looks up only that kind; otherwise every definition kind
-    /// is tried before `LocKey` (a loc string usually just shadows its object).
+    /// Resolves a doc ref to its target's file + 1-based line. The ref text is
+    /// `Symbol` or `Symbol.field.path`; because symbol names contain dots
+    /// (`test.0001`), the symbol is the **longest prefix that resolves** and the
+    /// remainder is a field path walked into the definition. A pinned `kind`
+    /// looks up only that kind; otherwise every definition kind is tried before
+    /// `LocKey` (a loc string usually just shadows its object). An unfound field
+    /// falls back to the definition's own line.
     fn resolve_doc_ref(
         &self,
         kind: Option<SymbolKind>,
@@ -637,28 +641,45 @@ impl ServerState {
         project: &Project,
         cache: &mut HashMap<PathBuf, Option<Vec<u8>>>,
     ) -> Option<(PathBuf, u32)> {
-        match kind {
-            Some(k) => self.lookup_doc_ref(k, name, project, cache),
-            None => {
-                doc_ref_lookup_order().find_map(|k| self.lookup_doc_ref(k, name, project, cache))
+        let mut end = name.len();
+        loop {
+            if let Some((full, offset)) = self.lookup_symbol(kind, &name[..end], project) {
+                let src = cache
+                    .entry(full.clone())
+                    .or_insert_with(|| self.read_file(&full).ok())
+                    .as_ref()?;
+                let field_path = name[end..].strip_prefix('.').unwrap_or("");
+                let target = if field_path.is_empty() {
+                    offset
+                } else {
+                    field_offset_in(src, offset, field_path).unwrap_or(offset)
+                };
+                return Some((full, offset_to_position(src, target).line + 1));
+            }
+            match name[..end].rfind('.') {
+                Some(dot) => end = dot,
+                None => return None,
             }
         }
     }
 
-    fn lookup_doc_ref(
+    /// The def file + name offset of `name`, honoring a pinned kind or the
+    /// loc-last default order. No file read (table lookup only).
+    fn lookup_symbol(
         &self,
-        kind: SymbolKind,
+        kind: Option<SymbolKind>,
         name: &str,
         project: &Project,
-        cache: &mut HashMap<PathBuf, Option<Vec<u8>>>,
     ) -> Option<(PathBuf, u32)> {
-        let sym = project.table().lookup(kind, name)?;
-        let full = project.rel_to_full(&sym.file)?;
-        let src = cache
-            .entry(full.to_path_buf())
-            .or_insert_with(|| self.read_file(full).ok());
-        let line = offset_to_position(src.as_ref()?, sym.offset).line + 1;
-        Some((full.to_path_buf(), line))
+        let find = |k: SymbolKind| {
+            let sym = project.table().lookup(k, name)?;
+            let full = project.rel_to_full(&sym.file)?;
+            Some((full.to_path_buf(), sym.offset))
+        };
+        match kind {
+            Some(k) => find(k),
+            None => doc_ref_lookup_order().find_map(find),
+        }
     }
 
     /// `textDocument/inlayHint`: lightweight dynamic-scope annotations at
@@ -998,6 +1019,60 @@ fn scan_doc_gap(src: &[u8], from: usize, to: usize, out: &mut Vec<(u32, u32)>) {
         }
         i = j;
     }
+}
+
+/// The byte offset of the field reached by walking `field_path` (dot-separated
+/// keys) into the definition at `def_offset`, or `None` if any segment is
+/// missing. Parses `src` on demand — only reached for a `Symbol.field` ref.
+fn field_offset_in(src: &[u8], def_offset: u32, field_path: &str) -> Option<u32> {
+    let parsed = pdxl_parser::parse(String::new(), src.to_vec());
+    let tree = parsed.tree();
+    let mut node = find_field_at(tree, tree.root(), def_offset)?;
+    for segment in field_path.split('.') {
+        let kids = tree.child_ids(node);
+        if kids.len() != 2 {
+            return None; // not a `key = { … }` block to descend into
+        }
+        node = find_child_field(tree, kids[1], segment.as_bytes())?;
+    }
+    let kids = tree.child_ids(node);
+    Some(tree.node(*kids.first()?).range.start)
+}
+
+/// The `Field` node whose start is exactly `offset` (a definition's node).
+fn find_field_at(
+    tree: &pdxl_ast::SyntaxTree,
+    node_id: pdxl_ast::NodeId,
+    offset: u32,
+) -> Option<pdxl_ast::NodeId> {
+    let node = tree.node(node_id);
+    if node.kind == pdxl_ast::NodeKind::Field && node.range.start == offset {
+        return Some(node_id);
+    }
+    for child in tree.children(node_id) {
+        if let Some(found) = find_field_at(tree, child, offset) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+/// The direct-child `Field` of `block_id` whose key equals `key`.
+fn find_child_field(
+    tree: &pdxl_ast::SyntaxTree,
+    block_id: pdxl_ast::NodeId,
+    key: &[u8],
+) -> Option<pdxl_ast::NodeId> {
+    for child in tree.children(block_id) {
+        if tree.node(child).kind != pdxl_ast::NodeKind::Field {
+            continue;
+        }
+        let kids = tree.child_ids(child);
+        if kids.first().is_some_and(|&k| tree.node_text(k) == key) {
+            return Some(child);
+        }
+    }
+    None
 }
 
 fn markdown_hover(src: &[u8], span: (u32, u32), text: String) -> lsp_types::Hover {
