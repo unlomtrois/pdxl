@@ -127,22 +127,72 @@ static OPTION: StructSpec = StructSpec {
     fields: &[
         (
             "name",
-            scalar_or_block(LocKey, ClauseKind::Struct(&OPTION_NAME)),
+            scalar_or_block(LocKey, ClauseKind::Struct(&OPTION_NAME))
+                .doc("The option button text (a localization key). Block form picks the text by trigger."),
         ),
-        ("trigger", block(Trigger)),
-        ("show_as_unavailable", block(Trigger)),
-        ("highlight_portrait", scalar(Target)),
-        ("reason", scalar(Setting)),
-        ("skill", scalar(Setting)),
-        ("trait", scalar(Setting)),
-        ("show_unlock_reason", scalar(Setting)),
-        ("is_cancel_option", scalar(Setting)),
-        ("clicksound", scalar(Setting)),
-        ("fallback", scalar(Setting)),
-        ("exclusive", scalar(Setting)),
-        ("ai_chance", block(ScriptedModifier)),
-        ("ai_will_select", block(ScriptValue)),
-        ("custom_tooltip", scalar(LocKey)),
+        (
+            "trigger",
+            block(Trigger).doc("Conditions required for this option to be shown at all."),
+        ),
+        (
+            "show_as_unavailable",
+            block(Trigger)
+                .doc("When these conditions pass, the option is shown but disabled (greyed out)."),
+        ),
+        (
+            "highlight_portrait",
+            scalar(Target)
+                .doc("A character whose portrait is highlighted while this option is hovered."),
+        ),
+        (
+            "reason",
+            scalar(Setting)
+                .doc("Localization key for the reason shown when the option is unavailable."),
+        ),
+        (
+            "skill",
+            scalar(Setting).doc("A skill (diplomacy, martial, …) whose icon is shown on the option."),
+        ),
+        (
+            "trait",
+            scalar(Setting).doc("A trait whose icon is shown on the option."),
+        ),
+        (
+            "show_unlock_reason",
+            scalar(Setting).doc("Whether the unlock-reason UI is shown for this option."),
+        ),
+        (
+            "is_cancel_option",
+            scalar(Setting)
+                .doc("Marks a cancel / back-out style option (used by some widgets and controllers)."),
+        ),
+        (
+            "clicksound",
+            scalar(Setting).doc("Sound effect played when the option is clicked."),
+        ),
+        (
+            "fallback",
+            scalar(Setting)
+                .doc("If yes, this option is auto-selected when no other option's trigger passes."),
+        ),
+        (
+            "exclusive",
+            scalar(Setting)
+                .doc("If any exclusive option is valid, non-exclusive options are ignored."),
+        ),
+        (
+            "ai_chance",
+            block(ScriptedModifier)
+                .doc("Weighted-modifier block for the AI's chance to pick this option."),
+        ),
+        (
+            "ai_will_select",
+            block(ScriptValue).doc("Script value for the AI's chance to pick this option."),
+        ),
+        (
+            "custom_tooltip",
+            scalar(LocKey).doc("A localization key added as an extra tooltip line on the option."),
+        ),
     ],
     fallback: Fallback::Effect,
 };

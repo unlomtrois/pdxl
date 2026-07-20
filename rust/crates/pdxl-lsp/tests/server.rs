@@ -524,6 +524,25 @@ fn hover_shows_builtin_effect_trigger_and_scope_link_docs() {
 }
 
 #[test]
+fn option_field_completion_carries_docs() {
+    let t = TempTree::new();
+    let src = "t.1 = {\n\ttype = character_event\n\toption = {\n\t\tname = t.1.a\n\t}\n}\n";
+    t.write("events/e.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "events/e.txt");
+    // Cursor just after the name line, still inside the option block.
+    let items = server.completion(&uri, pos_after(src, "name = t.1.a"));
+    let trait_item = items
+        .iter()
+        .find(|i| i.label == "trait")
+        .expect("`trait` option field offered");
+    let Some(lsp_types::Documentation::MarkupContent(doc)) = &trait_item.documentation else {
+        panic!("option field should carry documentation");
+    };
+    assert!(doc.value.contains("icon"), "{}", doc.value);
+}
+
+#[test]
 fn modifier_body_completion_and_hover() {
     let t = TempTree::new();
     let src =

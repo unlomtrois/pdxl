@@ -206,6 +206,12 @@ fn push_struct_items(
             label: (*key).to_string(),
             kind: Some(CompletionItemKind::PROPERTY),
             detail: Some(format!("{} field", spec.name)),
+            documentation: field.doc.map(|doc| {
+                Documentation::MarkupContent(MarkupContent {
+                    kind: MarkupKind::Markdown,
+                    value: doc.to_string(),
+                })
+            }),
             insert_text: Some(insert),
             insert_text_format: Some(InsertTextFormat::SNIPPET),
             sort_text: Some(format!("0_{key}")),
