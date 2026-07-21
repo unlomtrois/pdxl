@@ -323,25 +323,51 @@ fn harvest_def(
         params: params.into_iter().collect(),
     });
 
-    // Some kinds expose extra resolvable names via direct-child fields
-    // (CK3 traits: group / group_equivalence).
+    // Some kinds expose extra resolvable names via direct-child fields. The
+    // field's value may be a single scalar (CK3 traits: group /
+    // group_equivalence) or a list block (CK3 game concepts:
+    // `alias = { vassals vassalize … }`) — each name resolves to this def.
     if let Some(alias_keys) = schema.alias_keys(kind) {
         for alias_key in alias_keys {
-            if let Some(name) = direct_field_value(tree, value_id, alias_key)
-                && !name.is_empty()
-            {
-                facts.aliases.push(Symbol {
-                    name,
-                    kind,
-                    file: Arc::from(rel_path),
-                    offset: node.range.start,
-                    // Go parity: alias EndOffset equals the def's SrcStart.
-                    end_offset: node.range.start,
-                    params: Vec::new(),
-                });
+            let Some(field_val) = direct_field_node(tree, value_id, alias_key) else {
+                continue;
+            };
+            match tree.node(field_val).kind {
+                NodeKind::Scalar => {
+                    let name = String::from_utf8_lossy(tree.node_text(field_val)).into_owned();
+                    if !name.is_empty() {
+                        push_alias(facts, name, kind, rel_path, node.range.start);
+                    }
+                }
+                NodeKind::Block | NodeKind::TaggedBlock => {
+                    for item in tree.children(field_val) {
+                        if tree.node(item).kind != NodeKind::Scalar {
+                            continue;
+                        }
+                        let name = String::from_utf8_lossy(tree.node_text(item)).into_owned();
+                        if !name.is_empty() {
+                            push_alias(facts, name, kind, rel_path, node.range.start);
+                        }
+                    }
+                }
+                _ => {}
             }
         }
     }
+}
+
+/// Records one extra resolvable name for a definition. Go parity: an alias's
+/// offset and EndOffset both equal the def's SrcStart, so navigation from a
+/// reference-by-alias lands on the definition.
+fn push_alias(facts: &mut FileFacts, name: String, kind: KindId, rel_path: &str, def_start: u32) {
+    facts.aliases.push(Symbol {
+        name,
+        kind,
+        file: Arc::from(rel_path),
+        offset: def_start,
+        end_offset: def_start,
+        params: Vec::new(),
+    });
 }
 
 /// The keyed-value kind of a top-level `KEY = value` field (`namespace = X` →
@@ -733,14 +759,6 @@ fn append_ref(
 }
 
 /// The scalar value of a direct-child `key = value` field in `block_id`.
-fn direct_field_value(tree: &SyntaxTree, block_id: NodeId, key: &str) -> Option<String> {
-    let node_id = direct_field_node(tree, block_id, key)?;
-    if tree.node(node_id).kind != NodeKind::Scalar {
-        return None;
-    }
-    Some(String::from_utf8_lossy(tree.node_text(node_id)).into_owned())
-}
-
 /// The value node of a direct-child `key = value` field in `block_id`.
 fn direct_field_node(tree: &SyntaxTree, block_id: NodeId, key: &str) -> Option<NodeId> {
     for child in tree.children(block_id) {

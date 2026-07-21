@@ -270,6 +270,47 @@ fn trait_groups_become_aliases() {
 }
 
 #[test]
+fn game_concept_alias_list_becomes_aliases() {
+    let f = extract(
+        "vassal = {\n\
+         \talias = { vassals vassalize vassalage }\n\
+         \ttexture = \"x.dds\"\n\
+         }\n",
+        "common/game_concepts/00.txt",
+    );
+    // The def itself.
+    assert_eq!(def_names(&f), vec!["vassal"]);
+    assert!(f.defs[0].kind == pdxl_ck3::kinds::GAME_CONCEPT);
+    // Every list item is a resolvable alias name for the concept.
+    let names: Vec<&str> = f.aliases.iter().map(|a| a.name.as_str()).collect();
+    assert_eq!(names, vec!["vassals", "vassalize", "vassalage"]);
+    assert!(
+        f.aliases
+            .iter()
+            .all(|a| a.kind == pdxl_ck3::kinds::GAME_CONCEPT)
+    );
+    // Same Go-parity offset quirk as scalar aliases.
+    assert_eq!(f.aliases[0].end_offset, f.aliases[0].offset);
+}
+
+#[test]
+fn game_concept_parent_ref_is_gated() {
+    let f = extract(
+        "direct_vassal = {\n\
+         \tparent = vassal\n\
+         }\nvassal = { }\n",
+        "common/game_concepts/00.txt",
+    );
+    assert_eq!(ref_names(&f), vec!["vassal"]);
+    assert!(f.refs[0].kind == pdxl_ck3::kinds::GAME_CONCEPT);
+
+    // `parent` is a common key elsewhere (gui, culture eras) — not a concept
+    // ref outside the game_concepts directory.
+    let elsewhere = extract("x = { parent = vassal }\n", "common/culture/eras/00.txt");
+    assert!(ref_names(&elsewhere).is_empty());
+}
+
+#[test]
 fn non_trait_kinds_get_no_aliases() {
     let f = extract(
         "my_effect = { group = whatever }\n",

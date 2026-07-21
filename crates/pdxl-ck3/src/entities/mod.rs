@@ -43,6 +43,7 @@ mod event;
 mod event_background;
 mod event_theme;
 mod faith;
+mod game_concept;
 mod gui;
 mod law;
 mod loc;
@@ -125,5 +126,6 @@ registry!(
     culture_innovation::CultureInnovation,
     name_list::NameList,
     culture_misc::CultureMisc,
+    game_concept::GameConcept,
     loc::Loc,
 );

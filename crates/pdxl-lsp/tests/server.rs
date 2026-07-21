@@ -2252,3 +2252,29 @@ fn trait_body_completion_offers_fields_and_modifier_tags() {
     let hover = hover_md(&server, &uri, pos_of(src, "category"));
     assert!(hover.contains("trait field category"), "{hover}");
 }
+
+#[test]
+fn game_concept_body_completion_and_hover() {
+    let t = TempTree::new();
+    let src = "vassal = { }\ndirect_vassal = {\n\tparent = vassal\n\t\n}\n";
+    t.write("common/game_concepts/00.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/game_concepts/00.txt");
+
+    // Body completion offers the documented, closed field set.
+    let items = server.completion(
+        &uri,
+        Position {
+            line: 3,
+            character: 1,
+        },
+    );
+    let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    for f in ["parent", "texture", "framesize", "shown_in_encyclopedia"] {
+        assert!(labels.contains(&f), "missing field `{f}`: {labels:?}");
+    }
+
+    // Hover on `parent` documents the field.
+    let hover = hover_md(&server, &uri, pos_of(src, "parent = "));
+    assert!(hover.contains("game_concept field parent"), "{hover}");
+}
