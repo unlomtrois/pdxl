@@ -59,12 +59,20 @@ jobs:
         include:
           - runner: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
+            bin: pdxl
           - runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
+            bin: pdxl
           - runner: macos-15-intel
             target: x86_64-apple-darwin
+            bin: pdxl
           - runner: macos-15
             target: aarch64-apple-darwin
+            bin: pdxl
+          - runner: windows-2025
+            target: x86_64-pc-windows-msvc
+            bin: pdxl.exe
+            windows: true
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Check out repository
@@ -75,7 +83,12 @@ jobs:
           rustup toolchain install stable --profile minimal
           rustup default stable
 
+      # Several goldens embed filesystem paths (separators, case), so the suite
+      # is not yet Windows-clean; it runs on Linux (CI + here) and macOS. The
+      # Windows job builds the binary — a cargo build is the meaningful
+      # per-platform check that the code compiles for the MSVC target.
       - name: Test
+        if: ${{ !matrix.windows }}
         run: cargo test --locked --workspace
 
       - name: Build release binary
@@ -85,8 +98,12 @@ jobs:
         shell: bash
         run: |
           archive="pdxl-v${{ needs.validate.outputs.version }}-${{ matrix.target }}.tar.gz"
-          tar -C target/release -czf "$archive" pdxl
-          shasum -a 256 "$archive" > "$archive.sha256"
+          tar -C target/release -czf "$archive" "${{ matrix.bin }}"
+          if command -v shasum >/dev/null 2>&1; then
+            shasum -a 256 "$archive" > "$archive.sha256"
+          else
+            sha256sum "$archive" > "$archive.sha256"
+          fi
 
       - name: Upload release artifact
         uses: actions/upload-artifact@v5
