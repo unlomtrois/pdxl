@@ -114,9 +114,44 @@ jobs:
             pdxl-v${{ needs.validate.outputs.version }}-${{ matrix.target }}.tar.gz.sha256
           if-no-files-found: error
 
+  vsix:
+    name: Package VS Code extension
+    needs: validate
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: editor/vscode
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: editor/vscode/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # `vsix` runs vscode:prepublish (tsc type-check + production esbuild).
+      # Not published to the Marketplace — only attached to the GitHub Release.
+      - name: Package extension
+        run: npm run vsix
+
+      # Named `pdxl-*` so github-release's `pattern: pdxl-*` download picks it
+      # up and merges the .vsix into `dist/` alongside the binaries.
+      - name: Upload .vsix artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: pdxl-vscode-extension
+          path: editor/vscode/*.vsix
+          if-no-files-found: error
+
   github-release:
     name: Create GitHub Release
-    needs: [validate, build]
+    needs: [validate, build, vsix]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
