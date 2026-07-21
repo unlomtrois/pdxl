@@ -68,7 +68,11 @@ crates/pdxl-lsp        the language server over pdxl-project
   change; `pdxl_ast::SYNTAX_VERSION` for lexer/parser/tree changes (cache
   keys). Bump the workspace crate version (`[workspace.package] version` in
   `Cargo.toml`; all crates inherit) on each new feature; keep it as
-  `0.<ANALYSIS_VERSION>.0`.
+  `0.<ANALYSIS_VERSION>.0`. **Lockstep:** the `version = "0.N.0"` on each
+  `pdxl-*` path dep in `[workspace.dependencies]` must match — crates.io
+  publishing requires a version on path deps, and a mismatch breaks
+  `cargo publish --workspace`. (`pdxl-testutil` stays path-only: it is
+  `publish = false` and dev-only, so it is dropped from published manifests.)
 - Schema growth: one `KindSpec` row per game concept in `pdxl-ck3` (defs dir +
   `RefPattern` rules + gates + icon); **corpus-validate every candidate rule
   before shipping it** (target ~0 unresolved; document accepted noise and
