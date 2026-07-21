@@ -2026,3 +2026,30 @@ fn gui_datafn_completion_with_closed_bracket() {
         items.iter().take(8).map(|i| &i.label).collect::<Vec<_>>()
     );
 }
+
+#[test]
+fn gui_property_docs_in_hover_and_completion() {
+    let t = TempTree::new();
+    let src = "window = {\n\tparentanchor = center\n\ticon = {\n\t\tparentanchor = top\n\t}\n}\n";
+    t.write("gui/edit.gui", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "gui/edit.gui");
+
+    // Hover on a property key shows its curated doc.
+    let hover = hover_md(&server, &uri, pos_of(src, "parentanchor"));
+    assert!(hover.contains("Which point of the parent"), "{hover}");
+
+    // Completion items carry the doc.
+    let items = server.completion(
+        &uri,
+        Position {
+            line: 3,
+            character: 2,
+        },
+    );
+    let pa = items
+        .iter()
+        .find(|i| i.label == "parentanchor")
+        .expect("parentanchor offered");
+    assert!(pa.documentation.is_some(), "doc attached");
+}

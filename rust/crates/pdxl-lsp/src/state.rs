@@ -547,11 +547,15 @@ impl ServerState {
         let off = position_to_offset(&src, pos);
 
         // Interface scripts: hovering inside a `[…]` datafunction shows the
-        // segment's signature from the DumpDataTypes registry.
-        if path.extension().is_some_and(|e| e == "gui")
-            && let Some(hover) = gui_datafn_hover(&src, off)
-        {
-            return Some(hover);
+        // segment's signature from the DumpDataTypes registry; hovering a
+        // property key shows its curated documentation.
+        if path.extension().is_some_and(|e| e == "gui") {
+            if let Some(hover) = gui_datafn_hover(&src, off) {
+                return Some(hover);
+            }
+            if let Some(hover) = gui_property_hover(&src, off) {
+                return Some(hover);
+            }
         }
 
         if let Some((kind, name)) = symbol_at(facts, off) {
@@ -2152,6 +2156,39 @@ fn gui_datafn_hover(src: &[u8], off: u32) -> Option<lsp_types::Hover> {
         return Some(markdown_hover(src, (seg.name_start, seg.name_end), text));
     }
     None
+}
+
+/// Hover for a gui property key: the identifier under the cursor when it is
+/// in key position (followed by `=`), documented in the curated table.
+fn gui_property_hover(src: &[u8], off: u32) -> Option<lsp_types::Hover> {
+    let off = off as usize;
+    if off >= src.len() {
+        return None;
+    }
+    let is_word = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    if !(is_word(src[off]) || (off > 0 && is_word(src[off - 1]))) {
+        return None;
+    }
+    let mut start = off;
+    while start > 0 && is_word(src[start - 1]) {
+        start -= 1;
+    }
+    let mut end = off;
+    while end < src.len() && is_word(src[end]) {
+        end += 1;
+    }
+    // Key position: the next non-space byte is `=`.
+    let mut j = end;
+    while j < src.len() && (src[j] == b' ' || src[j] == b'\t') {
+        j += 1;
+    }
+    if src.get(j) != Some(&b'=') {
+        return None;
+    }
+    let key = std::str::from_utf8(&src[start..end]).ok()?;
+    let doc = pdxl_gui::docs::property_doc(key)?;
+    let text = format!("```pdxscript\n{key}\n```\n\n{doc}\n");
+    Some(markdown_hover(src, (start as u32, end as u32), text))
 }
 
 #[cfg(test)]

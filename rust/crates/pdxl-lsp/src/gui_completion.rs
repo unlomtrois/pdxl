@@ -168,6 +168,12 @@ pub fn items(project: &Project, src: &[u8], off: u32) -> Vec<CompletionItem> {
                 label: key.to_string(),
                 kind: Some(CompletionItemKind::PROPERTY),
                 detail: Some(format!("{owner} property · {n}× in corpus")),
+                documentation: pdxl_gui::docs::property_doc(key).map(|doc| {
+                    Documentation::MarkupContent(MarkupContent {
+                        kind: MarkupKind::Markdown,
+                        value: doc.to_string(),
+                    })
+                }),
                 insert_text: Some(format!("{key} = $0")),
                 insert_text_format: Some(InsertTextFormat::SNIPPET),
                 sort_text: Some(format!("0_{:08}_{key}", u32::MAX - n)),

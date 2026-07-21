@@ -27,6 +27,7 @@
 //! ~30.8k instantiations across 389 files.
 
 pub mod datafn;
+pub mod docs;
 pub mod vocab;
 use std::collections::HashSet;
 use std::sync::Arc;
