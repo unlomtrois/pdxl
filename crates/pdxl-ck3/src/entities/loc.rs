@@ -18,6 +18,15 @@ const fn interaction_loc(key: &'static str) -> RefRule {
     }
 }
 
+/// A `key = <loc>` scalar loc reference gated to scheme types.
+const fn scheme_loc(key: &'static str) -> RefRule {
+    RefRule {
+        pattern: RefPattern::KeyValue(key),
+        gate: Some("common/schemes/scheme_types/"),
+        alt: &[],
+    }
+}
+
 /// The person/tense fields of effect/trigger localization entries
 /// (`first`, `third_past`, `global_neg`, …) are loc keys in both dirs —
 /// one gated rule per key per directory (98.8% corpus resolution; misses
@@ -142,6 +151,10 @@ impl Entity for Loc {
                 interaction_loc("options_heading"),
                 interaction_loc("highlighted_reason"),
                 interaction_loc("reply_item_key"),
+                // Scheme-type text fields (all scalar loc keys in the corpus).
+                scheme_loc("desc"),
+                scheme_loc("success_desc"),
+                scheme_loc("discovery_desc"),
                 anywhere(RefPattern::KeyValue("custom_tooltip")),
             ],
             aliases: &[],

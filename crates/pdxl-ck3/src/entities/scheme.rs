@@ -5,6 +5,13 @@
 //! `scheme_type = X`, `start_scheme = { type = X }`, and the bare `scheme = X`
 //! trigger idiom.
 //!
+//! The text fields `desc` / `success_desc` / `discovery_desc` are loc-key
+//! references (rules live in `loc.rs`, gated to this dir — the target-kind
+//! precedent). The rule also catches the `desc = X` tooltip keys inside the
+//! scripted-modifier blocks (`base_success_chance`, `agent_join_chance`).
+//! Corpus: 97.8% of 743 resolve; the misses exist in no language — genuine
+//! dead-loc bugs the tool now surfaces.
+//!
 //! The `_schemes.info` warns it "does not currently include all possible
 //! parameters"; the body here is reconciled against the live corpus (82
 //! scheme types across game + T4N). Fields present in the corpus but absent

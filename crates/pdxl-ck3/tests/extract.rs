@@ -1739,3 +1739,28 @@ fn catalyst_refs_gated_and_struggle_excluded() {
     assert_eq!(ref_names(&eff), vec!["catalyst_gain"]);
     assert_eq!(eff.refs[0].kind, pdxl_ck3::kinds::CATALYST);
 }
+
+#[test]
+fn scheme_text_fields_are_loc_refs() {
+    let f = extract(
+        "murder = {\n\
+         \tdesc = murder_desc\n\
+         \tsuccess_desc = murder_success_desc\n\
+         \tdiscovery_desc = MURDER_DISCOVERY_DESC\n\
+         }\n",
+        "common/schemes/scheme_types/00.txt",
+    );
+    assert_eq!(
+        ref_names(&f),
+        vec![
+            "murder_desc",
+            "murder_success_desc",
+            "MURDER_DISCOVERY_DESC"
+        ]
+    );
+    assert!(f.refs.iter().all(|r| r.kind == pdxl_analysis::LOC_KEY));
+
+    // Those keys are loc refs only inside the schemes dir.
+    let elsewhere = extract("x = { discovery_desc = Y }\n", "common/traits/00.txt");
+    assert!(ref_names(&elsewhere).is_empty());
+}
