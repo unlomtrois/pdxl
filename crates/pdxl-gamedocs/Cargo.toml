@@ -6,6 +6,9 @@ license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
 description = "Parsers for the game's dumped script documentation logs (effects.log, triggers.log, event_targets.log, event_scopes.log, modifiers.log) and the gen-tables generator that renders them into pdxl-ck3 source tables"
+# Internal codegen tool (gen-tables): nothing depends on it and it is only run
+# by hand after a game patch, so it is not published to crates.io.
+publish = false
 
 [lints.rust]
 unsafe_code = "forbid"
