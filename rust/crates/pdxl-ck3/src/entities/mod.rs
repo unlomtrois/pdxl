@@ -21,6 +21,7 @@ use pdxl_analysis::context::ClauseKind;
 pub(crate) mod common;
 
 pub(crate) mod artifact;
+mod building;
 mod casus_belli;
 mod character;
 mod character_interaction;
@@ -112,6 +113,7 @@ registry!(
     nickname::Nickname,
     death_reason::DeathReason,
     custom_loc::CustomLoc,
+    building::Building,
     gui::Gui,
     culture_pillar::CulturePillar,
     culture_tradition::CultureTradition,

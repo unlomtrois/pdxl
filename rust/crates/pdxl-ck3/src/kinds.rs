@@ -42,6 +42,7 @@ pub const DYNASTY_HOUSE: KindId = KindId::new("dynasty_house");
 pub const NICKNAME: KindId = KindId::new("nickname");
 pub const DEATH_REASON: KindId = KindId::new("death_reason");
 pub const CUSTOM_LOC: KindId = KindId::new("custom_loc");
+pub const BUILDING: KindId = KindId::new("building");
 pub const GUI_TEMPLATE: KindId = KindId::new("gui_template");
 pub const GUI_TYPE: KindId = KindId::new("gui_type");
 pub const CULTURE_PILLAR: KindId = KindId::new("culture_pillar");

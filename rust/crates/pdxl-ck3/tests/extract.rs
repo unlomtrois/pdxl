@@ -1504,3 +1504,56 @@ fn custom_loc_defs_and_parent_ref() {
     let elsewhere = extract("e = { parent = RandomElephantName }\n", "events/x.txt");
     assert!(ref_names(&elsewhere).is_empty());
 }
+
+#[test]
+fn building_defs_and_refs() {
+    let d = extract(
+        "castle_01 = {\n\
+         \tconstruction_time = 720\n\
+         \tnext_building = castle_02\n\
+         }\ncastle_02 = { }\n",
+        "common/buildings/00.txt",
+    );
+    assert_eq!(def_names(&d), vec!["castle_01", "castle_02"]);
+    assert!(d.defs.iter().all(|s| s.kind == pdxl_ck3::kinds::BUILDING));
+    assert_eq!(ref_names(&d), vec!["castle_02"]);
+    assert_eq!(d.refs[0].kind, pdxl_ck3::kinds::BUILDING);
+
+    // Triggers/effects reference buildings anywhere.
+    let f = extract(
+        "e = {\n\
+         \ttrigger = { has_building_or_higher = castle_01 }\n\
+         \tadd_building = castle_02\n\
+         }\n",
+        "events/x.txt",
+    );
+    assert_eq!(ref_names(&f), vec!["castle_01", "castle_02"]);
+
+    // Culture innovations unlock buildings (gated to common/culture/).
+    let inn = extract(
+        "innovation_x = { culture_era = culture_era_tribal unlock_building = castle_01 }\n",
+        "common/culture/innovations/00.txt",
+    );
+    assert!(
+        ref_names(&inn).contains(&"castle_01"),
+        "{:?}",
+        ref_names(&inn)
+    );
+
+    // Province history: special buildings and the buildings list.
+    let h = extract(
+        "100 = {\n\
+         \tspecial_building_slot = hadrians_wall_01\n\
+         \tbuildings = {\n\t\tcurtain_walls_01\n\t\tmilitary_camps_01\n\t}\n\
+         }\n",
+        "history/provinces/x.txt",
+    );
+    assert_eq!(
+        ref_names(&h),
+        vec!["hadrians_wall_01", "curtain_walls_01", "military_camps_01"]
+    );
+    assert!(h.refs.iter().all(|r| r.kind == pdxl_ck3::kinds::BUILDING));
+    // … but a `buildings` list elsewhere means nothing.
+    let elsewhere = extract("e = { buildings = { castle_01 } }\n", "events/x.txt");
+    assert!(ref_names(&elsewhere).is_empty());
+}
