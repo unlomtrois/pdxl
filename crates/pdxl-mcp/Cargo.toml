@@ -5,6 +5,9 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "MCP server exposing pdxl's CK3 script documentation and scope-aware built-in metadata to agents"
+# Standalone server binary, not in the pdxl-cli tree and depended on by nothing;
+# shipped as a binary rather than a crates.io library.
+publish = false
 
 [features]
 default = []
