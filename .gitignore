@@ -1,40 +1,15 @@
 # Mac OS X files
 .DS_Store
 
-# Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-
-# Test binary, build with `go test -c`
-*.test
-
-# Output of the go coverage tool, specifically when used with LiteIDE
-*.out
-
-# Project-local glide cache, RE: https://github.com/Masterminds/glide/issues/736
-.glide/
-
-# Dependency directories (remove the comment below to include it)
-# vendor/
-
-# binary
-/bin
+# Rust build artifacts
+/target
 
 *.csv
 
 # Personal Claude Code context (machine-specific)
 .claude.local.md
 
-# Rust build artifacts
-/rust/target
-
-# Stray go build outputs
-/lexdump
-/pdxl
-/parsedump
-/filesetdump
-/factsdump
-/projectdump
+# VS Code extension build output
+editor/vscode/dist
+editor/vscode/node_modules
+editor/vscode/*.vsix

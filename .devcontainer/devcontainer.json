@@ -1,10 +1,10 @@
 {
   "name": "pdxl",
-  "image": "mcr.microsoft.com/devcontainers/go:1.25-bookworm",
+  "image": "mcr.microsoft.com/devcontainers/rust:1-bookworm",
   "features": {
     "ghcr.io/devcontainers/features/git:1": {}
   },
-  "postCreateCommand": "go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest && go mod download",
+  "postCreateCommand": "cargo fetch",
   "customizations": {
     "vscode": {
       "extensions": [
@@ -12,7 +12,9 @@
       ],
       "settings": {
         "go.lintTool": "golangci-lint",
-        "go.lintFlags": ["--fast"],
+        "go.lintFlags": [
+          "--fast"
+        ],
         "go.useLanguageServer": true,
         "[go]": {
           "editor.formatOnSave": true,

@@ -1,251 +1,116 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with
+code in this repository.
 
-> **NOTE:** the Go implementation described below is legacy (retired oracle).
-> Active development is the Rust workspace — see the "Rust port (rust/)"
-> section at the end of this file.
+pdxl is a Rust toolkit and language server for Paradox Interactive scripting
+(PDXScript — CK3, Vic3, EU5 share the grammar; semantics differ per game) and
+the Jomini interface dialect (`.gui`). See `README.md` for the workspace
+layout and `docs/` for design/measurement history (BASELINE.md,
+MILESTONE-*.md, SCHEMA-SCALING.md, STRUCTURAL-CONTEXTS.md).
 
 ## Commands
 
 ```sh
-make test         # run all tests
-make lint         # run golangci-lint
-make build        # build binary to bin/pdxl
-make install      # install to $GOPATH/bin
-make bench        # run all benchmarks (lexer + all parsers + cache)
-make bench-lexer  # lexer benchmarks only
-make bench-parser # v1/v2/v3 parser benchmarks side-by-side
-make bench-cache  # cache L1/L2 read and write benchmarks
+cargo test --workspace                                   # all tests incl. goldens
+cargo clippy --workspace --all-targets --all-features -- -D warnings   # must be clean
+cargo fmt --all --check
+cargo build --release -p pdxl-cli                        # → target/release/pdxl
 ```
 
-To run a single test:
+Golden regression suites (regenerate deliberately, review the diff like code):
+
 ```sh
-go test ./internal/lexer/... -run TestUTF8Identifier
+UPDATE_GOLDENS=1 cargo test -p pdxl-parity --test lexer --test parser \
+    --test fileset --test facts --test project
+UPDATE_GOLDENS=1 cargo test -p pdxl-cli --test cli
 ```
 
-To regenerate golden fixture files after a deliberate output change:
+Regenerate the game-doc tables after a game patch (needs the game's dumped
+logs, incl. `data_types/` from the `DumpDataTypes` console command):
+
 ```sh
-go test ./internal/parser/v2/... -update
-go test ./internal/parser/v3/... -update
+cargo run -p pdxl-gamedocs --bin gen-tables -- \
+  --logs "<paradox user dir>/Crusader Kings III/logs" --out crates/pdxl-ck3/src/tables
 ```
 
-Always use `make test` to verify changes, never raw `go test` or `go build`.
+The schema-coverage worklist ("what to model next"):
 
-Nix users: activate the toolchain with `nix-shell` before running make commands.
-
-## Architecture
-
-For the in-depth narrative — pipeline diagram, key data structures, request lifecycles, and cross-cutting invariants — see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The summary below is the quick map.
-
-pdxl is a toolkit for parsing Paradox Interactive scripting files (PDXScript, used in EU5, CK3, Victoria 3, etc.). The grammar is the same across all games; only semantics differ.
-
-```
-cmd/pdxl/               — CLI: lex, parse, lint, init, index, check, cache, watch, lsp subcommands
-internal/lexer/         — tokenizer (internal; not public API yet)
-internal/parser/
-  v1/                   — participle-based reference parser (benchmarking baseline only)
-  v2/                   — hand-written recursive descent + Pratt, pointer-tree AST
-  v3/                   — same algorithm, flat node-pool AST (fastest; preferred for new tools)
-internal/files/         — directory scanning + mod-overlay resolution (FileSet)
-internal/validate/      — cross-file semantic analysis: SymbolTable + reference resolution
-internal/lsp/           — Language Server (go-to-definition + live mod-scoped diagnostics) over validate.Project
-internal/cache/         — two-level parse cache: in-memory LRU + on-disk gob store
-internal/config/        — TOML config loader (pdxl.toml)
-internal/testutil/      — shared TestdataDir() and DiffLines() used by all test packages
-testdata/               — shared .txt fixture files and .golden expected-output files
-testdata/lint/          — intentionally broken fixtures for lint/recovery tests
-testdata/ck3/           — CK3-specific fixtures (macros, scripted triggers)
-pkg/mod/                — reserved for future public packages
+```sh
+cargo run --release -p pdxl-ck3 --bin schema-gaps -- --game "<game dir>" [--all]
 ```
 
-### Lexer
+## Architecture (short map)
 
-- `Lexer` holds `source []byte` and `pos int` (byte offset, not rune index).
-- `Token{Start, End int, Tag Tag}` — byte offsets only; no string copy. Extract via `token.GetValue(source)`.
-- `advance()` uses `utf8.DecodeRune` — multi-byte safe. Invalid UTF-8 is silently treated as an identifier char.
-- `yes`/`no` keyword detection happens in `Next()` after `lexIdentifier()` returns.
-- UTF-8 BOM (`\xEF\xBB\xBF`) is skipped in `Init()`.
-- `$IDENT$` is lexed as `TagMacroParam` (a single atom); bare `$` falls back to `TagDollar`.
-- `lexer.Tokenize(src []byte) []Token` is the public helper used by `v3.newParser`.
-
-### Parser v3 — flat node-pool AST with error recovery
-
-Preferred base for all new tools (linter, LSP, validator). ~2× fewer allocations than v2. The `parse` command uses v3.
-
-All nodes live in a single `Tree.Nodes []Node` slice. Parent→child relationships go through `Tree.Index []uint32` — a node's children are `Tree.Index[node.ChildStart:node.ChildEnd]`, each element being an index into `Tree.Nodes`. This eliminates heap pointers inside nodes.
-
-```go
-tree, diags := v3.Parse("file.pdx", src)
-// tree is always non-nil; diags non-empty means errors were found but parsing continued
-root := tree.Root()                    // tree.Nodes[0], always KindFile
-refs := tree.ChildRefs(root)          // []uint32, no alloc
-for _, idx := range refs {
-    child := tree.Nodes[idx]
-    fmt.Println(child.Value(tree.Src)) // materializes string from src[SrcStart:SrcEnd]
-}
+```
+crates/pdxl-lexer      tokenizer: Token{start,end,kind}, byte offsets, no copies
+crates/pdxl-parser     recursive descent → flat node-pool tree; parse() for
+                       script, parse_gui() for the .gui dialect ([Datafn] values)
+crates/pdxl-ast        the tree: Nodes + child-index array; NodeKind
+                       {File,Field,Block,TaggedBlock,Scalar}
+crates/pdxl-analysis   extraction engine: Schema (KindSpec rows) → FileFacts
+                       {defs,refs,calls}; structural contexts (ClauseKind /
+                       StructSpec / FieldSpec) for completion+hover
+crates/pdxl-ck3        the CK3 schema: kinds.rs (KindId consts), entities/*
+                       (one file per game concept), tables/* (generated from
+                       game doc dumps), contexts.rs, coverage.rs
+crates/pdxl-gui        .gui analysis: template/type symbols, DumpDataTypes
+                       datafunction typing, corpus-mined completion vocab,
+                       curated property docs
+crates/pdxl-project    whole-project: gather → merge_and_resolve → SymbolTable
+                       + RefDiags; incremental single-file updates
+crates/pdxl-lsp        the language server over pdxl-project
 ```
 
-`Node.Op` (a `lexer.Tag`) holds the operator for `KindField` nodes. `Node.OpString()` maps it back to a source symbol (`"="`, `"?="`, etc.).
+### Key invariants & gotchas
 
-**Error recovery** uses synchronization: on any unexpected token, the parser records a `Diagnostic{Filename, Offset, Msg, Severity}` and calls `synchronize()`, which skips tokens until reaching a `}`, the start of a plausible new item (atom followed by operator or `{`), or EOF. Recovery is zero-cost on valid input: `p.diags` stays nil and adds no allocations.
+- Bump `pdxl_analysis::ANALYSIS_VERSION` whenever schema/extraction semantics
+  change; `pdxl_ast::SYNTAX_VERSION` for lexer/parser/tree changes (cache
+  keys). Bump the workspace crate version (`[workspace.package] version` in
+  `Cargo.toml`; all crates inherit) on each new feature; keep it as
+  `0.<ANALYSIS_VERSION>.0`.
+- Schema growth: one `KindSpec` row per game concept in `pdxl-ck3` (defs dir +
+  `RefPattern` rules + gates + icon); **corpus-validate every candidate rule
+  before shipping it** (target ~0 unresolved; document accepted noise and
+  deliberate omissions in the entity's module doc). Shapes needing *logic* get
+  bespoke extractors, not new pattern variants — see `docs/SCHEMA-SCALING.md`.
+- Reference rules live in the file of their **target** kind (the loc.rs
+  precedent), not where they fire.
+- Multi-kind references: `RefRule::alt` — diagnosed only when no kind in the
+  chain defines the name; navigation follows whichever resolves.
+- `FieldSpec::values(…)` are completion/hover **suggestions, never
+  validation** (mods extend vocabularies).
+- Interface scripts (`.gui`): routed by extension like `.yml` loc files;
+  FileSet opt-in via `set_include_gui(true)`; gui refs are name-gated into
+  `FileFacts.calls` (never diagnosed — engine builtins aren't enumerable);
+  datafunction typing stops at `[unregistered]` return types.
+- Golden tests pin behavior that was originally byte-verified against the
+  retired Go implementation; treat golden diffs as behavior changes to review,
+  never as noise to regenerate blindly.
+- `Stats.shadowed` is always 0 (preserved Go-era quirk, documented in the M3
+  report).
+- lsp-server crate: use `initialize_start`/`initialize_finish`, NOT
+  `Connection::initialize` with a pre-wrapped result (double-nests
+  capabilities; regression-tested in `pdxl-cli/tests/cli.rs`).
+- Edition 2024: let-chains are used; clippy runs with `-D warnings`.
+- Shell here is zsh: unquoted `$VARS` do NOT word-split — pass args
+  explicitly. Beware zsh MULTIOS: `2>&1 >/dev/null | …` tees stdout into the
+  pipe; use separate redirections.
 
-`parseBlockItems` receives the opening `{` token and reports `"unclosed block (missing '}'; an inner block may have stolen the closing brace)"` when EOF is reached. When a block is unclosed, subsequent fields are absorbed into it — the parser cannot distinguish block-level from outer-level items without indentation heuristics.
+### Corpus paths (this machine)
 
-**Typed definitions** (`scripted_trigger NAME = { ... }`) parse as two sibling nodes under KindFile: a bare KindScalar for the type keyword, then a KindField for the assignment. This is valid syntactically; semantic distinction belongs in a future validator layer.
+- Game: `~/.local/share/Steam/steamapps/common/Crusader Kings III/game`
+- Mod:  `~/.local/share/Paradox Interactive/Crusader Kings III/mod/T4N.mod`
+  (dir root `…/T4N-CK3/T4N`)
+- Game doc dumps: `~/.local/share/Paradox Interactive/Crusader Kings III/logs`
 
-### Parser v2 — pointer-tree AST
+Full-corpus sanity check after schema work:
 
-Used only for benchmarking comparison. Key API:
-- `Field.KeyParts []lexer.Token`, `Field.Operator lexer.Tag` — materialize with `field.Key(src)` and `OperatorString(field.Operator)`.
-- `Scalar.Parts []lexer.Token` — materialize with `scalar.Value(src)`.
-
-`v3.Parse` returns `(*Tree, []Diagnostic)`; `v2.ParseBytes` returns `(*File, error)`. They are independent.
-
-### Cache layer (`internal/cache`)
-
-`Store` is the two-level cache. `NewStore(dir, lruCap)` creates the disk directory and an in-memory LRU when `lruCap > 0`. Also writes `.pdxl/.gitignore` on first use.
-
-```go
-store, _ := cache.NewStore(cfg.Cache.Dir, cfg.Cache.LRUCap)
-info, _ := os.Stat(path)
-tree, diags, _ := store.Get(path, info)   // nil on miss
-if tree == nil {
-    tree, diags = v3.Parse(path, src)
-    store.Put(path, info, src, tree, diags)
-}
+```sh
+./target/release/pdxl check --no-cache --game "<game>" --mod "<mod .mod>"
 ```
-
-**Invalidation:** L1 checks mtime; L2 always verifies SHA-256 (mtime alone is unreliable on coarse-resolution filesystems). A same-content/different-mtime file refreshes the stored mtime. A changed hash is a full miss.
-
-**Disk format:** gob-encoded `diskEntry{ModTime int64, SHA256 [32]byte, SrcGzip []byte, Nodes []v3.Node, Index []uint32, Diags []v3.Diagnostic}`. Entry filename is `sha256(filepath.Clean(path)).bin`. Source is stored gzip-compressed so hot L2 paths skip the original file entirely.
-
-**Performance baseline (i5-11400H):** L1 hit ~23 ns / 0 allocs; L2 disk read ~190 µs; disk write ~620 µs.
-
-### Files (`internal/files`)
-
-`FileSet` scans game and mod directories with Paradox mod-overlay semantics: add roots in load order (vanilla first, mod last); later additions shadow earlier ones for the same relative path. `RelPath` keys are normalised lowercase forward-slash. Supports `replace_path` prefixes (`SetReplacePaths`), non-script `.txt` exclusion (`SetIgnore`, driven by the `[scan]` config), and `.mod` file parsing with Windows/Proton path resolution (`ParseMod`, `ResolveWindowsPath`). `Walk` iterates winning entries in insertion order.
-
-### Validate (`internal/validate`)
-
-Cross-file semantic layer on top of v3 trees + `FileSet`. `Analyze(fs, astStore, *FactStore)` does a **single walk** that extracts per-file `FileFacts` (definitions, trait-group aliases, references), merges them into a `SymbolTable`, then resolves references **in memory** — returning the table plus `[]RefDiag`.
-
-- **Definitions** are harvested by directory via a hand-written CK3 registry (`schema_ck3.go`): top-level `NAME = { … }` fields in `common/scripted_triggers/`, `common/traits/`, `events/`, etc. `$PARAM$` macro-parameter names are recorded per symbol.
-- **References** are resolved by key via `ck3RefRules` (scalar, e.g. `add_trait`), `ck3BlockIDRefRules` (block `id`, e.g. `trigger_event = { id = … }`), and on_action-only `ck3ListRefRules` / `ck3WeightedRefRules` (event/on_action lists). CK3 nuances handled: trait `group`/`group_equivalence` aliases, quoted names, scope keywords and macro-interpolated values are skipped (can't resolve without scope tracking).
-- **FactStore** (`factcache.go`) caches `FileFacts` per file under `<cacheDir>/symbols/`, SHA-invalidated like the AST cache. Unchanged files skip parsing entirely; warm `pdxl check` is sub-second on the full CK3 corpus. Same content-keyed caveat as the AST cache — after changing validate/lexer logic, use `--no-cache` or `cache clear`.
-
-Not yet implemented (future phases): full macro expansion, scope tracking, broader schema coverage.
-
-### LSP (`internal/lsp`)
-
-Long-running language server (glsp / LSP 3.16, stdio) wrapping a single in-memory `validate.Project`. `pdxl lsp` starts it. Features: live diagnostics + go-to-definition. **Scope is editor DX, not validation depth** — ck3-tiger owns deep validation; keep validate lightweight.
-
-- `initialize` stores paths and returns fast; the project is built asynchronously in `initialized` (large corpora exceed the client init timeout).
-- Edits flow `didChange → debounce (200ms) → analyzeAndPublish → Project.UpdateSource (re-parse one file) → publishProjectDiagnostics`. Diagnostics publish for **every mod file** with unresolved refs (opened or not), filtered by `underModRoot`; vanilla files are analyzed but never flagged.
-- **`Server.mu` is not reentrant.** Methods called with the lock held (e.g. `publishProjectDiagnostics`) must use `readFileLocked`, not `readFile` (which locks). Mixing them deadlocks.
-- Byte offsets ↔ LSP positions go through `offsetToPosition` / `positionToOffset` (UTF-16 code units). Tests build a project then drive handlers directly with a capturing notify (`captureCtx`).
-
-### Config (`internal/config`)
-
-Config file is `pdxl.toml` in the project root (created by `pdxl init`). Missing file is not an error — defaults are used.
-
-```toml
-game      = "ck3"
-game_path = ""   # vanilla game dir; default for `index`/`check` --game
-mod_path  = ""   # mod dir or .mod file; default for --mod
-
-[cache]
-enabled = true
-dir     = ".pdxl/cache"
-lru_cap = 256
-
-[lint]
-context = 0
-
-[scan]                                  # non-script .txt skipped by directory scans
-ignore_dirs  = ["licenses"]
-ignore_files = ["credits.txt", "checksum_manifest.txt", "guids.txt", "license.txt", "ofl.txt"]
-```
-
-`config.Load(path)` starts from `Default()` and overlays the file, so partial configs inherit defaults. Override the path with `pdxl --config /path/to/pdxl.toml`.
-
-### CLI subcommands
-
-| Command | Description |
-|---------|-------------|
-| `pdxl init [--game ck3]` | Create `pdxl.toml` with defaults; `--force` to overwrite |
-| `pdxl lint <files> [--context N] [--no-cache]` | Structural diagnostics; `--context` prints N source lines around each |
-| `pdxl parse <file> [--tree\|--json]` | Print AST; `--tree` shows labelled node tree with box-drawing chars |
-| `pdxl lex <file>` | Dump token stream |
-| `pdxl index [--game DIR] [--mod DIR\|.mod] [--proton-prefix DIR] [--dry]` | Scan game+mod, parse all winning files, report file/diagnostic counts (progress bar) |
-| `pdxl check [--game DIR] [--mod DIR\|.mod] [--proton-prefix DIR] [--no-cache]` | Index definitions + resolve references; prints per-kind counts, duplicates, unresolved refs; exits non-zero on unresolved |
-| `pdxl watch [--game DIR] [--mod DIR\|.mod] [--proton-prefix DIR] [--addr ADDR]` | Persistent validator: build once, watch mod dir (fsnotify), serve diagnostics over HTTP (`GET /diagnostics[?file=…]`, `/health`; default `127.0.0.1:7777`) |
-| `pdxl lsp [--game DIR] [--log-level LEVEL]` | Run the language server over stdio (go-to-definition + live mod-scoped diagnostics) |
-| `pdxl cache size [--detailed]` / `pdxl cache clear` | Report (ast vs symbols) or delete cached entries |
-
-All subcommands accept `--verbose` / `-v` (debug logging via slog) and `--config`.
-
-### Testutil and golden tests
-
-`internal/testutil.TestdataDir()` returns the absolute path to the project-level `testdata/` directory using `runtime.Caller()` — safe to call from any sub-package without path hacks.
-
-All parser packages share the same `testdata/*.txt` fixtures. Each has its own `fixture_test.go` that renders the parsed AST to a string and diffs against `testdata/*.golden`. Run with `-update` to regenerate goldens.
-
-### Token naming
-
-Tag constants use `snake_case` (e.g. `literal_boolean`, `l_brace`). The linter's `var-naming` rule is disabled for this.
-
-`golangci-lint` enforces revive `cognitive-complexity` (max 20) and `nestif` — keep functions small and flat; extract helpers rather than nesting. Verbose debug-logging blocks can trip these.
 
 ### Commit style
 
-Use git-flow prefixes: `feat(scope):`, `fix(scope):`, `refactor(scope):`, `chore(scope):`, etc.
-
-## Rust port (rust/) — the reference implementation
-
-The Go code is legacy/oracle; new work happens in the `rust/` cargo workspace
-(see `rust/README.md` for the dependency diagram and milestone log).
-
-```sh
-cd rust
-cargo test --workspace                                   # all tests incl. parity/goldens
-cargo clippy --workspace --all-targets --all-features -- -D warnings   # must be clean
-cargo fmt --all --check
-bash ../scripts/parity.sh                                # Go tests + Rust tests + differentials
-```
-
-### Testing policy (which layer answers to what)
-
-- lexer / parser / fileset / .mod descriptors: still **byte-differential vs Go**
-  (`pdxl-parity/tests/{lexer,parser,fileset}.rs` run `go run ./tools/<name>dump`).
-- analysis layer (facts / project / `check` output): Go oracle **retired** —
-  **golden snapshots**; regenerate deliberately with
-  `UPDATE_GOLDENS=1 cargo test -p pdxl-parity --test facts --test project`
-  (and `-p pdxl-cli --test cli`), then review the golden diff like code.
-- Never modify Go production behavior except deliberate lockstep fixes
-  (precedent: ParseMod Unix-path fix); additive Go tools/tests are fine.
-
-### Invariants & gotchas
-
-- Bump `pdxl_analysis::ANALYSIS_VERSION` whenever schema/extraction semantics
-  change; `pdxl_ast::SYNTAX_VERSION` for lexer/parser/tree changes (cache keys).
-- Bump the workspace crate version (`[workspace.package] version` in
-  `rust/Cargo.toml`, all crates inherit via `version.workspace = true`) on each
-  new feature; keep it as `0.<ANALYSIS_VERSION>.0`.
-- Schema growth: one `KindSpec` row per game concept in `pdxl-ck3`
-  (defs dir + `RefPattern` rules + gates + icon); shapes needing *logic* get
-  bespoke extractors, not new pattern variants —
-  see `rust/docs/SCHEMA-SCALING.md` before extending the schema.
-- Interface scripts (`.gui`): `pdxl-gui` crate — dialect parser
-  (`pdxl_parser::parse_gui`, script `parse()` stays parity-locked) plus
-  name-gated template/type symbol extraction into `FileFacts.calls` (never
-  diagnosed; engine builtins aren't enumerable). Routed by extension like
-  `.yml` loc files; FileSet opt-in via `set_include_gui(true)`.
-- Edition 2024: let-chains are used; clippy runs with `-D warnings`.
-- `Stats.shadowed` is always 0 (preserved Go bug, documented in the M3 report).
-- lsp-server crate: use `initialize_start`/`initialize_finish`, NOT
-  `Connection::initialize` with a pre-wrapped result (double-nests capabilities;
-  regression-tested in `pdxl-cli/tests/cli.rs`).
-- Shell here is zsh: unquoted `$VARS` do NOT word-split — pass args explicitly.
-- Design/measurement history lives in `rust/docs/` (BASELINE.md, MILESTONE-*.md,
-  SCHEMA-SCALING.md).
+Use git-flow prefixes: `feat(scope):`, `fix(scope):`, `refactor(scope):`,
+`chore(scope):`, etc.

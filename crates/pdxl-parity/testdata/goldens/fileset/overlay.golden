@@ -1,0 +1,16 @@
+{
+"version":1,
+"entries":[
+{"rel_path":"a.txt","full_path":"<root0>/a.txt","kind":"vanilla"},
+{"rel_path":"b.txt","full_path":"<root3>/b.txt","kind":"mod"},
+{"rel_path":"shared.txt","full_path":"<root3>/shared.txt","kind":"mod"},
+{"rel_path":"d.txt","full_path":"<root1>/d.txt","kind":"dlc"},
+{"rel_path":"dep.txt","full_path":"<root2>/dep.txt","kind":"dependency"},
+{"rel_path":"c.txt","full_path":"<root3>/c.txt","kind":"mod"}
+],
+"stats":{"vanilla":2,"mod":4,"total":6,"shadowed":0,"replaced":0},
+"resolutions":[
+{"query":"b.txt","found":true,"rel_path":"b.txt","kind":"mod"},
+{"query":"shared.txt","found":true,"rel_path":"shared.txt","kind":"mod"}
+]
+}
