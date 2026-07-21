@@ -23,6 +23,9 @@ jobs:
           rustup toolchain install stable --profile minimal --component rustfmt,clippy
           rustup default stable
 
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@v2
+
       - name: Validate tag and Cargo version
         id: version
         shell: bash
@@ -82,6 +85,11 @@ jobs:
         run: |
           rustup toolchain install stable --profile minimal
           rustup default stable
+
+      - name: Cache cargo registry and target
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
 
       # Several goldens embed filesystem paths (separators, case), so the suite
       # is not yet Windows-clean; it runs on Linux (CI + here) and macOS. The
