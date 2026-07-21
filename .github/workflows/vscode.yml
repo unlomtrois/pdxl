@@ -1,0 +1,51 @@
+name: VS Code extension
+
+on:
+  push:
+    branches: [master]
+    paths: ['editor/vscode/**', '.github/workflows/vscode.yml']
+  pull_request:
+    paths: ['editor/vscode/**', '.github/workflows/vscode.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vscode-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  vsix:
+    name: Type-check, build, and package .vsix
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: editor/vscode
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: editor/vscode/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # `vsix` runs the `vscode:prepublish` hook (type-check + production
+      # esbuild), so a type error or bundling failure fails the build. The
+      # extension is NOT published to the Marketplace — this only produces the
+      # downloadable .vsix artifact.
+      - name: Package extension
+        run: npm run vsix
+
+      - name: Upload .vsix artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: pdxl-vscode-extension
+          path: editor/vscode/*.vsix
+          if-no-files-found: error
