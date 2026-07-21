@@ -43,23 +43,21 @@ repository = "https://github.com/unlomtrois/pdxl"
 rust-version = "1.96"
 
 [workspace.dependencies]
-pdxl-src = { path = "crates/pdxl-src", version = "0.46.0" }
-pdxl-path = { path = "crates/pdxl-path", version = "0.46.0" }
-pdxl-lexer = { path = "crates/pdxl-lexer", version = "0.46.0" }
-pdxl-ast = { path = "crates/pdxl-ast", version = "0.46.0" }
-pdxl-parser = { path = "crates/pdxl-parser", version = "0.46.0" }
-pdxl-fileset = { path = "crates/pdxl-fileset", version = "0.46.0" }
-pdxl-moddesc = { path = "crates/pdxl-moddesc", version = "0.46.0" }
-pdxl-cache = { path = "crates/pdxl-cache", version = "0.46.0" }
-pdxl-analysis = { path = "crates/pdxl-analysis", version = "0.46.0" }
-pdxl-fmt = { path = "crates/pdxl-fmt", version = "0.46.0" }
-pdxl-loc = { path = "crates/pdxl-loc", version = "0.46.0" }
-pdxl-ck3 = { path = "crates/pdxl-ck3", version = "0.46.0" }
-pdxl-gui = { path = "crates/pdxl-gui", version = "0.46.0" }
-pdxl-project = { path = "crates/pdxl-project", version = "0.46.0" }
-pdxl-lsp = { path = "crates/pdxl-lsp", version = "0.46.0" }
-# Test-only helper (publish = false); path-only so it is dropped from
-# published manifests rather than looked up on crates.io.
+pdxl-src = { path = "crates/pdxl-src" }
+pdxl-path = { path = "crates/pdxl-path" }
+pdxl-lexer = { path = "crates/pdxl-lexer" }
+pdxl-ast = { path = "crates/pdxl-ast" }
+pdxl-parser = { path = "crates/pdxl-parser" }
+pdxl-fileset = { path = "crates/pdxl-fileset" }
+pdxl-moddesc = { path = "crates/pdxl-moddesc" }
+pdxl-cache = { path = "crates/pdxl-cache" }
+pdxl-analysis = { path = "crates/pdxl-analysis" }
+pdxl-fmt = { path = "crates/pdxl-fmt" }
+pdxl-loc = { path = "crates/pdxl-loc" }
+pdxl-ck3 = { path = "crates/pdxl-ck3" }
+pdxl-gui = { path = "crates/pdxl-gui" }
+pdxl-project = { path = "crates/pdxl-project" }
+pdxl-lsp = { path = "crates/pdxl-lsp" }
 pdxl-testutil = { path = "crates/pdxl-testutil" }
 
 # external — added for the syntax cache (M4); versions pinned at the workspace
