@@ -50,4 +50,8 @@ pub struct CallKinds {
 pub struct GuiKinds {
     pub template: KindId,
     pub ty: KindId,
+    /// Datafunctions whose first quoted argument names a symbol of the given
+    /// kind (`GetScriptedGui('x')`, `ScriptValue('v')`, `Custom('k')`).
+    /// Extracted as navigation-only references from `.gui` files.
+    pub arg_refs: &'static [(&'static str, KindId)],
 }

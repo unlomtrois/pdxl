@@ -54,6 +54,7 @@ mod on_action;
 mod portrait_animation;
 mod scheme;
 mod scripted;
+mod scripted_gui;
 mod secret_type;
 mod title;
 mod traits;
@@ -116,6 +117,7 @@ registry!(
     custom_loc::CustomLoc,
     building::Building,
     effect_localization::EffectLocalization,
+    scripted_gui::ScriptedGui,
     gui::Gui,
     culture_pillar::CulturePillar,
     culture_tradition::CultureTradition,

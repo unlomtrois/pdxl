@@ -160,7 +160,41 @@ pub fn gui_refs(tree: &SyntaxTree, full_path: &str, names: &GuiNames, kinds: Gui
     let mut refs = Vec::new();
     let file: Arc<str> = Arc::from(full_path);
     walk_refs(tree, tree.root(), true, names, kinds, &file, &mut refs);
+    push_datafn_arg_refs(tree, kinds, &file, &mut refs);
     refs
+}
+
+/// Emits references for datafunction arguments that name script symbols:
+/// `GetScriptedGui('x')` / `ScriptValue('v')` / `Custom('k')` per the game's
+/// [`GuiKinds::arg_refs`] map. Navigation-only (the calls bucket) — an
+/// unknown name simply does not navigate.
+fn push_datafn_arg_refs(tree: &SyntaxTree, kinds: GuiKinds, file: &Arc<str>, refs: &mut Vec<Ref>) {
+    if kinds.arg_refs.is_empty() {
+        return;
+    }
+    let src = tree.source();
+    for span in datafn::datafn_spans(tree) {
+        let text = &src[span.start as usize..span.end as usize];
+        let Some(segments) = datafn::parse_chain(text, span.start) else {
+            continue;
+        };
+        for seg in &segments {
+            let Some((arg, start, end)) = &seg.first_arg else {
+                continue;
+            };
+            let Some(&(_, kind)) = kinds.arg_refs.iter().find(|(f, _)| *f == seg.name) else {
+                continue;
+            };
+            refs.push(Ref {
+                kind,
+                alt: &[],
+                name: arg.clone(),
+                file: Arc::clone(file),
+                start: *start,
+                end: *end,
+            });
+        }
+    }
 }
 
 /// Walks one item list. `top` marks a definition context (file top level or a

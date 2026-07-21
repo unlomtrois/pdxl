@@ -91,6 +91,12 @@ const CALL_KINDS: CallKinds = CallKinds {
 const GUI_KINDS: GuiKinds = GuiKinds {
     template: kinds::GUI_TEMPLATE,
     ty: kinds::GUI_TYPE,
+    arg_refs: &[
+        ("GetScriptedGui", kinds::SCRIPTED_GUI),
+        ("ScriptValue", kinds::SCRIPT_VALUE),
+        ("Custom", kinds::CUSTOM_LOC),
+        ("Custom2", kinds::CUSTOM_LOC),
+    ],
 };
 
 /// The compiled datafunction registry (gui `[…]` expression typing), built

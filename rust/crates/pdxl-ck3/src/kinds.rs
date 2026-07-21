@@ -42,6 +42,7 @@ pub const DYNASTY_HOUSE: KindId = KindId::new("dynasty_house");
 pub const NICKNAME: KindId = KindId::new("nickname");
 pub const DEATH_REASON: KindId = KindId::new("death_reason");
 pub const CUSTOM_LOC: KindId = KindId::new("custom_loc");
+pub const SCRIPTED_GUI: KindId = KindId::new("scripted_gui");
 pub const BUILDING: KindId = KindId::new("building");
 pub const EFFECT_LOC: KindId = KindId::new("effect_loc");
 pub const TRIGGER_LOC: KindId = KindId::new("trigger_loc");

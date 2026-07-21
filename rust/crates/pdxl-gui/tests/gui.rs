@@ -5,9 +5,11 @@ use pdxl_gui::{GuiNames, gui_defs, gui_refs, parse};
 
 const TEMPLATE: KindId = KindId::new("gui_template");
 const TYPE: KindId = KindId::new("gui_type");
+const SGUI: KindId = KindId::new("scripted_gui");
 const KINDS: GuiKinds = GuiKinds {
     template: TEMPLATE,
     ty: TYPE,
+    arg_refs: &[("GetScriptedGui", SGUI)],
 };
 
 const SRC: &str = r#"
@@ -262,4 +264,20 @@ fn datafn_spans_and_segments() {
     let (resolved, err) = resolve_chain(&segs, &registry());
     assert!(err.is_none());
     assert_eq!(resolved[1].row.unwrap().ret, "CString");
+}
+
+#[test]
+fn datafn_arg_refs_extracted() {
+    let src = "window = {\n\
+         \tvisible = \"[GetScriptedGui('can_pledge').IsShown( GuiScope.SetRoot( GetPlayer.MakeScope ).End )]\"\n\
+         \tonclick = [GetScriptedGui('can_pledge').Execute( GuiScope.End )]\n\
+         }\n";
+    let parsed = parse("gui/x.gui", src.as_bytes().to_vec());
+    let names = GuiNames::default();
+    let refs = gui_refs(parsed.tree(), "gui/x.gui", &names, KINDS);
+    let got: Vec<(&str, KindId)> = refs.iter().map(|r| (r.name.as_str(), r.kind)).collect();
+    assert_eq!(got, vec![("can_pledge", SGUI), ("can_pledge", SGUI)]);
+    // Spans cover exactly the quoted name.
+    let r = &refs[0];
+    assert_eq!(&src[r.start as usize..r.end as usize], "can_pledge");
 }

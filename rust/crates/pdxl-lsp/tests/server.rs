@@ -2106,3 +2106,34 @@ fn custom_description_text_resolves_across_kinds() {
         "exactly the missing_entry diagnostic expected: {publishes:?}"
     );
 }
+
+#[test]
+fn scripted_gui_definition_from_gui_datafn_arg() {
+    let t = TempTree::new();
+    t.write(
+        "common/scripted_guis/sguis.txt",
+        "can_pledge = {\n\tscope = character\n\tis_valid = { is_adult = yes }\n\teffect = { }\n}\n",
+    );
+    let src =
+        "window = {\n\tvisible = \"[GetScriptedGui('can_pledge').IsShown( GuiScope.End )]\"\n}\n";
+    t.write("gui/window_x.gui", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "gui/window_x.gui");
+
+    let loc = server
+        .definition(&uri, pos_of(src, "can_pledge"))
+        .expect("scripted_gui definition from datafn argument");
+    assert!(
+        loc.uri
+            .to_file_path()
+            .unwrap()
+            .ends_with("common/scripted_guis/sguis.txt")
+    );
+    assert_eq!(
+        loc.range.start,
+        Position {
+            line: 0,
+            character: 0
+        }
+    );
+}

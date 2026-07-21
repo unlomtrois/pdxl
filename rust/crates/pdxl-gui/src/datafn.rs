@@ -220,6 +220,10 @@ pub struct Segment {
     pub name_end: u32,
     /// Number of top-level arguments in `( … )`, or `None` without parens.
     pub args: Option<u8>,
+    /// The first argument when it is a `'quoted'` literal: its text and the
+    /// absolute byte span of the content (quotes excluded). Symbol-naming
+    /// arguments (`GetScriptedGui('x')`) are extracted from this.
+    pub first_arg: Option<(String, u32, u32)>,
 }
 
 /// Parses the chain inside one datafunction span. `text` is the expression
@@ -246,20 +250,31 @@ pub fn parse_chain(text: &[u8], base: u32) -> Option<Vec<Segment>> {
         let name_end = i;
         let name = String::from_utf8_lossy(&expr[name_start..name_end]).into_owned();
         let mut args = None;
+        let mut first_arg: Option<(String, u32, u32)> = None;
         // Optional argument list; count top-level commas, skip quotes/parens.
         if i < expr.len() && expr[i] == b'(' {
             let mut depth = 1;
             let mut count: u8 = 0;
             let mut any = false;
-            let mut quote = false;
+            let mut quote_start: Option<usize> = None;
             i += 1;
             while i < expr.len() && depth > 0 {
                 let b = expr[i];
-                if quote {
-                    quote = b != b'\'';
+                if let Some(qs) = quote_start {
+                    if b == b'\'' {
+                        // First top-level quoted literal → capture it.
+                        if count == 0 && first_arg.is_none() && depth == 1 {
+                            first_arg = Some((
+                                String::from_utf8_lossy(&expr[qs..i]).into_owned(),
+                                base + qs as u32,
+                                base + i as u32,
+                            ));
+                        }
+                        quote_start = None;
+                    }
                 } else {
                     match b {
-                        b'\'' => quote = true,
+                        b'\'' => quote_start = Some(i + 1),
                         b'(' => depth += 1,
                         b')' => depth -= 1,
                         b',' if depth == 1 => count += 1,
@@ -276,6 +291,7 @@ pub fn parse_chain(text: &[u8], base: u32) -> Option<Vec<Segment>> {
             name_start: base + name_start as u32,
             name_end: base + name_end as u32,
             args,
+            first_arg,
         });
         if i < expr.len() && expr[i] == b'.' {
             i += 1;
