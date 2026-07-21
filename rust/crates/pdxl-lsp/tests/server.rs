@@ -2137,3 +2137,31 @@ fn scripted_gui_definition_from_gui_datafn_arg() {
         }
     );
 }
+
+#[test]
+fn decision_definition_from_gui_datafn_arg() {
+    let t = TempTree::new();
+    t.write(
+        "common/decisions/rice.txt",
+        "T4N_sell_rice_decision = {\n\tpicture = \"x.dds\"\n}\n",
+    );
+    let src = "button_standard = {\n\
+         \tsize = { 120 30 }\n\
+         \tdatacontext = \"[GetDecisionWithKey('T4N_sell_rice_decision')]\"\n\
+         \tvisible = \"[Decision.IsShownForPlayer]\"\n\
+         \tonclick = \"[OpenGameViewData( 'decision_detail', Decision.Self )]\"\n\
+         }\n";
+    t.write("gui/window_x.gui", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "gui/window_x.gui");
+
+    let loc = server
+        .definition(&uri, pos_of(src, "T4N_sell_rice_decision'"))
+        .expect("decision definition from GetDecisionWithKey argument");
+    assert!(
+        loc.uri
+            .to_file_path()
+            .unwrap()
+            .ends_with("common/decisions/rice.txt")
+    );
+}

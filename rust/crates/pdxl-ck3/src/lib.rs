@@ -96,6 +96,13 @@ const GUI_KINDS: GuiKinds = GuiKinds {
         ("ScriptValue", kinds::SCRIPT_VALUE),
         ("Custom", kinds::CUSTOM_LOC),
         ("Custom2", kinds::CUSTOM_LOC),
+        // The ByKey/WithKey lookup family (kinds the schema models; the
+        // unmodeled ones — GetTopParticipantGroupByKey, GetTraitTrackByKey,
+        // GetReligionByKey — are omitted until their kinds exist).
+        ("GetDecisionWithKey", kinds::DECISION),
+        ("GetTitleByKey", kinds::TITLE),
+        ("GetCultureByKey", kinds::CULTURE),
+        ("GetFaithByKey", kinds::FAITH),
     ],
 };
 
