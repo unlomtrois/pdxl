@@ -250,6 +250,7 @@ fn push_ref(
     let n = tree.node(node);
     refs.push(Ref {
         kind,
+        alt: &[],
         name: name.to_string(),
         file: Arc::clone(file),
         start: n.range.start,

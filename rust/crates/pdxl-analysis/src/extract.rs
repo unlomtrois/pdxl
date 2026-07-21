@@ -194,6 +194,7 @@ fn push_name_ref(
     let node = tree.node(node_id);
     calls.push(Ref {
         kind,
+        alt: &[],
         name: String::from_utf8_lossy(tree.node_text(node_id)).into_owned(),
         file: Arc::from(path),
         start: node.range.start,
@@ -578,6 +579,7 @@ fn scan_prefix_refs(
         let end = node.range.start + name_end as u32;
         refs.push(Ref {
             kind: rule.kind,
+            alt: &[],
             name: name.into_owned(),
             file: Arc::from(path),
             start,
@@ -617,16 +619,16 @@ fn extract_field_refs(
         match rule.form {
             // Scalar form: key = value.
             KeyForm::Value if value.kind == NodeKind::Scalar => {
-                append_ref(tree, rule.kind, value_id, path, schema, refs);
+                append_ref(tree, rule.kind, rule.alt, value_id, path, schema, refs);
             }
             // Scalar form, only directly inside a top-level definition body.
             KeyForm::ValueTop if value.kind == NodeKind::Scalar && depth == 1 => {
-                append_ref(tree, rule.kind, value_id, path, schema, refs);
+                append_ref(tree, rule.kind, rule.alt, value_id, path, schema, refs);
             }
             // Scalar form constrained to a parent block: option = { name = X }.
             KeyForm::ValueUnder(parent) if value.kind == NodeKind::Scalar => {
                 if parent_key == parent.as_bytes() {
-                    append_ref(tree, rule.kind, value_id, path, schema, refs);
+                    append_ref(tree, rule.kind, rule.alt, value_id, path, schema, refs);
                 }
             }
             // Block form carrying a named field: key = { field = value … }.
@@ -634,20 +636,20 @@ fn extract_field_refs(
                 if let Some(id_node) = direct_field_node(tree, value_id, field)
                     && tree.node(id_node).kind == NodeKind::Scalar
                 {
-                    append_ref(tree, rule.kind, id_node, path, schema, refs);
+                    append_ref(tree, rule.kind, rule.alt, id_node, path, schema, refs);
                 }
             }
             // List form: key = { item item … } — loose scalar items.
             KeyForm::List if value.kind == NodeKind::Block => {
                 for item in tree.children(value_id) {
                     if tree.node(item).kind == NodeKind::Scalar {
-                        append_ref(tree, rule.kind, item, path, schema, refs);
+                        append_ref(tree, rule.kind, rule.alt, item, path, schema, refs);
                     }
                 }
             }
             // Weighted form: key = { WEIGHT = id … } — numeric-keyed entries.
             KeyForm::Weighted if value.kind == NodeKind::Block => {
-                extract_weighted_refs(tree, rule.kind, value_id, path, schema, refs);
+                extract_weighted_refs(tree, rule.kind, rule.alt, value_id, path, schema, refs);
             }
             _ => {}
         }
@@ -660,6 +662,7 @@ fn extract_field_refs(
 fn extract_weighted_refs(
     tree: &SyntaxTree,
     kind: KindId,
+    alt: &'static [KindId],
     block_id: NodeId,
     path: &str,
     schema: &Schema,
@@ -675,7 +678,7 @@ fn extract_weighted_refs(
         }
         if starts_with_digit(tree.node_text(kids[0])) && !starts_with_digit(tree.node_text(kids[1]))
         {
-            append_ref(tree, kind, kids[1], path, schema, refs);
+            append_ref(tree, kind, alt, kids[1], path, schema, refs);
         }
     }
 }
@@ -685,6 +688,7 @@ fn extract_weighted_refs(
 fn append_ref(
     tree: &SyntaxTree,
     kind: KindId,
+    alt: &'static [KindId],
     value_id: NodeId,
     path: &str,
     schema: &Schema,
@@ -706,6 +710,7 @@ fn append_ref(
 
     refs.push(Ref {
         kind,
+        alt,
         name: val.into_owned(),
         file: Arc::from(path),
         start: value.range.start,

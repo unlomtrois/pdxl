@@ -29,6 +29,7 @@ impl super::Entity for PortraitAnimation {
             refs: &[RefRule {
                 pattern: RefPattern::KeyValue("animation"),
                 gate: Some("events/"),
+                alt: &[],
             }],
             aliases: &[],
         },

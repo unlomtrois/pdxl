@@ -14,6 +14,7 @@ const fn interaction_loc(key: &'static str) -> RefRule {
     RefRule {
         pattern: RefPattern::KeyValue(key),
         gate: Some("common/character_interactions/"),
+        alt: &[],
     }
 }
 
@@ -27,10 +28,12 @@ macro_rules! person_tense_rules {
             RefRule {
                 pattern: RefPattern::KeyValue($key),
                 gate: Some(super::effect_localization::EFFECT_LOC_DIR),
+                alt: &[],
             },
             RefRule {
                 pattern: RefPattern::KeyValue($key),
                 gate: Some(super::effect_localization::TRIGGER_LOC_DIR),
+                alt: &[],
             },
         )*]
     };
@@ -78,14 +81,17 @@ impl Entity for Loc {
                 RefRule {
                     pattern: RefPattern::KeyValue("title"),
                     gate: Some("events/"),
+                    alt: &[],
                 },
                 RefRule {
                     pattern: RefPattern::KeyValue("desc"),
                     gate: Some("events/"),
+                    alt: &[],
                 },
                 RefRule {
                     pattern: RefPattern::KeyValue("opening"),
                     gate: Some("events/"),
+                    alt: &[],
                 },
                 // `name` is a loc key only directly inside an option (elsewhere it
                 // names variable lists etc.); `text` only inside a gated name block
@@ -93,30 +99,37 @@ impl Entity for Loc {
                 RefRule {
                     pattern: RefPattern::KeyValueUnder("option", "name"),
                     gate: Some("events/"),
+                    alt: &[],
                 },
                 RefRule {
                     pattern: RefPattern::KeyValueUnder("name", "text"),
                     gate: Some("events/"),
+                    alt: &[],
                 },
                 RefRule {
                     pattern: RefPattern::KeyValueUnder("custom_tooltip", "text"),
                     gate: None,
+                    alt: &[],
                 },
                 RefRule {
                     pattern: RefPattern::KeyValue("title"),
                     gate: Some("common/decisions/"),
+                    alt: &[],
                 },
                 RefRule {
                     pattern: RefPattern::KeyValue("desc"),
                     gate: Some("common/decisions/"),
+                    alt: &[],
                 },
                 RefRule {
                     pattern: RefPattern::KeyValue("selection_tooltip"),
                     gate: Some("common/decisions/"),
+                    alt: &[],
                 },
                 RefRule {
                     pattern: RefPattern::KeyValue("confirm_text"),
                     gate: Some("common/decisions/"),
+                    alt: &[],
                 },
                 // Character-interaction text fields (from `_character_interactions.info`).
                 // `desc` also catches nested dynamic-description descs. All corpus-

@@ -26,6 +26,7 @@ impl Entity for CharacterTemplate {
         refs: &[RefRule {
             pattern: RefPattern::KeyBlockField("create_character", "template"),
             gate: None,
+            alt: &[],
         }],
         aliases: &[],
     }];

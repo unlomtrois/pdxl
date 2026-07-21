@@ -42,6 +42,7 @@ impl Entity for Title {
             RefRule {
                 pattern: RefPattern::KeyValue("capital"),
                 gate: Some(LANDED_TITLES_DIR),
+                alt: &[],
             },
         ],
         aliases: &[],

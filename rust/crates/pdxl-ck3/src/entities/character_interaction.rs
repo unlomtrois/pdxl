@@ -275,6 +275,7 @@ impl Entity for CharacterInteraction {
             refs: &[RefRule {
                 pattern: RefPattern::KeyValue("category"),
                 gate: Some("common/character_interactions/"),
+                alt: &[],
             }],
             aliases: &[],
         },

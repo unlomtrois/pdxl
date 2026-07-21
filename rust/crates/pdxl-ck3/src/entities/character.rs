@@ -33,6 +33,7 @@ const fn in_history(key: &'static str) -> RefRule {
     RefRule {
         pattern: RefPattern::KeyValue(key),
         gate: Some(CHARACTERS_DIR),
+        alt: &[],
     }
 }
 

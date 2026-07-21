@@ -122,6 +122,12 @@ pub enum RefPattern {
 pub struct RefRule {
     pub pattern: RefPattern,
     pub gate: Option<&'static str>,
+    /// Alternate kinds the reference may resolve to when the owning kind
+    /// does not define the name (CK3: `custom_description`'s `text` is a
+    /// trigger-localization key, an effect-localization key, or a plain loc
+    /// key). Diagnosed as unresolved only when no kind in the chain defines
+    /// it; navigation follows whichever kind resolves.
+    pub alt: &'static [KindId],
 }
 
 /// ALL knowledge about one game concept, co-located: adding a kind to a game
@@ -156,6 +162,7 @@ pub(crate) struct KeyRule {
     pub(crate) kind: KindId,
     pub(crate) form: KeyForm,
     pub(crate) gate: Option<&'static str>,
+    pub(crate) alt: &'static [KindId],
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -278,6 +285,7 @@ impl Schema {
                     kind: spec.kind,
                     form,
                     gate: rule.gate,
+                    alt: rule.alt,
                 });
             }
         }

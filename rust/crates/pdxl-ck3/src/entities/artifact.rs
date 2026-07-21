@@ -36,6 +36,7 @@ const fn in_dir(dir: &'static str, pattern: RefPattern) -> RefRule {
     RefRule {
         pattern,
         gate: Some(dir),
+        alt: &[],
     }
 }
 

@@ -143,6 +143,7 @@ impl Entity for CustomLoc {
             // Depth-1 only: `parent` is a generic word other dirs use freely.
             pattern: RefPattern::KeyValueTop("parent"),
             gate: Some(CUSTOM_LOC_DIR),
+            alt: &[],
         }],
         aliases: &[],
     }];

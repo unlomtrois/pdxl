@@ -253,20 +253,24 @@ impl Entity for Building {
             RefRule {
                 pattern: RefPattern::KeyValue("unlock_building"),
                 gate: Some("common/culture/"),
+                alt: &[],
             },
             // Province history: preplaced special buildings and slots, and
             // the `buildings = { X Y … }` list.
             RefRule {
                 pattern: RefPattern::KeyValue("special_building"),
                 gate: Some(PROVINCE_HISTORY_DIR),
+                alt: &[],
             },
             RefRule {
                 pattern: RefPattern::KeyValue("special_building_slot"),
                 gate: Some(PROVINCE_HISTORY_DIR),
+                alt: &[],
             },
             RefRule {
                 pattern: RefPattern::KeyList("buildings"),
                 gate: Some(PROVINCE_HISTORY_DIR),
+                alt: &[],
             },
         ],
         aliases: &[],

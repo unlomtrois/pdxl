@@ -1590,3 +1590,29 @@ fn effect_and_trigger_localization_defs_and_loc_refs() {
     let elsewhere = extract("e = { first = X global = Y }\n", "events/x.txt");
     assert!(ref_names(&elsewhere).is_empty());
 }
+
+#[test]
+fn custom_description_text_is_multi_kind() {
+    let f = extract(
+        "e = {\n\
+         \tcustom_description = {\n\
+         \t\ttext = T4N_buy_rice_can_afford\n\
+         \t\tgold >= 150\n\
+         \t}\n\
+         }\n",
+        "common/scripted_triggers/x.txt",
+    );
+    assert_eq!(ref_names(&f), vec!["T4N_buy_rice_can_afford"]);
+    let r = &f.refs[0];
+    assert_eq!(r.kind, pdxl_ck3::kinds::TRIGGER_LOC);
+    assert_eq!(
+        r.alt,
+        &[pdxl_ck3::kinds::EFFECT_LOC, pdxl_analysis::LOC_KEY]
+    );
+    // Deeper `text` (not a direct child) is untouched.
+    let deep = extract(
+        "e = { custom_description = { limit = { text = X } } }\n",
+        "events/x.txt",
+    );
+    assert!(ref_names(&deep).is_empty());
+}

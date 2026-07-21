@@ -2053,3 +2053,56 @@ fn gui_property_docs_in_hover_and_completion() {
         .expect("parentanchor offered");
     assert!(pa.documentation.is_some(), "doc attached");
 }
+
+#[test]
+fn custom_description_text_resolves_across_kinds() {
+    let t = TempTree::new();
+    t.write(
+        "common/trigger_localization/00.txt",
+        "can_afford_rice = { first = I_CAN_AFFORD }\n",
+    );
+    t.write(
+        "common/effect_localization/00.txt",
+        "gain_rice = { first = I_GAIN_RICE }\n",
+    );
+    let src = "e = {\n\
+         \tcustom_description = { text = can_afford_rice }\n\
+         \tcustom_description = { text = gain_rice }\n\
+         \tcustom_description = { text = missing_entry }\n\
+         }\n";
+    t.write("common/scripted_effects/e.txt", src);
+    let (server, rx) = server_over(&t);
+    let uri = uri_for(&t, "common/scripted_effects/e.txt");
+
+    // Primary kind (trigger_loc) resolves…
+    let loc = server
+        .definition(&uri, pos_of(src, "can_afford_rice"))
+        .expect("trigger_loc definition");
+    assert!(
+        loc.uri
+            .to_file_path()
+            .unwrap()
+            .ends_with("common/trigger_localization/00.txt")
+    );
+    // … and the alternate kind (effect_loc) does too.
+    let loc = server
+        .definition(&uri, pos_of(src, "gain_rice"))
+        .expect("effect_loc definition via alt kind");
+    assert!(
+        loc.uri
+            .to_file_path()
+            .unwrap()
+            .ends_with("common/effect_localization/00.txt")
+    );
+
+    // Only the name defined in NO kind is diagnosed.
+    let publishes = drain_publishes(&rx);
+    let ours: Vec<_> = publishes
+        .iter()
+        .filter(|(p, _)| p.ends_with("common/scripted_effects/e.txt"))
+        .collect();
+    assert!(
+        ours.iter().any(|(_, n)| *n == 1),
+        "exactly the missing_entry diagnostic expected: {publishes:?}"
+    );
+}

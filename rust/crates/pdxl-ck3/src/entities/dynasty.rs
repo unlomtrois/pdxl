@@ -21,6 +21,7 @@ const fn in_dir(dir: &'static str, key: &'static str) -> RefRule {
     RefRule {
         pattern: RefPattern::KeyValue(key),
         gate: Some(dir),
+        alt: &[],
     }
 }
 

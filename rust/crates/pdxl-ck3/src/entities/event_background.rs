@@ -77,6 +77,7 @@ impl Entity for EventBackground {
             RefRule {
                 pattern: RefPattern::KeyBlockField("background", "reference"),
                 gate: Some("common/event_themes/"),
+                alt: &[],
             },
             // An event's `override_background = { reference = X }` (events only;
             // always a bare background key).

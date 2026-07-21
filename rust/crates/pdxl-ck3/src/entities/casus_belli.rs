@@ -505,6 +505,7 @@ impl Entity for CasusBelli {
             refs: &[RefRule {
                 pattern: RefPattern::KeyValueTop("group"),
                 gate: Some(TYPES_DIR),
+                alt: &[],
             }],
             aliases: &[],
         },

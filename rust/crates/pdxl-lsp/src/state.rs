@@ -311,7 +311,12 @@ impl ServerState {
             .chain(facts.calls.iter())
             .find(|r| r.start <= off && off < r.end)?;
 
-        let symbol = project.table().lookup(reference.kind, &reference.name)?;
+        // Primary kind first, then the rule's alternates (multi-kind refs
+        // like custom_description's text resolve to whichever kind defines
+        // the name).
+        let symbol = std::iter::once(reference.kind)
+            .chain(reference.alt.iter().copied())
+            .find_map(|k| project.table().lookup(k, &reference.name))?;
         let def_full = project.rel_to_full(&symbol.file)?.to_path_buf();
         let def_src = self.read_file(&def_full).ok()?;
 
@@ -403,7 +408,11 @@ impl ServerState {
                         .refs
                         .iter()
                         .chain(gui_calls)
-                        .filter(|r| project.table().lookup(r.kind, &r.name).is_some())
+                        .filter(|r| {
+                            std::iter::once(r.kind)
+                                .chain(r.alt.iter().copied())
+                                .any(|k| project.table().lookup(k, &r.name).is_some())
+                        })
                         .map(|r| (r.start, r.end))
                         .collect();
                     spans.sort_by_key(|&(start, _)| start);
@@ -558,7 +567,14 @@ impl ServerState {
             }
         }
 
-        if let Some((kind, name)) = symbol_at(facts, off) {
+        if let Some((kind0, alts, name)) = symbol_at_with_alts(facts, off) {
+            // The kind that actually defines the name wins the display (a
+            // multi-kind ref like custom_description text shows as whichever
+            // localization kind it resolved to).
+            let kind = std::iter::once(kind0)
+                .chain(alts.iter().copied())
+                .find(|&k| project.table().lookup(k, name).is_some())
+                .unwrap_or(kind0);
             let mut text = format!("```pdxscript\n{} {}\n```", kind.name(), name);
             if let Some(symbol) = project.table().lookup(kind, name) {
                 // Loc keys carry their user-visible text — show it.
@@ -2043,21 +2059,34 @@ fn cursor_context(src: &[u8], off: u32) -> CursorContext {
 /// `off`. Definitions are checked first so the cursor on a `NAME = {}` name
 /// resolves to that symbol (Go's `symbolAt`).
 fn symbol_at(facts: &pdxl_analysis::FileFacts, off: u32) -> Option<(pdxl_analysis::KindId, &str)> {
+    symbol_at_with_alts(facts, off).map(|(k, _, n)| (k, n))
+}
+
+/// Like [`symbol_at`], but keeps the reference's alternate-kind list so
+/// consumers can resolve against whichever kind defines the name.
+fn symbol_at_with_alts(
+    facts: &pdxl_analysis::FileFacts,
+    off: u32,
+) -> Option<(
+    pdxl_analysis::KindId,
+    &'static [pdxl_analysis::KindId],
+    &str,
+)> {
     for d in &facts.defs {
         if d.offset <= off && off < d.end_offset {
-            return Some((d.kind, &d.name));
+            return Some((d.kind, &[], &d.name));
         }
     }
     for r in &facts.refs {
         if r.start <= off && off < r.end {
-            return Some((r.kind, &r.name));
+            return Some((r.kind, r.alt, &r.name));
         }
     }
     // Call-by-name sites (`my_effect = yes`): the key resolves to the scripted
     // effect/trigger, enabling go-to-definition and find-references from a call.
     for r in &facts.calls {
         if r.start <= off && off < r.end {
-            return Some((r.kind, &r.name));
+            return Some((r.kind, r.alt, &r.name));
         }
     }
     None

@@ -24,6 +24,7 @@ pub(crate) const fn in_cultures(pattern: RefPattern) -> RefRule {
     RefRule {
         pattern,
         gate: Some(CULTURES_DIR),
+        alt: &[],
     }
 }
 
@@ -32,6 +33,7 @@ pub(crate) const fn in_innovations(pattern: RefPattern) -> RefRule {
     RefRule {
         pattern,
         gate: Some(INNOVATIONS_DIR),
+        alt: &[],
     }
 }
 

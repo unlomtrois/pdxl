@@ -31,6 +31,9 @@ pub struct Symbol {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ref {
     pub kind: KindId,
+    /// Alternate kinds this reference may resolve to (see `RefRule::alt`);
+    /// empty for ordinary single-kind references.
+    pub alt: &'static [KindId],
     pub name: String,
     /// On-disk path (editor diagnostics point at a clickable file). Interned
     /// per file — all refs from one file share one allocation.

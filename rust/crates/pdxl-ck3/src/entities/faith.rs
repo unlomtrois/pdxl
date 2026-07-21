@@ -14,6 +14,7 @@ const fn in_history(key: &'static str) -> RefRule {
     RefRule {
         pattern: RefPattern::KeyValue(key),
         gate: Some("history/characters/"),
+        alt: &[],
     }
 }
 

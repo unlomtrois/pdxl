@@ -19,6 +19,7 @@ pub(crate) const fn anywhere(pattern: RefPattern) -> RefRule {
     RefRule {
         pattern,
         gate: None,
+        alt: &[],
     }
 }
 
@@ -27,6 +28,7 @@ pub(crate) const fn in_on_action(pattern: RefPattern) -> RefRule {
     RefRule {
         pattern,
         gate: Some(ON_ACTION_DIR),
+        alt: &[],
     }
 }
 

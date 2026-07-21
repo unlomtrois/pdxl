@@ -31,6 +31,7 @@ const fn culture_in(dir: &'static str) -> RefRule {
     RefRule {
         pattern: RefPattern::KeyValue("culture"),
         gate: Some(dir),
+        alt: &[],
     }
 }
 

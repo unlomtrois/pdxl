@@ -64,7 +64,9 @@ pub fn resolve_refs<'a>(
 ) -> Vec<RefDiag> {
     let mut diags = Vec::new();
     for r in refs {
-        if table.lookup(r.kind, &r.name).is_none() {
+        let resolved = table.lookup(r.kind, &r.name).is_some()
+            || r.alt.iter().any(|&k| table.lookup(k, &r.name).is_some());
+        if !resolved {
             diags.push(RefDiag {
                 file: r.file.clone(),
                 start: r.start,

@@ -28,6 +28,7 @@ impl Entity for Traits {
             RefRule {
                 pattern: RefPattern::KeyValue("trait"),
                 gate: Some("history/characters/"),
+                alt: &[],
             },
         ],
         // CK3 traits expose group / group_equivalence names as valid refs.

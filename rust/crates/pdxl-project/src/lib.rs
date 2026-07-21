@@ -562,11 +562,13 @@ impl Project {
         let mut out = Vec::new();
         for key in &self.order {
             if let Some(f) = self.facts.get(&key.rel) {
-                out.extend(f.refs.iter().filter(|r| r.kind == kind && r.name == name));
+                let matches =
+                    |r: &&Ref| r.name == name && (r.kind == kind || r.alt.contains(&kind));
+                out.extend(f.refs.iter().filter(matches));
                 // Call-by-name references (scripted effect/trigger invocations)
                 // live outside `refs`; surface them too. They only exist for the
                 // scripted kinds, so the kind filter naturally scopes this.
-                out.extend(f.calls.iter().filter(|r| r.kind == kind && r.name == name));
+                out.extend(f.calls.iter().filter(matches));
             }
         }
         out

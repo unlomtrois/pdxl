@@ -11,17 +11,30 @@
 //! The person/tense field values are loc-key references (resolved in
 //! `loc.rs`, the LOC_KEY entity — ~6k refs, ~96% resolve; the ~190 misses
 //! are genuine dead loc references, almost all vanilla's own — the keys
-//! exist in no language). `custom_description`'s `text = X` is
-//! **not** a strict reference: 14% of corpus values are plain loc keys the
-//! engine falls back to, so a single-kind rule would flag valid script.
+//! exist in no language). `custom_description`'s `text = X` is a
+//! **multi-kind** reference (the first in the schema): corpus-measured 69%
+//! trigger_loc, 20% effect_loc, and a loc-key fallback (vanilla tutorials
+//! use plain loc keys there) — so the rule's primary kind is trigger_loc
+//! with `alt = [effect_loc, loc_key]`; only names in none of the three are
+//! diagnosed (240 corpus occurrences, all genuinely dead).
 
 use crate::kinds;
 use pdxl_analysis::context::ClauseKind;
 use pdxl_analysis::context::ScalarKind::LocKey;
 use pdxl_analysis::context::{Fallback, StructSpec, scalar};
-use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec};
+use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
+
+/// `custom_description(_no_bullet) = { text = X }` — X names a trigger-loc
+/// entry, an effect-loc entry, or (vanilla tutorials) a plain loc key.
+const fn custom_description_text(parent: &'static str) -> RefRule {
+    RefRule {
+        pattern: RefPattern::KeyValueUnder(parent, "text"),
+        gate: None,
+        alt: &[kinds::EFFECT_LOC, kinds::LOC_KEY],
+    }
+}
 
 pub(crate) const EFFECT_LOC_DIR: &str = "common/effect_localization/";
 pub(crate) const TRIGGER_LOC_DIR: &str = "common/trigger_localization/";
@@ -122,7 +135,10 @@ impl Entity for EffectLocalization {
                 dir_prefix: TRIGGER_LOC_DIR,
                 shape: DefShape::TopLevel,
             }),
-            refs: &[],
+            refs: &[
+                custom_description_text("custom_description"),
+                custom_description_text("custom_description_no_bullet"),
+            ],
             aliases: &[],
         },
     ];

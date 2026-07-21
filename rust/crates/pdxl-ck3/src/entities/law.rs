@@ -252,6 +252,7 @@ impl Entity for Law {
             RefRule {
                 pattern: RefPattern::KeyValue("default"),
                 gate: Some(LAWS_DIR),
+                alt: &[],
             },
             // An innovation's tooltip-only law unlock (corpus-validated: the
             // key never occurs in eras/ or anywhere else).
