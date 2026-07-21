@@ -647,6 +647,20 @@ fn extract_field_refs(
                     }
                 }
             }
+            // Block-keys form: key = { X = v … } — each field key is a ref.
+            KeyForm::BlockKeys if value.kind == NodeKind::Block => {
+                for item in tree.children(value_id) {
+                    if tree.node(item).kind != NodeKind::Field {
+                        continue;
+                    }
+                    let kids = tree.child_ids(item);
+                    if let Some(&key_id) = kids.first()
+                        && tree.node(key_id).kind == NodeKind::Scalar
+                    {
+                        append_ref(tree, rule.kind, rule.alt, key_id, path, schema, refs);
+                    }
+                }
+            }
             // Weighted form: key = { WEIGHT = id … } — numeric-keyed entries.
             KeyForm::Weighted if value.kind == NodeKind::Block => {
                 extract_weighted_refs(tree, rule.kind, rule.alt, value_id, path, schema, refs);

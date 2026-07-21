@@ -37,7 +37,9 @@
 {"name":"fearful_family","kind":"trait","file":"common/traits/f.txt","offset":108,"end_offset":108,"params":[]},
 {"name":"education_diplomacy","kind":"trait","file":"common/traits/f.txt","offset":201,"end_offset":201,"params":[]}
 ],
-"refs":[]
+"refs":[
+{"kind":"trait","name":"brave","file":"crates/pdxl-parity/testdata/facts_traits.txt","start":191,"end":196}
+]
 }
 {
 "version":1,

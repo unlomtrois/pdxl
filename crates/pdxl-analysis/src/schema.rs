@@ -106,6 +106,9 @@ pub enum RefPattern {
     KeyBlockField(&'static str, &'static str),
     /// `key = { X Y … }` — loose scalar items each resolve to the kind.
     KeyList(&'static str),
+    /// `key = { X = v Y = v … }` — the block's field *keys* each resolve to
+    /// the kind (CK3 trait `compatibility` maps trait names to values).
+    KeyBlockKeys(&'static str),
     /// `key = { WEIGHT = X … }` — numeric-keyed values resolve to the kind.
     KeyWeighted(&'static str),
     /// `prefix:X[.chain…]` — a self-identifying scope literal in ANY scalar
@@ -175,6 +178,8 @@ pub(crate) enum KeyForm {
     /// The named direct-child field of the value block carries the reference.
     BlockField(&'static str),
     List,
+    /// The block's field keys carry the references.
+    BlockKeys,
     Weighted,
 }
 
@@ -271,6 +276,7 @@ impl Schema {
                     RefPattern::KeyValueUnder(parent, k) => (k, KeyForm::ValueUnder(parent)),
                     RefPattern::KeyBlockField(k, field) => (k, KeyForm::BlockField(field)),
                     RefPattern::KeyList(k) => (k, KeyForm::List),
+                    RefPattern::KeyBlockKeys(k) => (k, KeyForm::BlockKeys),
                     RefPattern::KeyWeighted(k) => (k, KeyForm::Weighted),
                     RefPattern::ScopePrefix(prefix) => {
                         schema.scope_rules.push(ScopeRule {

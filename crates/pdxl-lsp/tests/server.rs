@@ -2206,3 +2206,49 @@ fn gui_text_and_tooltip_reference_loc_keys() {
     // Prose in raw_text is not a reference.
     assert!(server.definition(&uri, pos_of(src, "Just some")).is_none());
 }
+
+#[test]
+fn trait_body_completion_offers_fields_and_modifier_tags() {
+    let t = TempTree::new();
+    let src =
+        "brave = {\n\tcategory = personality\n\t\n\ttrack = {\n\t\t50 = {\n\t\t\t\n\t\t}\n\t}\n}\n";
+    t.write("common/traits/00.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/traits/00.txt");
+
+    // Body completion: documented fields plus modifier tags (Fallback::Modifier).
+    let items = server.completion(
+        &uri,
+        Position {
+            line: 2,
+            character: 1,
+        },
+    );
+    let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    for f in ["potential", "opposites", "inherit_chance", "tracks"] {
+        assert!(labels.contains(&f), "missing field `{f}`: {}", labels.len());
+    }
+    assert!(
+        labels.contains(&"monthly_prestige") || labels.contains(&"diplomacy"),
+        "modifier tags expected via Fallback::Modifier"
+    );
+
+    // Inside an XP level (`50 = { … }`), unknown keys are modifiers too.
+    let items = server.completion(
+        &uri,
+        Position {
+            line: 5,
+            character: 3,
+        },
+    );
+    assert!(
+        items
+            .iter()
+            .any(|i| i.label == "monthly_prestige" || i.label == "diplomacy"),
+        "XP-level bodies complete modifier tags"
+    );
+
+    // Hover on `category` documents the field.
+    let hover = hover_md(&server, &uri, pos_of(src, "category"));
+    assert!(hover.contains("trait field category"), "{hover}");
+}

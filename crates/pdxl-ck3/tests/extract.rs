@@ -1616,3 +1616,25 @@ fn custom_description_text_is_multi_kind() {
     );
     assert!(ref_names(&deep).is_empty());
 }
+
+#[test]
+fn trait_opposites_and_compatibility_refs() {
+    let d = extract(
+        "brave = {\n\
+         \tcategory = personality\n\
+         \topposites = { craven }\n\
+         \tcompatibility = { gluttonous = 20 drunkard = @pos_compat_low }\n\
+         }\ncraven = { }\ngluttonous = { }\ndrunkard = { }\n",
+        "common/traits/00.txt",
+    );
+    // opposites list items and compatibility block KEYS are trait refs.
+    assert_eq!(ref_names(&d), vec!["craven", "gluttonous", "drunkard"]);
+    assert!(d.refs.iter().all(|r| r.kind == pdxl_ck3::kinds::TRAIT));
+
+    // The same keys outside the traits dir mean nothing.
+    let elsewhere = extract(
+        "e = { opposites = { craven } compatibility = { x = 1 } }\n",
+        "events/x.txt",
+    );
+    assert!(ref_names(&elsewhere).is_empty());
+}
