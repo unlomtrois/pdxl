@@ -109,7 +109,7 @@ fn gather_facts(
             let full = entry.full_path.to_string_lossy().into_owned();
             let f = if entry.rel_path.ends_with(".yml") {
                 let src = std::fs::read(&entry.full_path)?;
-                loc_facts(&src, &entry.rel_path)
+                loc_facts(&src, &entry.rel_path, schema.loc_concept_kind())
             } else if entry.rel_path.ends_with(".gui") {
                 gui_defs_for(&entry.full_path, &entry.rel_path, schema)?
             } else {
@@ -309,7 +309,7 @@ fn gather_facts_parallel(
             let full = entry.full_path.to_string_lossy().into_owned();
             let f = if entry.rel_path.ends_with(".yml") {
                 let src = std::fs::read(&entry.full_path)?;
-                loc_facts(&src, &entry.rel_path)
+                loc_facts(&src, &entry.rel_path, schema.loc_concept_kind())
             } else if entry.rel_path.ends_with(".gui") {
                 gui_defs_for(&entry.full_path, &entry.rel_path, schema)?
             } else {
@@ -340,7 +340,7 @@ fn gather_facts_parallel(
 /// extension: those entries only exist when the FileSet was opted in via
 /// `set_localization_language`). Files without an `l_<lang>:` header yield
 /// empty facts.
-fn loc_facts(src: &[u8], rel_path: &str) -> FileFacts {
+fn loc_facts(src: &[u8], rel_path: &str, concept_kind: Option<KindId>) -> FileFacts {
     let mut facts = FileFacts::default();
     let Some(loc) = pdxl_loc::parse(src) else {
         return facts;
@@ -349,6 +349,9 @@ fn loc_facts(src: &[u8], rel_path: &str) -> FileFacts {
     // holds tens of thousands, and this is 73% of the corpus's symbols.
     let file: std::sync::Arc<str> = std::sync::Arc::from(rel_path);
     for e in loc.entries {
+        if let Some(kind) = concept_kind {
+            scan_concept_refs(&e.text, e.text_start, kind, &file, &mut facts.refs);
+        }
         facts.defs.push(pdxl_analysis::Symbol {
             name: e.key,
             kind: LOC_KEY,
@@ -359,6 +362,70 @@ fn loc_facts(src: &[u8], rel_path: &str) -> FileFacts {
         });
     }
     facts
+}
+
+/// Scans one localization value for game-concept encyclopedia links and pushes
+/// a [`pdxl_analysis::Ref`] for each. Two forms occur in the corpus:
+///
+/// - `[concept|E]` — a bare concept key (or alias) formatted as a link (the
+///   dominant form, ~47k in vanilla). The `|E` command is unambiguous: the
+///   value must be a concept, so an unresolved one is a broken link.
+/// - `[Concept('key', …)…]` — the explicit datafunction; its first quoted
+///   argument is the concept key.
+///
+/// Datafunction chains like `[GetPlayer.Custom('x')|E]` are skipped: only a
+/// bare identifier immediately followed by `|E]` counts as the first form.
+fn scan_concept_refs(
+    text: &str,
+    text_start: u32,
+    kind: KindId,
+    file: &std::sync::Arc<str>,
+    out: &mut Vec<pdxl_analysis::Ref>,
+) {
+    let b = text.as_bytes();
+    let is_ident = |c: u8| c.is_ascii_alphanumeric() || c == b'_';
+    let push = |lo: usize, hi: usize, out: &mut Vec<pdxl_analysis::Ref>| {
+        out.push(pdxl_analysis::Ref {
+            kind,
+            alt: &[],
+            name: text[lo..hi].to_string(),
+            file: file.clone(),
+            start: text_start + lo as u32,
+            end: text_start + hi as u32,
+        });
+    };
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] != b'[' {
+            i += 1;
+            continue;
+        }
+        let inner = i + 1;
+        // `[Concept('KEY'…` — the first quoted argument is the concept.
+        if b[inner..].starts_with(b"Concept('") {
+            let ks = inner + b"Concept('".len();
+            let mut ke = ks;
+            while ke < b.len() && is_ident(b[ke]) {
+                ke += 1;
+            }
+            if ke > ks && ke < b.len() && b[ke] == b'\'' {
+                push(ks, ke, out);
+            }
+            i = ke;
+            continue;
+        }
+        // `[concept|E]` — a bare identifier terminated by the `|E]` command.
+        let mut j = inner;
+        while j < b.len() && is_ident(b[j]) {
+            j += 1;
+        }
+        if j > inner && b[j..].starts_with(b"|E]") {
+            push(inner, j, out);
+            i = j + 3;
+        } else {
+            i = inner;
+        }
+    }
 }
 
 /// Returns the syntax tree for a file: a cache hit when possible, otherwise a
@@ -482,7 +549,7 @@ impl Project {
 
     fn replace_facts(&mut self, key: &FileKey, src: Vec<u8>) {
         let facts = if key.rel.ends_with(".yml") {
-            loc_facts(&src, &key.rel)
+            loc_facts(&src, &key.rel, self.schema.loc_concept_kind())
         } else if key.rel.ends_with(".gui") {
             // Defs from the edited buffer, then name-gated refs against the
             // project-wide template/type sets (rebuilt from all facts so a
@@ -598,4 +665,44 @@ impl Project {
 fn abs_clean(path: &Path) -> Option<String> {
     let abs = std::path::absolute(path).ok()?;
     Some(pdxl_path::clean(&abs.to_string_lossy()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn concept_refs(text: &str) -> Vec<(String, u32, u32)> {
+        let kind = KindId::new("game_concept");
+        let file: std::sync::Arc<str> = std::sync::Arc::from("x_l_english.yml");
+        let mut out = Vec::new();
+        scan_concept_refs(text, 0, kind, &file, &mut out);
+        out.into_iter().map(|r| (r.name, r.start, r.end)).collect()
+    }
+
+    #[test]
+    fn scans_bare_encyclopedia_links() {
+        // Bare `[concept|E]` links; the range covers exactly the identifier.
+        let refs = concept_refs("Your [ruler|E] and [T4N_kayo|E] await.");
+        assert_eq!(
+            refs,
+            vec![("ruler".into(), 6, 11), ("T4N_kayo".into(), 20, 28)]
+        );
+        assert_eq!(&"Your [ruler|E] and [T4N_kayo|E] await."[6..11], "ruler");
+    }
+
+    #[test]
+    fn scans_explicit_concept_datafunction() {
+        // `[Concept('key','display')|E]` — the first quoted arg is the concept.
+        let refs = concept_refs("[Concept('liege','Lieges')|E]");
+        assert_eq!(refs, vec![("liege".into(), 10, 15)]);
+    }
+
+    #[test]
+    fn skips_datafunction_chains_and_plain_text() {
+        // A datafunction chain formatted with |E is not a bare concept key.
+        assert!(concept_refs("[GetPlayer.Custom('x')|E] pays [ROOT.GetName]").is_empty());
+        // Brackets that are not `|E`-terminated links are ignored.
+        assert!(concept_refs("gold [prestige] and #bold text#!").is_empty());
+        assert!(concept_refs("no markup at all").is_empty());
+    }
 }

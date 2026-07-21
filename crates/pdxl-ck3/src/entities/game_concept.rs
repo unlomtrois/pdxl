@@ -12,9 +12,17 @@
 //! game_concepts directory and matched at depth 1 ([`RefPattern::KeyValueTop`]),
 //! since `parent` is a common key elsewhere (gui, culture eras).
 //!
-//! Not modeled as refs: loc-layer `Concept('X')` / `#L_X` markup (61 in
-//! vanilla) — that belongs to the localization datafunction scanner, still
-//! deferred (see BACKLOG), the same machinery `Custom('X')` needs.
+//! Localization references: concepts are linked from loc text far more than
+//! from script. Two forms are scanned in `pdxl_project::loc_facts` (wired via
+//! `Schema::loc_concept_kind`): the bare `[concept|E]` encyclopedia link
+//! (~47k in vanilla) and the explicit `[Concept('key', …)]` datafunction. `|E`
+//! is an unambiguous concept-link command, so an unresolved one is a broken
+//! link — corpus-validated at 10 unresolved across every language: vanilla's
+//! own German/Japanese placeholder links (`intrigue_lqwuljxh`, encoded
+//! debug entries) and a handful of removed concepts (`calamities`, `vigor`,
+//! `head_determination`) plus T4N typos — all genuine dangling links.
+//! Datafunction chains (`[GetPlayer.Custom('x')|E]`) are deliberately skipped:
+//! only a bare identifier immediately before `|E]` counts.
 //!
 //! The body is a closed, fully-enumerated struct (only these seven keys occur
 //! corpus-wide), so the fallback denies unknown keys.

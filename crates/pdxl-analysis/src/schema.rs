@@ -229,11 +229,17 @@ pub struct Schema {
     /// Which kinds interface-script (`.gui`) symbols get. `None` disables
     /// `.gui` analysis.
     gui_kinds: Option<GuiKinds>,
+    /// The kind that bare `[concept|E]` encyclopedia links in localization text
+    /// resolve to (CK3: game concepts). `None` disables loc-layer concept refs.
+    loc_concept_kind: Option<KindId>,
 }
 
 impl Schema {
     /// Compiles kind rows (plus game-wide scope keywords, which belong to no
     /// single kind) into the lookup indices the extraction engine uses.
+    // The trailing params are all optional game-binding hooks (call/gui/loc
+    // conventions); if a fourth arrives, bundle them into a `GameHooks` struct.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         specs: &[KindSpec],
         scope_keywords: &[&'static str],
@@ -242,6 +248,7 @@ impl Schema {
         doc_ref_aliases: &[(&'static str, KindId)],
         call_kinds: Option<CallKinds>,
         gui_kinds: Option<GuiKinds>,
+        loc_concept_kind: Option<KindId>,
     ) -> Schema {
         let mut schema = Schema {
             scope_keywords: scope_keywords.iter().copied().collect(),
@@ -250,6 +257,7 @@ impl Schema {
             by_alias: doc_ref_aliases.iter().copied().collect(),
             call_kinds,
             gui_kinds,
+            loc_concept_kind,
             ..Schema::default()
         };
         for spec in specs {
@@ -397,6 +405,11 @@ impl Schema {
     /// The interface-script symbol kinds, when the game declares them.
     pub fn gui_kinds(&self) -> Option<GuiKinds> {
         self.gui_kinds
+    }
+
+    /// The kind that `[concept|E]` localization links resolve to, if any.
+    pub fn loc_concept_kind(&self) -> Option<KindId> {
+        self.loc_concept_kind
     }
 
     pub(crate) fn key_rules(&self, key: &str) -> Option<&[KeyRule]> {

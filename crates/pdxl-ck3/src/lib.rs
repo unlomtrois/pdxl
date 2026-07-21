@@ -127,5 +127,6 @@ pub fn schema() -> Schema {
         DOC_REF_ALIASES,
         Some(CALL_KINDS),
         Some(GUI_KINDS),
+        Some(kinds::GAME_CONCEPT),
     )
 }

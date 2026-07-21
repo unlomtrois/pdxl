@@ -1629,6 +1629,37 @@ fn loc_key_goto_definition_and_hover_text() {
 }
 
 #[test]
+fn loc_concept_link_goto_definition() {
+    let t = TempTree::new();
+    // A concept def + an alias, and a loc line that links both an alias and a
+    // canonical concept via the `|E` encyclopedia command.
+    t.write(
+        "common/game_concepts/00.txt",
+        "vassal = { alias = { vassals } }\nruler = { }\n",
+    );
+    let yml = "\u{feff}l_english:\n k: \"A [ruler|E] and their [vassals|E].\"\n";
+    t.write("localization/english/c_l_english.yml", yml);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "localization/english/c_l_english.yml");
+
+    // Jump from the canonical link → the concept definition.
+    let loc = server
+        .definition(&uri, pos_of(yml, "ruler|E"))
+        .expect("definition on [ruler|E]");
+    assert!(
+        loc.uri.path().ends_with("common/game_concepts/00.txt"),
+        "target: {}",
+        loc.uri
+    );
+
+    // The alias link resolves too (to the owning `vassal` concept).
+    let loc = server
+        .definition(&uri, pos_of(yml, "vassals|E"))
+        .expect("definition on [vassals|E]");
+    assert!(loc.uri.path().ends_with("common/game_concepts/00.txt"));
+}
+
+#[test]
 fn inlay_hints_show_loc_text_for_resolved_keys() {
     let t = TempTree::new();
     let long_text = "A common soldier offers a correction to the officers' maneuver. It contradicts the drill manuals.";

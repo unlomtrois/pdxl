@@ -34,6 +34,9 @@ pub struct LocEntry {
     pub key_end: u32,
     /// The text between the outermost quotes, verbatim.
     pub text: String,
+    /// Byte offset of the text's first byte (just past the opening quote), so
+    /// scanners over `text` can map local indices back to file offsets.
+    pub text_start: u32,
 }
 
 const UTF8_BOM: &[u8] = &[0xEF, 0xBB, 0xBF];
@@ -95,11 +98,15 @@ pub fn parse(src: &[u8]) -> Option<LocFile> {
         };
 
         let key_start = line_start + indent;
+        // `open` indexes into `trimmed`, whose left edge sits `indent` bytes
+        // into the line; the first text byte is one past the opening quote.
+        let text_start = line_start + indent + open as u32 + 1;
         entries.push(LocEntry {
             key: key.to_string(),
             key_start,
             key_end: key_start + key.len() as u32,
             text: value.to_string(),
+            text_start,
         });
     }
 
@@ -143,6 +150,18 @@ mod tests {
             &bom.as_bytes()[e.key_start as usize..e.key_end as usize],
             b"my.key"
         );
+    }
+
+    #[test]
+    fn text_start_points_past_the_opening_quote() {
+        let src = "l_english:\n my.key: \"[ruler|E]\"\n";
+        let f = parse(src.as_bytes()).unwrap();
+        let e = &f.entries[0];
+        assert_eq!(
+            &src.as_bytes()[e.text_start as usize..e.text_start as usize + e.text.len()],
+            e.text.as_bytes()
+        );
+        assert_eq!(&src.as_bytes()[e.text_start as usize..][..1], b"[");
     }
 
     #[test]
