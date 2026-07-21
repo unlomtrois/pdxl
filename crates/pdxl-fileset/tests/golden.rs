@@ -288,12 +288,15 @@ fn fileset_scan_scenarios() {
             .dump(),
     );
 
-    // --- normalization: mixed case, nested, non-ASCII, case collision ---
+    // --- normalization: mixed case, nested, non-ASCII ---
+    // (Case *collision* — two paths that differ only in case — is covered by
+    // the `case_collision_later_wins` unit test, not here: on a
+    // case-insensitive filesystem, e.g. macOS APFS, `A.txt` and `a.txt` are one
+    // physical file whose on-disk name keeps the first case, so the dumped
+    // `full_path` is platform-dependent and can't be a portable golden.)
     let nm = TempTree::new();
     nm.write("Common/Traits/Noble.txt", "");
     nm.write("café/Ω.txt", ""); // accented Latin + Greek (simple==full lower)
-    nm.write("A.txt", "first");
-    nm.write("a.txt", "second"); // collides with A.txt after lowercase
     check_golden(
         "normalization",
         &Scan::new()
