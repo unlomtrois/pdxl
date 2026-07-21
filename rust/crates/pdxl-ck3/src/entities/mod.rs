@@ -33,6 +33,7 @@ mod culture_misc;
 mod culture_pillar;
 mod culture_shared;
 mod culture_tradition;
+mod custom_loc;
 mod death_reason;
 mod decision;
 mod dynasty;
@@ -110,6 +111,7 @@ registry!(
     dynasty::Dynasty,
     nickname::Nickname,
     death_reason::DeathReason,
+    custom_loc::CustomLoc,
     gui::Gui,
     culture_pillar::CulturePillar,
     culture_tradition::CultureTradition,

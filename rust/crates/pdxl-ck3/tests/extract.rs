@@ -1470,3 +1470,37 @@ fn realm_law_references_and_gated_default() {
     let f = extract("d = { default = something }\n", "common/decisions/d.txt");
     assert!(f.refs.iter().all(|r| r.kind != pdxl_ck3::kinds::LAW));
 }
+
+#[test]
+fn custom_loc_defs_and_parent_ref() {
+    let d = extract(
+        "RandomElephantName = {\n\
+         \ttype = character\n\
+         \trandom_valid = yes\n\
+         \ttext = { localization_key = elephant_name_mahmud }\n\
+         }\n\
+         ElephantNameVariant = {\n\
+         \tparent = RandomElephantName\n\
+         \tsuffix = \"_FR_Le\"\n\
+         }\n",
+        "common/customizable_localization/00.txt",
+    );
+    assert_eq!(
+        def_names(&d),
+        vec!["RandomElephantName", "ElephantNameVariant"]
+    );
+    assert!(d.defs.iter().all(|s| s.kind == pdxl_ck3::kinds::CUSTOM_LOC));
+    // The variant's `parent` references the parent custom loc …
+    assert_eq!(ref_names(&d), vec!["RandomElephantName"]);
+    assert_eq!(d.refs[0].kind, pdxl_ck3::kinds::CUSTOM_LOC);
+    // … and `localization_key` is deliberately NOT a ref (multi-language keys).
+
+    // `parent` nested deeper, or outside the dir, means nothing.
+    let deep = extract(
+        "x = { text = { trigger = { parent = RandomElephantName } } }\n",
+        "common/customizable_localization/00.txt",
+    );
+    assert!(ref_names(&deep).is_empty());
+    let elsewhere = extract("e = { parent = RandomElephantName }\n", "events/x.txt");
+    assert!(ref_names(&elsewhere).is_empty());
+}
