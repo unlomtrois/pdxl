@@ -24,6 +24,7 @@ use pdxl_analysis::{CallKinds, GuiKinds, KindId, Schema};
 mod entities;
 
 pub mod contexts;
+pub mod coverage;
 pub mod kinds;
 pub mod tables;
 

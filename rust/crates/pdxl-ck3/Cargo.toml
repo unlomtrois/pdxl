@@ -9,11 +9,12 @@ description = "CK3 rules for pdxl-analysis: definition directories, reference ke
 
 [dependencies]
 pdxl-analysis.workspace = true
+pdxl-ast.workspace = true
 pdxl-gui.workspace = true
+pdxl-parser.workspace = true
 
 [dev-dependencies]
-pdxl-ast.workspace = true
-pdxl-parser.workspace = true
+pdxl-testutil.workspace = true
 
 [lints.rust]
 unsafe_code = "forbid"
