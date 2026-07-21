@@ -38,6 +38,7 @@ mod custom_loc;
 mod death_reason;
 mod decision;
 mod dynasty;
+mod effect_localization;
 mod event;
 mod event_background;
 mod event_theme;
@@ -114,6 +115,7 @@ registry!(
     death_reason::DeathReason,
     custom_loc::CustomLoc,
     building::Building,
+    effect_localization::EffectLocalization,
     gui::Gui,
     culture_pillar::CulturePillar,
     culture_tradition::CultureTradition,

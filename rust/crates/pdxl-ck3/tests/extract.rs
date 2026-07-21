@@ -1557,3 +1557,36 @@ fn building_defs_and_refs() {
     let elsewhere = extract("e = { buildings = { castle_01 } }\n", "events/x.txt");
     assert!(ref_names(&elsewhere).is_empty());
 }
+
+#[test]
+fn effect_and_trigger_localization_defs_and_loc_refs() {
+    let e = extract(
+        "accept_activity_invite = {\n\
+         \tfirst = I_ACCEPT_THE_INVITATION\n\
+         \tthird_past = CHARACTER_ACCEPTED\n\
+         \tglobal_neg = GLOBAL_LOST\n\
+         }\n",
+        "common/effect_localization/00.txt",
+    );
+    assert_eq!(e.defs[0].kind, pdxl_ck3::kinds::EFFECT_LOC);
+    assert_eq!(
+        ref_names(&e),
+        vec![
+            "I_ACCEPT_THE_INVITATION",
+            "CHARACTER_ACCEPTED",
+            "GLOBAL_LOST"
+        ]
+    );
+    assert!(e.refs.iter().all(|r| r.kind == pdxl_analysis::LOC_KEY));
+
+    let t = extract(
+        "is_adult = { first_not = I_AM_NOT_ADULT }\n",
+        "common/trigger_localization/00.txt",
+    );
+    assert_eq!(t.defs[0].kind, pdxl_ck3::kinds::TRIGGER_LOC);
+    assert_eq!(ref_names(&t), vec!["I_AM_NOT_ADULT"]);
+
+    // The same keys elsewhere mean nothing (`first` etc. are generic words).
+    let elsewhere = extract("e = { first = X global = Y }\n", "events/x.txt");
+    assert!(ref_names(&elsewhere).is_empty());
+}

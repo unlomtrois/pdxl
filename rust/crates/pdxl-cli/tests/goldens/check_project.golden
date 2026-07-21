@@ -35,6 +35,8 @@ nickname                0
 death_reason            0
 custom_loc              0
 building                0
+effect_loc              0
+trigger_loc             0
 gui_template            0
 gui_type                0
 culture_pillar          0
