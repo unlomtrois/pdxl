@@ -741,10 +741,7 @@ impl ServerState {
                 };
                 return Some((full, offset_to_position(src, target).line + 1));
             }
-            match name[..end].rfind('.') {
-                Some(dot) => end = dot,
-                None => return None,
-            }
+            end = name[..end].rfind('.')?;
         }
     }
 
