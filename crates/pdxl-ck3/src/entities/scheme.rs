@@ -4,6 +4,18 @@
 //! A scheme's key is its type id (`elope`, `murder`, …); it is referenced as
 //! `scheme_type = X`, `start_scheme = { type = X }`, and the bare `scheme = X`
 //! trigger idiom.
+//!
+//! The `_schemes.info` warns it "does not currently include all possible
+//! parameters"; the body here is reconciled against the live corpus (82
+//! scheme types across game + T4N). Fields present in the corpus but absent
+//! from the info: `on_start`, `phases_per_agent_charge`, `discovery_desc`,
+//! `base_maximum_success` (the info's `base_maximum_success_chance` is not
+//! used), `starting_agent_slots`. Enum values are corpus-derived too —
+//! `category` gained `political` beyond the info's personal/contract/hostile.
+//!
+//! Sibling dirs `common/schemes/{pulse_actions,agent_types,scheme_countermeasures}/`
+//! are their own kinds (not modeled yet); modeling `pulse_actions` would turn
+//! this body's `pulse_actions.entries` list into references.
 
 use crate::kinds;
 use pdxl_analysis::context::ClauseKind::{
@@ -15,6 +27,12 @@ use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern};
 
 use super::Entity;
 use super::common::{DURATION, OPAQUE, anywhere};
+use pdxl_analysis::context::FieldSpec;
+
+/// A `yes`/`no` toggle field.
+const fn toggle(doc: &'static str) -> FieldSpec {
+    scalar(Setting).doc(doc).values(&["yes", "no"])
+}
 
 /// `pulse_actions = { entries = { a b } chance_of_no_event = 0 }`.
 static PULSE_ACTIONS: StructSpec = StructSpec {
@@ -35,25 +53,35 @@ static SCHEME: StructSpec = StructSpec {
     fields: &[
         (
             "skill",
-            scalar(Setting).doc("What skill to base scheme speed on."),
+            scalar(Setting)
+                .doc("What skill to base scheme speed on.")
+                .values(&[
+                    "diplomacy",
+                    "martial",
+                    "stewardship",
+                    "intrigue",
+                    "learning",
+                    "prowess",
+                ]),
         ),
         (
             "category",
-            scalar(Setting).doc(
-                "Scheme category: personal / contract / hostile. Hostile schemes use \
-                 hostile_scheme_resistance/speed; personal & contract use personal_scheme_*.",
-            ),
+            scalar(Setting)
+                .doc(
+                    "Scheme category. Hostile schemes use hostile_scheme_resistance/speed; \
+                     personal & contract use personal_scheme_*.",
+                )
+                .values(&["personal", "contract", "hostile", "political"]),
         ),
         (
             "target_type",
-            scalar(Setting).doc(
-                "The type of scope the scheme targets: character / title / culture / faith / \
-                 nothing.",
-            ),
+            scalar(Setting)
+                .doc("The type of scope the scheme targets.")
+                .values(&["character", "title", "culture", "faith", "nothing"]),
         ),
         (
             "hostile",
-            scalar(Setting).doc("(Deprecated) marks the scheme hostile. Prefer category."),
+            toggle("(Deprecated) marks the scheme hostile. Prefer category."),
         ),
         (
             "icon",
@@ -65,6 +93,7 @@ static SCHEME: StructSpec = StructSpec {
         ),
         ("desc", scalar_or_block(LocKey, DynamicDesc)),
         ("success_desc", scalar_or_block(LocKey, DynamicDesc)),
+        ("discovery_desc", scalar_or_block(LocKey, DynamicDesc)),
         (
             "allow",
             block_scoped(Trigger, "character")
@@ -86,15 +115,25 @@ static SCHEME: StructSpec = StructSpec {
             scalar(Setting).doc("If AI desire falls below this, the agent auto-leaves."),
         ),
         (
+            "phases_per_agent_charge",
+            scalar(Setting)
+                .doc("How many scheme phases each agent charge lasts. (Corpus field, not in the info docs.)"),
+        ),
+        (
+            "starting_agent_slots",
+            scalar(Setting)
+                .doc("Number of agent slots the scheme starts with. (Corpus field, not in the info docs.)"),
+        ),
+        (
             "uses_resistance",
-            scalar(Setting).doc(
+            toggle(
                 "If no, the target's modifiers/skill/spymaster/tier are ignored when computing \
                  phase speed.",
             ),
         ),
         (
             "is_basic",
-            scalar(Setting).doc(
+            toggle(
                 "A basic scheme has no success-chance growth per phase, no agents, and no \
                  opportunities.",
             ),
@@ -144,6 +183,9 @@ static SCHEME: StructSpec = StructSpec {
             ),
         ),
         ("base_maximum_success_chance", scalar(Setting)),
+        // The live corpus uses the shorter `base_maximum_success` (82×); keep
+        // both so either spelling completes.
+        ("base_maximum_success", scalar(Setting)),
         ("minimum_success", scalar(Setting)),
         ("maximum_secrecy", scalar(Setting)),
         ("minimum_secrecy", scalar(Setting)),
@@ -162,8 +204,7 @@ static SCHEME: StructSpec = StructSpec {
         ),
         (
             "is_secret",
-            scalar(Setting)
-                .doc("If yes, secrecy mechanics apply; otherwise secrecy is always 100%."),
+            toggle("If yes, secrecy mechanics apply; otherwise secrecy is always 100%."),
         ),
         (
             "use_secrecy",
@@ -177,6 +218,11 @@ static SCHEME: StructSpec = StructSpec {
                 "Base for the monthly expose check: base_secrecy + success_chance + modifiers, \
                  clamped 0-100.",
             ),
+        ),
+        (
+            "on_start",
+            block(Effect)
+                .doc("Runs when the scheme starts. (Corpus hook, not in the info docs.)"),
         ),
         (
             "on_phase_completed",
@@ -198,13 +244,13 @@ static SCHEME: StructSpec = StructSpec {
             "on_invalidated",
             block(Effect).doc("Runs if the scheme invalidates (see valid)."),
         ),
-        ("freeze_scheme_when_traveling", scalar(Setting)),
-        ("freeze_scheme_when_traveling_target", scalar(Setting)),
-        ("cancel_scheme_when_traveling", scalar(Setting)),
-        ("cancel_scheme_when_traveling_target", scalar(Setting)),
+        ("freeze_scheme_when_traveling", toggle("Freeze the scheme when the schemer starts traveling.")),
+        ("freeze_scheme_when_traveling_target", toggle("Freeze the scheme when the scheme target starts traveling.")),
+        ("cancel_scheme_when_traveling", toggle("Cancel the scheme when the schemer starts traveling.")),
+        ("cancel_scheme_when_traveling_target", toggle("Cancel the scheme when the scheme target starts traveling.")),
         (
             "hide_target_name",
-            scalar(Setting).doc("Whether to hide the target when showing the scheme name."),
+            toggle("Whether to hide the target when showing the scheme name."),
         ),
         ("speed_per_skill_point", scalar(Setting)),
         ("speed_per_target_skill_point", scalar(Setting)),

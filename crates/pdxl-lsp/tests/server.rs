@@ -1705,6 +1705,50 @@ fn situation_body_completion_hover_and_effect_context() {
 }
 
 #[test]
+fn scheme_body_offers_corpus_fields_and_enum_values() {
+    let t = TempTree::new();
+    // Body completion includes the corpus-only fields the .info omits.
+    let src = "murder = {\n\t\n}\n";
+    t.write("common/schemes/scheme_types/00.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/schemes/scheme_types/00.txt");
+    let labels: Vec<String> = server
+        .completion(&uri, pos_after(src, "murder = {\n\t"))
+        .iter()
+        .map(|i| i.label.clone())
+        .collect();
+    for f in [
+        "on_start",
+        "discovery_desc",
+        "phases_per_agent_charge",
+        "starting_agent_slots",
+    ] {
+        assert!(
+            labels.iter().any(|l| l == f),
+            "missing scheme field `{f}`: {labels:?}"
+        );
+    }
+
+    // `category = ` value completion offers the enum, including the newer
+    // `political` category found in the corpus.
+    let vsrc = "murder = {\n\tcategory = \n}\n";
+    t.write("common/schemes/scheme_types/01.txt", vsrc);
+    let (server, _rx) = server_over(&t);
+    let vuri = uri_for(&t, "common/schemes/scheme_types/01.txt");
+    let vlabels: Vec<String> = server
+        .completion(&vuri, pos_after(vsrc, "category = "))
+        .iter()
+        .map(|i| i.label.clone())
+        .collect();
+    for v in ["personal", "contract", "hostile", "political"] {
+        assert!(
+            vlabels.iter().any(|l| l == v),
+            "category values missing `{v}`: {vlabels:?}"
+        );
+    }
+}
+
+#[test]
 fn inlay_hints_show_loc_text_for_resolved_keys() {
     let t = TempTree::new();
     let long_text = "A common soldier offers a correction to the officers' maneuver. It contradicts the drill manuals.";
