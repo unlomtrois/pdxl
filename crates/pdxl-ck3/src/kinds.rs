@@ -57,3 +57,6 @@ pub const AESTHETICS_BUNDLE: KindId = KindId::new("aesthetics_bundle");
 pub const CULTURE_CREATION_NAME: KindId = KindId::new("culture_creation_name");
 pub const NAME_EQUIVALENCY: KindId = KindId::new("name_equivalency");
 pub const GAME_CONCEPT: KindId = KindId::new("game_concept");
+pub const SITUATION_TYPE: KindId = KindId::new("situation_type");
+pub const CATALYST: KindId = KindId::new("catalyst");
+pub const SITUATION_GROUP_TYPE: KindId = KindId::new("situation_group_type");

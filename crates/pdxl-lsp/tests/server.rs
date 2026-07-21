@@ -1660,6 +1660,51 @@ fn loc_concept_link_goto_definition() {
 }
 
 #[test]
+fn situation_body_completion_hover_and_effect_context() {
+    let t = TempTree::new();
+    let src = "dynastic_cycle = {\n\twindow = dynastic_cycle\n\t\n\ton_start = {\n\t\t\n\t}\n}\n";
+    t.write("common/situation/situations/00.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/situation/situations/00.txt");
+
+    // Body completion offers documented situation fields.
+    let items = server.completion(
+        &uri,
+        Position {
+            line: 2,
+            character: 1,
+        },
+    );
+    let labels: Vec<&str> = items.iter().map(|i| i.label.as_str()).collect();
+    for f in [
+        "phases",
+        "participant_groups",
+        "is_unique",
+        "situation_group_type",
+    ] {
+        assert!(labels.contains(&f), "missing field `{f}`: {labels:?}");
+    }
+
+    // Inside `on_start = { … }` the context is Effect, so effects complete.
+    let eff = server.completion(
+        &uri,
+        Position {
+            line: 4,
+            character: 2,
+        },
+    );
+    assert!(
+        eff.iter()
+            .any(|i| i.label == "add_gold" || i.label == "trigger_event"),
+        "on_start body should complete effects"
+    );
+
+    // Hover on the `window` enum field documents it.
+    let hover = hover_md(&server, &uri, pos_of(src, "window = "));
+    assert!(hover.contains("situation_type field window"), "{hover}");
+}
+
+#[test]
 fn inlay_hints_show_loc_text_for_resolved_keys() {
     let t = TempTree::new();
     let long_text = "A common soldier offers a correction to the officers' maneuver. It contradicts the drill manuals.";

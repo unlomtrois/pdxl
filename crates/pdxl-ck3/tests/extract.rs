@@ -1679,3 +1679,63 @@ fn trait_opposites_and_compatibility_refs() {
     );
     assert!(ref_names(&elsewhere).is_empty());
 }
+
+#[test]
+fn situation_scope_and_type_refs() {
+    // `situation:X` scope literal and `situation_type = X` both resolve to a
+    // situation_type, anywhere.
+    let f = extract(
+        "e = {\n\
+         \tsituation_type = dynastic_cycle\n\
+         \tif = { limit = { situation:silk_road_situation = { is_unique = yes } } }\n\
+         }\n",
+        "events/x.txt",
+    );
+    assert_eq!(ref_names(&f), vec!["dynastic_cycle", "silk_road_situation"]);
+    assert!(
+        f.refs
+            .iter()
+            .all(|r| r.kind == pdxl_ck3::kinds::SITUATION_TYPE)
+    );
+}
+
+#[test]
+fn situation_group_type_ref_is_gated() {
+    let f = extract(
+        "dynastic_cycle = {\n\tsituation_group_type = major\n}\n",
+        "common/situation/situations/00.txt",
+    );
+    assert_eq!(ref_names(&f), vec!["major"]);
+    assert_eq!(f.refs[0].kind, pdxl_ck3::kinds::SITUATION_GROUP_TYPE);
+
+    // `situation_group_type` outside the situations dir is not a ref.
+    let elsewhere = extract("e = { situation_group_type = major }\n", "events/x.txt");
+    assert!(ref_names(&elsewhere).is_empty());
+}
+
+#[test]
+fn catalyst_refs_gated_and_struggle_excluded() {
+    // Block keys inside a situation's future_phases catalysts map (gated dir).
+    let sit = extract(
+        "dynastic_cycle = {\n\
+         \tphases = { p = { future_phases = { q = {\n\
+         \t\tcatalysts = { catalyst_gain = 25 catalyst_loss = 30 }\n\
+         \t} } } }\n\
+         }\n",
+        "common/situation/situations/00.txt",
+    );
+    assert_eq!(ref_names(&sit), vec!["catalyst_gain", "catalyst_loss"]);
+    assert!(sit.refs.iter().all(|r| r.kind == pdxl_ck3::kinds::CATALYST));
+
+    // `catalyst = X` inside a situation-catalyst effect resolves; the same
+    // field inside `activate_struggle_catalyst` does NOT (separate database).
+    let eff = extract(
+        "e = {\n\
+         \ttrigger_situation_catalyst = { catalyst = catalyst_gain character = scope:x }\n\
+         \tactivate_struggle_catalyst = { catalyst = struggle_only_catalyst }\n\
+         }\n",
+        "events/x.txt",
+    );
+    assert_eq!(ref_names(&eff), vec!["catalyst_gain"]);
+    assert_eq!(eff.refs[0].kind, pdxl_ck3::kinds::CATALYST);
+}

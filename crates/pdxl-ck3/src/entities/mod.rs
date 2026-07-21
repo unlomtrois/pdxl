@@ -57,6 +57,7 @@ mod scheme;
 mod scripted;
 mod scripted_gui;
 mod secret_type;
+mod situation;
 mod title;
 mod traits;
 
@@ -127,5 +128,6 @@ registry!(
     name_list::NameList,
     culture_misc::CultureMisc,
     game_concept::GameConcept,
+    situation::Situation,
     loc::Loc,
 );
