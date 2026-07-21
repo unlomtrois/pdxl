@@ -104,6 +104,9 @@ const GUI_KINDS: GuiKinds = GuiKinds {
         ("GetCultureByKey", kinds::CULTURE),
         ("GetFaithByKey", kinds::FAITH),
     ],
+    // `raw_text`/`raw_tooltip` are deliberately absent: 95% of their
+    // identifier-like corpus values are literal prose, not loc keys.
+    loc_fields: &["text", "tooltip"],
 };
 
 /// The compiled datafunction registry (gui `[…]` expression typing), built

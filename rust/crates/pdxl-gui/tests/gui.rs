@@ -10,6 +10,7 @@ const KINDS: GuiKinds = GuiKinds {
     template: TEMPLATE,
     ty: TYPE,
     arg_refs: &[("GetScriptedGui", SGUI)],
+    loc_fields: &["text", "tooltip"],
 };
 
 const SRC: &str = r#"
@@ -85,13 +86,15 @@ fn refs_using_and_instantiations_name_gated() {
     let parsed = parse("gui/test.gui", SRC.as_bytes().to_vec());
     let refs = gui_refs(parsed.tree(), "gui/test.gui", &names, KINDS);
     let got: Vec<(&str, KindId)> = refs.iter().map(|r| (r.name.as_str(), r.kind)).collect();
-    // Two `using = MyHeader`, plus the `my_marker`/`my_button` instantiations.
+    // The template's `text = "SOME_LOC_KEY"` is a loc-key ref, then two
+    // `using = MyHeader` plus the `my_marker`/`my_button` instantiations.
     // The `type … = widget/button_std` bases and `window`/`inner`/`size`
     // fields are not defined names, so they are silently skipped — and the
     // definition fields themselves never self-reference.
     assert_eq!(
         got,
         vec![
+            ("SOME_LOC_KEY", pdxl_analysis::LOC_KEY),
             ("MyHeader", TEMPLATE),
             ("my_marker", TYPE),
             ("MyHeader", TEMPLATE),

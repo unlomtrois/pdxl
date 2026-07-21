@@ -2165,3 +2165,44 @@ fn decision_definition_from_gui_datafn_arg() {
             .ends_with("common/decisions/rice.txt")
     );
 }
+
+#[test]
+fn gui_text_and_tooltip_reference_loc_keys() {
+    let t = TempTree::new();
+    t.write(
+        "localization/english/rice_l_english.yml",
+        "l_english:\n T4N_RICE_SELL_BUTTON:0 \"Sell rice\"\n T4N_sell_rice_decision_tooltip:0 \"Sells rice\"\n",
+    );
+    let src = "button_standard = {\n\
+         \ttext = \"T4N_RICE_SELL_BUTTON\"\n\
+         \ttooltip = \"T4N_sell_rice_decision_tooltip\"\n\
+         \traw_text = \"Just some words\"\n\
+         }\n";
+    t.write("gui/window_x.gui", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "gui/window_x.gui");
+
+    let loc = server
+        .definition(&uri, pos_of(src, "T4N_RICE_SELL_BUTTON"))
+        .expect("loc key definition from gui text property");
+    assert!(
+        loc.uri
+            .to_file_path()
+            .unwrap()
+            .ends_with("rice_l_english.yml")
+    );
+    let loc = server
+        .definition(&uri, pos_of(src, "T4N_sell_rice_decision_tooltip"))
+        .expect("loc key definition from gui tooltip property");
+    assert!(
+        loc.uri
+            .to_file_path()
+            .unwrap()
+            .ends_with("rice_l_english.yml")
+    );
+    // Hover shows the localized text.
+    let hover = hover_md(&server, &uri, pos_of(src, "T4N_RICE_SELL_BUTTON"));
+    assert!(hover.contains("Sell rice"), "{hover}");
+    // Prose in raw_text is not a reference.
+    assert!(server.definition(&uri, pos_of(src, "Just some")).is_none());
+}

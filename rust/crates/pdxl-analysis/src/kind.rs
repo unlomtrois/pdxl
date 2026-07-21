@@ -54,4 +54,9 @@ pub struct GuiKinds {
     /// kind (`GetScriptedGui('x')`, `ScriptValue('v')`, `Custom('k')`).
     /// Extracted as navigation-only references from `.gui` files.
     pub arg_refs: &'static [(&'static str, KindId)],
+    /// Widget properties whose quoted value is a localization key
+    /// (`text = "MY_KEY"`, `tooltip = "…"`). Identifier-like values become
+    /// navigation-only [`LOC_KEY`] references; prose and datafn-embedded
+    /// strings are skipped.
+    pub loc_fields: &'static [&'static str],
 }

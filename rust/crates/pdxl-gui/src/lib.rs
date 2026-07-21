@@ -240,6 +240,14 @@ fn walk_refs(
                     if key == b"using" && val.kind == NodeKind::Scalar {
                         push_ref(tree, val_id, names, kinds, file, refs);
                     }
+                    // `text = "LOC_KEY"` — quoted identifier-like values of
+                    // the game's loc-carrying properties.
+                    if val.kind == NodeKind::Scalar
+                        && let Ok(key_str) = std::str::from_utf8(key)
+                        && kinds.loc_fields.contains(&key_str)
+                    {
+                        push_loc_ref(tree, val_id, file, refs);
+                    }
                     // `name = { … }` — a widget instantiation when `name` is
                     // a defined template/type. Skipped for the `type x = …`
                     // definition Field itself (its key is the *new* name).
@@ -263,6 +271,34 @@ fn walk_refs(
         pending_types_group = false;
         pending_type_def = false;
     }
+}
+
+/// Records a loc-key reference when the scalar is a quoted identifier-like
+/// value (prose, datafn-embedded, and macro values are skipped). The span
+/// covers the text inside the quotes.
+fn push_loc_ref(tree: &SyntaxTree, node: NodeId, file: &Arc<str>, refs: &mut Vec<Ref>) {
+    let n = tree.node(node);
+    let src = tree.source();
+    let raw = &src[n.range.start as usize..n.range.end as usize];
+    if raw.len() < 3 || raw[0] != b'"' || raw[raw.len() - 1] != b'"' {
+        return;
+    }
+    let inner = &raw[1..raw.len() - 1];
+    if inner.is_empty()
+        || !inner
+            .iter()
+            .all(|&b| b.is_ascii_alphanumeric() || b == b'_' || b == b'.' || b == b'-')
+    {
+        return;
+    }
+    refs.push(Ref {
+        kind: pdxl_analysis::LOC_KEY,
+        alt: &[],
+        name: String::from_utf8_lossy(inner).into_owned(),
+        file: Arc::clone(file),
+        start: n.range.start + 1,
+        end: n.range.end - 1,
+    });
 }
 
 /// Records a reference for `node`'s text when it names a defined symbol.
