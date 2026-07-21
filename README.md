@@ -10,8 +10,9 @@ per-game schema crate (currently CK3).
 - **`pdxl lsp`** — the language server: live mod-scoped diagnostics,
   go-to-definition, find-references, hover (with game-doc and wiki-sourced
   documentation), completion (schema-driven for script, corpus-mined for
-  gui), semantic highlighting, inlay hints, formatting. Ships with a VS Code
-  extension under `editor/vscode/`.
+  gui), semantic highlighting, inlay hints, formatting. Editor integrations
+  live under `editor/` (VS Code in `editor/vscode/`, Neovim in `editor/nvim/`,
+  Zed in `editor/zed/`).
 - **`pdxl check`** — one-shot project analysis: index every definition across
   game + mod (with Paradox mod-overlay semantics), resolve references, report
   duplicates, unresolved references, and gui datafunction errors.
