@@ -12,3 +12,6 @@ pdxl-src.workspace = true
 
 [lints.rust]
 unsafe_code = "forbid"
+
+[dev-dependencies]
+pdxl-testutil.workspace = true

@@ -752,6 +752,7 @@ dependencies = [
 name = "pdxl-fileset"
 version = "0.46.0"
 dependencies = [
+ "pdxl-moddesc",
  "pdxl-path",
  "pdxl-testutil",
 ]
@@ -783,6 +784,7 @@ name = "pdxl-lexer"
 version = "0.46.0"
 dependencies = [
  "pdxl-src",
+ "pdxl-testutil",
 ]
 
 [[package]]
@@ -827,23 +829,6 @@ version = "0.46.0"
 dependencies = [
  "pdxl-parser",
  "pdxl-path",
- "pdxl-testutil",
-]
-
-[[package]]
-name = "pdxl-parity"
-version = "0.46.0"
-dependencies = [
- "pdxl-analysis",
- "pdxl-ast",
- "pdxl-ck3",
- "pdxl-fileset",
- "pdxl-lexer",
- "pdxl-moddesc",
- "pdxl-parser",
- "pdxl-path",
- "pdxl-project",
- "pdxl-src",
  "pdxl-testutil",
 ]
 

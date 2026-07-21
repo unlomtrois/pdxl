@@ -72,7 +72,7 @@
 ],
 "aliases":[],
 "refs":[
-{"kind":"title","name":"c_shore","file":"crates/pdxl-parity/testdata/facts_titles.txt","start":125,"end":132}
+{"kind":"title","name":"c_shore","file":"crates/pdxl-ck3/testdata/facts_titles.txt","start":125,"end":132}
 ]
 }
 {

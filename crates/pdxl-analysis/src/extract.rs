@@ -1,8 +1,9 @@
 //! The extraction engine: one AST walk → [`FileFacts`].
 //!
 //! A direct port of `internal/validate`'s `extractFacts` and helpers, with the
-//! CK3-specific decisions parameterized through [`Schema`]. Behavior is
-//! oracle-checked byte-for-byte by the `pdxl-parity` facts differential.
+//! CK3-specific decisions parameterized through [`Schema`]. Behavior was
+//! oracle-checked byte-for-byte against Go and is now pinned by the facts
+//! golden snapshots in `pdxl-ck3` (`tests/facts.rs`).
 
 use std::collections::BTreeSet;
 use std::sync::Arc;

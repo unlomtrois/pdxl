@@ -21,8 +21,12 @@ cargo build --release -p pdxl-cli                        # → target/release/pd
 Golden regression suites (regenerate deliberately, review the diff like code):
 
 ```sh
-UPDATE_GOLDENS=1 cargo test -p pdxl-parity --test lexer --test parser \
-    --test fileset --test facts --test project
+# Each golden suite lives in the crate it tests (dump serializer inlined there):
+UPDATE_GOLDENS=1 cargo test -p pdxl-lexer --test golden      # token dump
+UPDATE_GOLDENS=1 cargo test -p pdxl-parser --test golden     # tree dump
+UPDATE_GOLDENS=1 cargo test -p pdxl-fileset --test golden    # scan/descriptor dump
+UPDATE_GOLDENS=1 cargo test -p pdxl-ck3 --test facts         # facts dump (schema-coupled)
+UPDATE_GOLDENS=1 cargo test -p pdxl-project --test golden    # whole-project dump
 UPDATE_GOLDENS=1 cargo test -p pdxl-cli --test cli
 ```
 

@@ -11,6 +11,7 @@ description = "Project file discovery and Paradox mod-overlay resolution (port o
 pdxl-path.workspace = true
 
 [dev-dependencies]
+pdxl-moddesc.workspace = true
 pdxl-testutil.workspace = true
 
 [lints.rust]

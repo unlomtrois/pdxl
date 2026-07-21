@@ -12,8 +12,8 @@
 //! directories define what, which keys are references, which values to skip)
 //! arrives as data in a [`Schema`], supplied by a rules crate such as
 //! `pdxl-ck3`. The Go implementation hardcodes these in its extraction
-//! functions; behavior is identical (oracle-checked by `pdxl-parity`), only
-//! ownership moved.
+//! functions; behavior is identical (once oracle-checked against Go, now
+//! pinned by golden snapshots), only ownership moved.
 //!
 //! Deliberate deviation from Go, per the project's measured-simplification
 //! plan: the on-disk `FactStore` is **not** ported in this milestone. Facts

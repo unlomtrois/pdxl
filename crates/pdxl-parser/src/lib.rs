@@ -8,9 +8,9 @@
 //! crate owns only the algorithm (plus the golden-format renderer used by
 //! tests).
 //!
-//! The Go implementation is the oracle; node allocation order and child-index
-//! ordering are differential-parity targets, not just "logically equivalent
-//! trees" (see the `pdxl-parity` crate).
+//! The Go implementation was the oracle; node allocation order and child-index
+//! ordering were differential-parity targets, not just "logically equivalent
+//! trees" — now pinned by the golden snapshots in `tests/golden.rs`.
 //!
 //! ```
 //! let parse = pdxl_parser::parse("example.txt", &b"key = value"[..]);

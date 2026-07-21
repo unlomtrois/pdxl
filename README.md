@@ -41,7 +41,6 @@ crates/
   pdxl-mcp        MCP server for agent-facing semantic queries
   pdxl-gamedocs   parsers for the game's doc dumps + gen-tables
   pdxl-testutil   shared test helpers
-  pdxl-parity     dump formats + golden regression suites
 ```
 
 ## Development
@@ -52,9 +51,10 @@ cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo fmt --all --check
 ```
 
-Regression behavior is pinned by golden files (`crates/pdxl-parity` and
-`crates/pdxl-cli/tests/goldens`); regenerate deliberately with
-`UPDATE_GOLDENS=1` and review the diff like code.
+Regression behavior is pinned by golden files, each living in the crate it
+tests (`pdxl-lexer`, `pdxl-parser`, `pdxl-fileset`, `pdxl-ck3`, `pdxl-project`
+under `tests/` + `testdata/goldens/`, plus `crates/pdxl-cli/tests/goldens`);
+regenerate deliberately with `UPDATE_GOLDENS=1` and review the diff like code.
 
 ## History
 

@@ -25,9 +25,8 @@ members = [
     "crates/pdxl-mcp",      # MCP server for agent-facing semantic queries
     # dev tooling
     "crates/pdxl-gamedocs", # parses the game's doc dumps; gen-tables renders pdxl-ck3 tables
-    # test / parity infrastructure
+    # test infrastructure
     "crates/pdxl-testutil", # shared test helpers (temp trees, repo root)
-    "crates/pdxl-parity",   # dump formats, dump binaries, Go differential tests
 ]
 
 # Full debuginfo dominated a multi-GiB target/; line tables keep file:line in

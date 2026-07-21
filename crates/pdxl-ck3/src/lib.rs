@@ -3,8 +3,8 @@
 //! Originally a transcription of the Go `internal/validate/schema_ck3.go`
 //! registry. Since the landed-titles addition (`ANALYSIS_VERSION` 2) this
 //! schema has grown past the Go implementation — the analysis layer's Go
-//! oracle is retired; regressions are pinned by golden snapshots in
-//! `pdxl-parity` instead.
+//! oracle is retired; regressions are pinned by the facts golden snapshots in
+//! this crate (`tests/facts.rs`) instead.
 //!
 //! Everything about one game concept lives in one file under [`entities`]:
 //! its schema row(s) ([`KindSpec`] — def directory, reference shapes,

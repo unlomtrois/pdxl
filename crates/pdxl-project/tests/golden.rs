@@ -7,16 +7,90 @@
 //! canonical dump (with the temp root normalized to `<root>`) against a golden.
 //!
 //! To accept an intentional behavior change, regenerate with:
-//! `UPDATE_GOLDENS=1 cargo test -p pdxl-parity --test project`
+//! `UPDATE_GOLDENS=1 cargo test -p pdxl-project --test golden`
 
 use std::path::PathBuf;
 
+use pdxl_analysis::{KindId, RefDiag, SymbolTable};
 use pdxl_fileset::{FileKind, FileSet};
-use pdxl_parity::dump_project;
 use pdxl_testutil::TempTree;
 
-fn repo_root() -> PathBuf {
-    pdxl_testutil::repo_root(env!("CARGO_MANIFEST_DIR"))
+/// Project dump schema version. Bump on any format change.
+const PROJECT_DUMP_VERSION: u32 = 1;
+
+/// Canonical dump of one whole-project analysis: symbol counts by kind (in
+/// schema order), duplicates in merge order, unresolved-reference diagnostics
+/// in walk order.
+fn dump_project(table: &SymbolTable, diags: &[RefDiag], kinds: &[KindId]) -> String {
+    let mut out = String::new();
+    out.push_str("{\n\"version\":");
+    out.push_str(&PROJECT_DUMP_VERSION.to_string());
+    out.push_str(",\n\"counts\":{");
+    for (i, kind) in kinds.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        out.push('"');
+        out.push_str(kind.name());
+        out.push_str("\":");
+        out.push_str(&table.count(*kind).to_string());
+    }
+    out.push_str(",\"total\":");
+    out.push_str(&table.total().to_string());
+    out.push_str("},\n\"duplicates\":[");
+    if !table.duplicates.is_empty() {
+        out.push('\n');
+        for (i, d) in table.duplicates.iter().enumerate() {
+            out.push_str("{\"kind\":\"");
+            out.push_str(d.kind.name());
+            out.push_str("\",\"name\":\"");
+            push_escaped(&mut out, &d.name);
+            out.push_str("\",\"first_file\":\"");
+            push_escaped(&mut out, &d.first.file);
+            out.push_str("\",\"file\":\"");
+            push_escaped(&mut out, &d.file);
+            out.push_str("\"}");
+            if i + 1 < table.duplicates.len() {
+                out.push(',');
+            }
+            out.push('\n');
+        }
+    }
+    out.push_str("],\n\"unresolved\":[");
+    if !diags.is_empty() {
+        out.push('\n');
+        for (i, d) in diags.iter().enumerate() {
+            out.push_str("{\"file\":\"");
+            push_escaped(&mut out, &d.file);
+            out.push_str("\",\"start\":");
+            out.push_str(&d.start.to_string());
+            out.push_str(",\"end\":");
+            out.push_str(&d.end.to_string());
+            out.push_str(",\"msg\":\"");
+            push_escaped(&mut out, &d.msg);
+            out.push_str("\"}");
+            if i + 1 < diags.len() {
+                out.push(',');
+            }
+            out.push('\n');
+        }
+    }
+    out.push_str("]\n}\n");
+    out
+}
+
+fn push_escaped(out: &mut String, s: &str) {
+    for ch in s.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
 }
 
 /// Analyzes `roots` and returns the dump with every root path normalized.
@@ -38,7 +112,7 @@ fn scenario_dump(roots: &[(&TempTree, FileKind)]) -> String {
 }
 
 fn check_golden(name: &str, dump: &str) {
-    let goldens_dir = repo_root().join("crates/pdxl-parity/testdata/goldens/project");
+    let goldens_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("testdata/goldens/project");
     let golden_path = goldens_dir.join(format!("{name}.golden"));
     if std::env::var_os("UPDATE_GOLDENS").is_some() {
         std::fs::create_dir_all(&goldens_dir).unwrap();
@@ -51,7 +125,7 @@ fn check_golden(name: &str, dump: &str) {
     assert_eq!(
         dump, golden,
         "project dump changed for scenario '{name}'. If intentional, regenerate:\n\
-         UPDATE_GOLDENS=1 cargo test -p pdxl-parity --test project"
+         UPDATE_GOLDENS=1 cargo test -p pdxl-project --test golden"
     );
 }
 

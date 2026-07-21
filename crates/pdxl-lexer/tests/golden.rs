@@ -1,23 +1,39 @@
-//! Parser regression tests — golden snapshots.
+//! Lexer regression tests — golden snapshots.
 //!
 //! Historical note: these were byte-differential tests against the Go oracle
-//! (`go run ./tools/parsedump`), verified byte-identical before the Go
-//! implementation was removed. The last parity-verified tree dumps are
+//! (`go run ./tools/lexdump`), verified byte-identical before the Go
+//! implementation was removed. The last parity-verified token streams are
 //! pinned as golden files. To accept an intentional change, regenerate with
-//! `UPDATE_GOLDENS=1 cargo test -p pdxl-parity --test parser`
+//! `UPDATE_GOLDENS=1 cargo test -p pdxl-lexer --test golden`
 //! and review the diff like any other code change.
 
 use std::path::{Path, PathBuf};
 
-use pdxl_parity::dump_json;
-use pdxl_parser::{parse, validate_tree};
+use pdxl_lexer::Lexer;
 
 fn repo_root() -> PathBuf {
     pdxl_testutil::repo_root(env!("CARGO_MANIFEST_DIR"))
 }
 
-/// Fixtures: shared `testdata` (incl. ck3 + malformed lint) plus the
-/// crate-local stress fixtures, sorted.
+/// Canonical token dump: `<kind>\t<start>\t<end>`, one token per line. Every
+/// token from `Lexer::next_token` is emitted, **including invalid ones**, so
+/// invalid/partial-input behavior is covered.
+fn dump_tokens(src: &[u8]) -> String {
+    let mut lexer = Lexer::init(src);
+    let mut out = String::new();
+    while let Some(tok) = lexer.next_token() {
+        out.push_str(tok.kind.as_str());
+        out.push('\t');
+        out.push_str(&tok.range.start.to_string());
+        out.push('\t');
+        out.push_str(&tok.range.end.to_string());
+        out.push('\n');
+    }
+    out
+}
+
+/// Collects fixture files: `testdata/*.txt` plus `*.txt` in `testdata/ck3`,
+/// `testdata/lint`, and the crate-local stress fixtures, sorted.
 fn fixtures(root: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let dirs = [
@@ -42,9 +58,9 @@ fn fixtures(root: &Path) -> Vec<PathBuf> {
 }
 
 #[test]
-fn parser_matches_goldens() {
+fn lexer_matches_goldens() {
     let root = repo_root();
-    let goldens_dir = root.join("crates/pdxl-parity/testdata/goldens/parser");
+    let goldens_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("testdata/goldens/lexer");
     let update = std::env::var_os("UPDATE_GOLDENS").is_some();
     if update {
         std::fs::create_dir_all(&goldens_dir).unwrap();
@@ -55,12 +71,7 @@ fn parser_matches_goldens() {
 
     for file in &fixtures {
         let src = std::fs::read(file).expect("read fixture");
-        let parsed = parse("input", src);
-        // Invariants must hold for every fixture, including malformed ones.
-        validate_tree(parsed.tree())
-            .unwrap_or_else(|e| panic!("{}: invalid tree: {e:?}", file.display()));
-
-        let dump = dump_json(&parsed);
+        let dump = dump_tokens(&src);
         let stem = file.file_stem().unwrap().to_string_lossy();
         let golden_path = goldens_dir.join(format!("{stem}.golden"));
         if update {
@@ -72,20 +83,8 @@ fn parser_matches_goldens() {
         });
         assert_eq!(
             dump, golden,
-            "tree dump changed for {stem}; if intentional, regenerate with \
-             UPDATE_GOLDENS=1 cargo test -p pdxl-parity --test parser"
+            "token dump changed for {stem}; if intentional, regenerate with \
+             UPDATE_GOLDENS=1 cargo test -p pdxl-lexer --test golden"
         );
     }
-}
-
-#[test]
-fn dump_is_stable_and_normalized() {
-    // Non-field nodes report operator "invalid"; a field reports its op name.
-    let p = parse("test", &b"a = b"[..]);
-    assert!(p.diagnostics().is_empty());
-    let dump = dump_json(&p);
-    assert!(dump.contains("\"kind\":\"file\",\"start\":0,\"end\":0,\"operator\":\"invalid\""));
-    assert!(dump.contains("\"kind\":\"field\""));
-    assert!(dump.contains("\"operator\":\"equal\""));
-    assert!(dump.starts_with("{\"version\":1,"));
 }

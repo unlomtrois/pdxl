@@ -5,15 +5,130 @@
 //! implementation was removed. Each scenario builds a temp tree, dumps the
 //! scan/descriptor in-process, normalizes the temp roots to `<rootN>`, and
 //! compares against a golden. To accept an intentional change, regenerate
-//! with `UPDATE_GOLDENS=1 cargo test -p pdxl-parity --test fileset`
+//! with `UPDATE_GOLDENS=1 cargo test -p pdxl-fileset --test golden`
 //! and review the diff like any other code change.
 
 use std::path::{Path, PathBuf};
 
 use pdxl_fileset::{FileKind, FileSet, validate_fileset};
-use pdxl_moddesc::parse_mod;
-use pdxl_parity::{dump_descriptor, dump_scan};
+use pdxl_moddesc::{ModDescriptor, parse_mod};
+use pdxl_path::is_windows_absolute;
 use pdxl_testutil::TempTree;
+
+/// Dump schema version. Bump on any format change.
+const FILESET_DUMP_VERSION: u32 = 1;
+
+/// Canonical scan dump: entries (winner order), stats, resolutions. JSON with
+/// one entry / resolution per line; entries stay in exact `iter` (winner) order.
+fn dump_scan(fs: &FileSet, queries: &[String]) -> String {
+    let mut out = String::new();
+    out.push_str("{\n\"version\":");
+    out.push_str(&FILESET_DUMP_VERSION.to_string());
+    out.push_str(",\n\"entries\":[");
+
+    let entries: Vec<_> = fs.iter().collect();
+    if !entries.is_empty() {
+        out.push('\n');
+        for (i, e) in entries.iter().enumerate() {
+            out.push_str("{\"rel_path\":\"");
+            push_escaped(&mut out, &e.rel_path);
+            out.push_str("\",\"full_path\":\"");
+            push_escaped(&mut out, &e.full_path.to_string_lossy());
+            out.push_str("\",\"kind\":\"");
+            out.push_str(e.kind.as_str());
+            out.push_str("\"}");
+            if i + 1 < entries.len() {
+                out.push(',');
+            }
+            out.push('\n');
+        }
+    }
+    out.push_str("],\n");
+
+    let st = fs.stats();
+    out.push_str("\"stats\":{\"vanilla\":");
+    out.push_str(&st.vanilla.to_string());
+    out.push_str(",\"mod\":");
+    out.push_str(&st.mod_files.to_string());
+    out.push_str(",\"total\":");
+    out.push_str(&st.total.to_string());
+    out.push_str(",\"shadowed\":");
+    out.push_str(&st.shadowed.to_string());
+    out.push_str(",\"replaced\":");
+    out.push_str(&st.replaced.to_string());
+    out.push_str("},\n");
+
+    out.push_str("\"resolutions\":[");
+    if !queries.is_empty() {
+        out.push('\n');
+        for (i, q) in queries.iter().enumerate() {
+            out.push_str("{\"query\":\"");
+            push_escaped(&mut out, q);
+            match fs.resolve(q) {
+                Some(e) => {
+                    out.push_str("\",\"found\":true,\"rel_path\":\"");
+                    push_escaped(&mut out, &e.rel_path);
+                    out.push_str("\",\"kind\":\"");
+                    out.push_str(e.kind.as_str());
+                    out.push_str("\"}");
+                }
+                None => {
+                    out.push_str("\",\"found\":false,\"rel_path\":null,\"kind\":null}");
+                }
+            }
+            if i + 1 < queries.len() {
+                out.push(',');
+            }
+            out.push('\n');
+        }
+    }
+    out.push_str("]\n}\n");
+    out
+}
+
+/// Canonical descriptor dump.
+fn dump_descriptor(m: &ModDescriptor) -> String {
+    let path_str = m.path.to_string_lossy();
+    let mut out = String::new();
+    out.push_str("{\n\"version\":");
+    out.push_str(&FILESET_DUMP_VERSION.to_string());
+    out.push_str(",\n\"name\":\"");
+    push_escaped(&mut out, &m.name);
+    out.push_str("\",\n\"path\":\"");
+    push_escaped(&mut out, &path_str);
+    out.push_str("\",\n\"replace_paths\":[");
+    for (i, rp) in m.replace_paths.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        out.push('"');
+        push_escaped(&mut out, rp);
+        out.push('"');
+    }
+    out.push_str("],\n\"is_windows_absolute\":");
+    out.push_str(if is_windows_absolute(&path_str) {
+        "true"
+    } else {
+        "false"
+    });
+    out.push_str("\n}\n");
+    out
+}
+
+/// Appends `s` with minimal JSON string escaping.
+fn push_escaped(out: &mut String, s: &str) {
+    for ch in s.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+}
 
 fn repo_root() -> PathBuf {
     pdxl_testutil::repo_root(env!("CARGO_MANIFEST_DIR"))
@@ -77,7 +192,7 @@ impl Scan {
 }
 
 fn check_golden(name: &str, dump: &str) {
-    let goldens_dir = repo_root().join("crates/pdxl-parity/testdata/goldens/fileset");
+    let goldens_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("testdata/goldens/fileset");
     let golden_path = goldens_dir.join(format!("{name}.golden"));
     if std::env::var_os("UPDATE_GOLDENS").is_some() {
         std::fs::create_dir_all(&goldens_dir).unwrap();
@@ -89,7 +204,7 @@ fn check_golden(name: &str, dump: &str) {
     assert_eq!(
         dump, golden,
         "fileset dump changed for '{name}'; if intentional, regenerate with \
-         UPDATE_GOLDENS=1 cargo test -p pdxl-parity --test fileset"
+         UPDATE_GOLDENS=1 cargo test -p pdxl-fileset --test golden"
     );
 }
 

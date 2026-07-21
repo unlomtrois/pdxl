@@ -5,7 +5,7 @@
 //! cache stays unwritten.
 //!
 //! Usage:
-//!   cargo run --release -p pdxl-parity --example factsbench [-- <root>]
+//!   cargo run --release -p pdxl-project --example factsbench [-- <root>]
 //!
 //! Without a root, a CK3-scale corpus (~3,500 files) is synthesized by
 //! replicating the repository fixtures into a temp tree.
