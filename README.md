@@ -1,103 +1,66 @@
 # pdxl
 
-A toolkit for working with Paradox Interactive scripting files — the format used by games like EU5, CK3, and Victoria 3.
+A Rust toolkit and language server for Paradox Interactive scripting
+(PDXScript, used by CK3, Victoria 3, EU5, …) and the Jomini interface dialect
+(`.gui`). The grammar is shared across games; game semantics live in a
+per-game schema crate (currently CK3).
 
-Existing tools are either outdated or single-purpose CI validators. pdxl aims to be a foundation for editor tooling and AI-assisted modding workflows.
+## What it does
 
-> Early experiment. Expect breaking changes.
+- **`pdxl lsp`** — the language server: live mod-scoped diagnostics,
+  go-to-definition, find-references, hover (with game-doc and wiki-sourced
+  documentation), completion (schema-driven for script, corpus-mined for
+  gui), semantic highlighting, inlay hints, formatting. Ships with a VS Code
+  extension under `editor/vscode/`.
+- **`pdxl check`** — one-shot project analysis: index every definition across
+  game + mod (with Paradox mod-overlay semantics), resolve references, report
+  duplicates, unresolved references, and gui datafunction errors.
+- **`pdxl lex` / `pdxl parse` / `pdxl fmt`** — tokenizer, AST printer, and a
+  comment-preserving formatter.
 
-## Status
+## Workspace layout
 
-| Component | Status |
-|-----------|--------|
-| Lexer | Working — ~135 MB/s; full CK3 syntax (`@` script values & inline math, dates, paths, …) |
-| Parser | Working — three implementations for benchmarking (see below) |
-| File scanning | Working — mod-overlay resolution (`replace_path`, `.mod`/Proton paths) |
-| Cache | Working — two-level parse cache (in-memory LRU + on-disk) + per-file symbol cache |
-| Validator | Working — cross-file definition indexing + reference resolution (CK3) |
-| LSP server | Planned |
-| MCP server | Planned |
-
-On the full CK3 game plus a total-conversion mod (~3,500 files), `pdxl` parses
-with zero diagnostics and a warm `pdxl check` runs in under a second.
-
-## Install
-
-```sh
-go install github.com/unlomtrois/pdxl/cmd/pdxl@latest
 ```
-
-Or build from source:
-
-```sh
-git clone https://github.com/unlomtrois/pdxl
-cd pdxl
-make build
+crates/
+  pdxl-src        TextRange: zero-based, half-open byte ranges
+  pdxl-path       lexical path helpers
+  pdxl-lexer      byte-offset tokenizer
+  pdxl-ast        flat node-pool syntax tree (data only)
+  pdxl-parser     recursive-descent parser (+ .gui dialect entry)
+  pdxl-fileset    directory scanning + mod-overlay resolution
+  pdxl-moddesc    .mod descriptor parsing
+  pdxl-cache      two-level parse cache
+  pdxl-analysis   fact extraction engine (game-agnostic)
+  pdxl-ck3        the CK3 schema: kinds, entities, doc tables, contexts
+  pdxl-loc        Paradox localization .yml parser
+  pdxl-gui        interface-script (.gui) analysis + datafunction typing
+  pdxl-project    whole-project analysis + incremental updates
+  pdxl-fmt        PDXScript formatter
+  pdxl-cli        the pdxl binary
+  pdxl-lsp        the language server
+  pdxl-mcp        MCP server for agent-facing semantic queries
+  pdxl-gamedocs   parsers for the game's doc dumps + gen-tables
+  pdxl-testutil   shared test helpers
+  pdxl-parity     dump formats + golden regression suites
 ```
-
-## Usage
-
-**Lex a file** — print tokens with positions:
-
-```sh
-pdxl lex common/characters/my_char.txt
-```
-
-**Parse a file** — print the AST:
-
-```sh
-pdxl parse --tree common/international_organizations/foo.txt
-pdxl parse --json common/international_organizations/foo.txt
-```
-
-**Lint** — structural diagnostics for files or directories:
-
-```sh
-pdxl lint common/traits/00_traits.txt
-pdxl lint common/                       # recurses; --context N for source lines
-```
-
-**Check a whole project** — index definitions and resolve cross-file references
-(undefined traits, events, on_actions). Game and mod are overlaid with Paradox
-`replace_path`/load-order semantics:
-
-```sh
-pdxl check --game /path/to/ck3/game --mod /path/to/MyMod.mod
-```
-
-`pdxl index` scans and parses the whole project (with a progress bar) and reports
-file/diagnostic counts. `pdxl cache size [--detailed]` / `pdxl cache clear`
-inspect the on-disk caches.
-
-Project defaults (game path, mod path, ignored files) live in `pdxl.toml`; run
-`pdxl init` to create one.
-
-## Parser implementations
-
-Three parser variants live in `internal/parser/` for benchmarking comparison:
-
-| Package | Design | ~Throughput | ~Allocs/op |
-|---------|--------|-------------|------------|
-| `v1` | participle (reference baseline) | 2 MB/s | 19 000 |
-| `v2` | hand-written Pratt, pointer-tree AST | 104 MB/s | 2 300 |
-| `v3` | hand-written Pratt, flat node pool | 115 MB/s | 880 |
-
-The CLI and validator use `v3` (preferred for new tools). Run `make bench-parser`
-to reproduce.
 
 ## Development
 
-Requires Go 1.25+. Nix users: `nix-shell` provides the full toolchain.
-
 ```sh
-make test          # run all tests
-make lint          # run golangci-lint
-make build         # build binary to bin/pdxl
-make bench         # benchmark lexer + all parser variants
-make bench-lexer   # lexer only
-make bench-parser  # parser v1/v2/v3 comparison
+cargo test --workspace
+cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo fmt --all --check
 ```
 
-## License
+Regression behavior is pinned by golden files (`crates/pdxl-parity` and
+`crates/pdxl-cli/tests/goldens`); regenerate deliberately with
+`UPDATE_GOLDENS=1` and review the diff like code.
 
-MIT
+## History
+
+pdxl began as a Go implementation, then was ported to Rust subsystem by
+subsystem with byte-differential testing against the Go oracle (the port's
+milestone reports live in `docs/`). The Go code has since been removed; the
+last parity-verified outputs are pinned as the golden files above. Internally
+everything uses zero-based, half-open byte ranges (`pdxl-src::TextRange`);
+UTF-16 conversion happens only at the LSP boundary.

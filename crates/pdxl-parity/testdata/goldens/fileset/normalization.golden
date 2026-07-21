@@ -1,0 +1,13 @@
+{
+"version":1,
+"entries":[
+{"rel_path":"a.txt","full_path":"<root0>/a.txt","kind":"mod"},
+{"rel_path":"common/traits/noble.txt","full_path":"<root0>/Common/Traits/Noble.txt","kind":"mod"},
+{"rel_path":"café/ω.txt","full_path":"<root0>/café/Ω.txt","kind":"mod"}
+],
+"stats":{"vanilla":0,"mod":3,"total":3,"shadowed":0,"replaced":0},
+"resolutions":[
+{"query":"COMMON/TRAITS/NOBLE.TXT","found":true,"rel_path":"common/traits/noble.txt","kind":"mod"},
+{"query":"CAFÉ/Ω.TXT","found":true,"rel_path":"café/ω.txt","kind":"mod"}
+]
+}

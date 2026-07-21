@@ -1,0 +1,12 @@
+{
+"version":1,
+"entries":[
+{"rel_path":"common/events.txt","full_path":"<root0>/common/EVENTS.TXT","kind":"mod"},
+{"rel_path":"common/traits/a.txt","full_path":"<root0>/common/traits/a.txt","kind":"mod"}
+],
+"stats":{"vanilla":0,"mod":2,"total":2,"shadowed":0,"replaced":0},
+"resolutions":[
+{"query":"COMMON/EVENTS.TXT","found":true,"rel_path":"common/events.txt","kind":"mod"},
+{"query":"missing.txt","found":false,"rel_path":null,"kind":null}
+]
+}

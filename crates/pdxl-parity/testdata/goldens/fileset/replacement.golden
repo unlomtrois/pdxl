@@ -1,0 +1,14 @@
+{
+"version":1,
+"entries":[
+{"rel_path":"common/landed_titles_extra/x.txt","full_path":"<root0>/common/landed_titles_extra/x.txt","kind":"vanilla"},
+{"rel_path":"common/traits/n.txt","full_path":"<root0>/common/traits/n.txt","kind":"vanilla"},
+{"rel_path":"common/landed_titles/custom.txt","full_path":"<root1>/common/landed_titles/custom.txt","kind":"mod"}
+],
+"stats":{"vanilla":2,"mod":1,"total":3,"shadowed":0,"replaced":1},
+"resolutions":[
+{"query":"common/landed_titles/base.txt","found":false,"rel_path":null,"kind":null},
+{"query":"common/landed_titles/custom.txt","found":true,"rel_path":"common/landed_titles/custom.txt","kind":"mod"},
+{"query":"common/landed_titles_extra/x.txt","found":true,"rel_path":"common/landed_titles_extra/x.txt","kind":"vanilla"}
+]
+}

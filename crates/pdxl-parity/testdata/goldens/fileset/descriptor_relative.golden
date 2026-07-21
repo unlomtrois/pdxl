@@ -1,0 +1,7 @@
+{
+"version":1,
+"name":"My Mod",
+"path":"<root0>/mods/mymod",
+"replace_paths":["common/x","common/x"],
+"is_windows_absolute":false
+}

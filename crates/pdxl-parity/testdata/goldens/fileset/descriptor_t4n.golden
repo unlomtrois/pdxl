@@ -1,0 +1,7 @@
+{
+"version":1,
+"name":"The Four Nations",
+"path":"<root0>/testdata/mod/T4N-CK3/T4N",
+"replace_paths":["common/achievements","common/bookmark_portraits","common/bookmarks","common/culture/cultures","common/dna_data","common/religion/religion_types","common/landed_titles","common/achievements","history/characters","history/provinces","history/cultures","history/titles","history/wars","map_data","tests"],
+"is_windows_absolute":false
+}
