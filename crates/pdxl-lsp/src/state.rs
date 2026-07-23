@@ -21,7 +21,8 @@ use lsp_server::{Message, Notification};
 use lsp_types::notification::{Notification as _, PublishDiagnostics};
 use lsp_types::{
     Diagnostic, DiagnosticSeverity, InlayHint, InlayHintKind, InlayHintTooltip, Location, Position,
-    PrepareRenameResponse, PublishDiagnosticsParams, Range, TextEdit, Url, WorkspaceEdit,
+    PrepareRenameResponse, PublishDiagnosticsParams, Range, SymbolInformation, TextEdit, Url,
+    WorkspaceEdit,
 };
 use pdxl_analysis::context::ClauseKind;
 use pdxl_analysis::{KindId, LOC_KEY, RefDiag, Schema};
@@ -641,6 +642,58 @@ impl ServerState {
                     selection_range: range,
                     children: None,
                 }
+            })
+            .collect()
+    }
+
+    /// `workspace/symbol`: fuzzy-search every project definition by name.
+    /// Returns the best [`WORKSPACE_SYMBOL_LIMIT`] matches (name, kind, and a
+    /// jump location), ranked by match quality then name length. An empty
+    /// query returns an arbitrary capped slice (the client narrows as you type).
+    pub fn workspace_symbols(&self, query: &str) -> Vec<SymbolInformation> {
+        let Some(project) = &self.project else {
+            return Vec::new();
+        };
+        let schema = project.schema();
+
+        let mut scored: Vec<(i32, &pdxl_analysis::Symbol)> = project
+            .table()
+            .iter()
+            .filter_map(|s| fuzzy_score(query, &s.name).map(|sc| (sc, s)))
+            .collect();
+        // Higher score first, then shorter names (tighter match), then name.
+        scored.sort_by(|a, b| {
+            b.0.cmp(&a.0)
+                .then_with(|| a.1.name.len().cmp(&b.1.name.len()))
+                .then_with(|| a.1.name.cmp(&b.1.name))
+        });
+        scored.truncate(WORKSPACE_SYMBOL_LIMIT);
+
+        // Resolve each winner's jump location, reading each file once.
+        let mut src_cache: HashMap<PathBuf, Option<Vec<u8>>> = HashMap::new();
+        scored
+            .into_iter()
+            .filter_map(|(_, sym)| {
+                let full = project.rel_to_full(&sym.file)?.to_path_buf();
+                let text = src_cache
+                    .entry(full.clone())
+                    .or_insert_with(|| self.read_file(&full).ok())
+                    .as_ref()?;
+                #[allow(deprecated)] // `deprecated`/`tags` are required fields
+                Some(SymbolInformation {
+                    name: sym.name.clone(),
+                    kind: lsp_symbol_kind(schema.icon(sym.kind)),
+                    tags: None,
+                    deprecated: None,
+                    location: Location {
+                        uri: path_to_uri(&full),
+                        range: Range {
+                            start: offset_to_position(text, sym.offset),
+                            end: offset_to_position(text, sym.end_offset),
+                        },
+                    },
+                    container_name: Some(sym.kind.name().to_string()),
+                })
             })
             .collect()
     }
@@ -2220,6 +2273,58 @@ fn unquoted_span(src: &[u8], start: u32, end: u32) -> (u32, u32) {
     } else {
         (start, end)
     }
+}
+
+/// Cap on `workspace/symbol` results — enough to be useful, bounded so a broad
+/// query over a CK3-scale table (tens of thousands of symbols) stays cheap.
+const WORKSPACE_SYMBOL_LIMIT: usize = 256;
+
+/// Fuzzy match `query` against a symbol `name` (case-insensitive), returning a
+/// rank score (higher = better) or `None` when `query` is not even a
+/// subsequence. Bands: exact > prefix > word-boundary substring > substring >
+/// subsequence. An empty query matches everything at a flat score.
+fn fuzzy_score(query: &str, name: &str) -> Option<i32> {
+    if query.is_empty() {
+        return Some(0);
+    }
+    let q = query.to_ascii_lowercase();
+    let n = name.to_ascii_lowercase();
+    if n == q {
+        return Some(1000);
+    }
+    if let Some(pos) = n.find(&q) {
+        // Substring: prefer early matches, with prefix / word-boundary bonuses.
+        let mut score = 500 - (pos as i32).min(300);
+        if pos == 0 {
+            score += 300;
+        } else if n.as_bytes().get(pos - 1) == Some(&b'_') {
+            score += 150;
+        }
+        return Some(score);
+    }
+    subsequence_score(q.as_bytes(), n.as_bytes())
+}
+
+/// Scores an in-order subsequence match (`sc` in `scarab` → yes) or `None`.
+/// Rewards adjacency and matches at word boundaries so `sf` favors
+/// `scripted_effect` over a scattered hit.
+fn subsequence_score(q: &[u8], n: &[u8]) -> Option<i32> {
+    let mut qi = 0;
+    let mut score = 0i32;
+    let mut last: Option<usize> = None;
+    for (i, &c) in n.iter().enumerate() {
+        if qi < q.len() && c == q[qi] {
+            if last == Some(i.wrapping_sub(1)) {
+                score += 5; // contiguous run
+            }
+            if i == 0 || n[i - 1] == b'_' {
+                score += 3; // word boundary
+            }
+            last = Some(i);
+            qi += 1;
+        }
+    }
+    (qi == q.len()).then_some(score)
 }
 
 /// Whether `name` is a usable rename target: a non-empty identifier with no

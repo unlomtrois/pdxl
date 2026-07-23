@@ -113,6 +113,9 @@ pub fn run_stdio(opts: Options) -> Result<(), Box<dyn std::error::Error + Sync +
             resolve_provider: Some(true),
         }),
         document_symbol_provider: Some(OneOf::Left(true)),
+        // Fuzzy project-wide symbol search (VS Code Ctrl-T / nvim
+        // workspace_symbol) over every definition in the SymbolTable.
+        workspace_symbol_provider: Some(OneOf::Left(true)),
         // Schema-aware highlighting driven by pdxl's lexer/parser (phase 1:
         // lexer-level). The legend index order lives in `semantic`.
         semantic_tokens_provider: Some(
@@ -407,6 +410,24 @@ fn handle_request(server: &mut ServerState, out: &Sender<Message>, req: lsp_serv
             let resp = match serde_json::from_value::<lsp_types::DocumentLinkParams>(req.params) {
                 Ok(params) => {
                     Response::new_ok(req.id, server.document_links(&params.text_document.uri))
+                }
+                Err(e) => Response::new_err(
+                    req.id,
+                    lsp_server::ErrorCode::InvalidParams as i32,
+                    e.to_string(),
+                ),
+            };
+            let _ = out.send(Message::Response(resp));
+        }
+        lsp_types::request::WorkspaceSymbolRequest::METHOD => {
+            let resp = match serde_json::from_value::<lsp_types::WorkspaceSymbolParams>(req.params)
+            {
+                Ok(params) => {
+                    let symbols = server.workspace_symbols(&params.query);
+                    Response::new_ok(
+                        req.id,
+                        Some(lsp_types::WorkspaceSymbolResponse::Flat(symbols)),
+                    )
                 }
                 Err(e) => Response::new_err(
                     req.id,

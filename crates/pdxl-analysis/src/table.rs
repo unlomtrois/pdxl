@@ -86,4 +86,10 @@ impl SymbolTable {
             .into_iter()
             .flat_map(|m| m.keys().map(String::as_str))
     }
+
+    /// Every symbol across all kinds, in arbitrary order (workspace-symbol
+    /// search). Includes aliases (they share a bucket with defs).
+    pub fn iter(&self) -> impl Iterator<Item = &Symbol> {
+        self.by_kind.values().flat_map(HashMap::values)
+    }
 }

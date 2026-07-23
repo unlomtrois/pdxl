@@ -52,8 +52,6 @@ worklist comes from `cargo run -p pdxl-ck3 --bin schema-gaps`.
 - **Go-to-definition through `scope:x`** → the `save_scope_as = x` site.
 - **`blockoverride "name"` → `block "name"`** in gui, resolved through the
   instantiated template/type (needs instance context; deferred from gui M1).
-- **Workspace symbols** (`workspace/symbol`) — SymbolTable has everything;
-  needs a name-substring index.
 - **Folding ranges** from Block nodes — blocked on zero-width block ranges
   (below).
 - **Zed extension** — plan exists (`editor/zed/` layout, tree-sitter-paradox

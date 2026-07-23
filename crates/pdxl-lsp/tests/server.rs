@@ -1922,6 +1922,47 @@ fn prepare_rename_selects_identifier_and_rejects_non_symbols() {
 }
 
 #[test]
+fn workspace_symbols_fuzzy_search() {
+    let t = TempTree::new();
+    t.write(
+        "common/traits/00.txt",
+        "brave = { }\nbrave_hearted = { }\ncraven = { }\n",
+    );
+    t.write(
+        "localization/english/x_l_english.yml",
+        "\u{feff}l_english:\n brave_desc: \"Brave\"\n",
+    );
+    let (server, _rx) = server_over(&t);
+
+    // Substring query ranks the exact match first, then the longer name.
+    let names: Vec<String> = server
+        .workspace_symbols("brave")
+        .into_iter()
+        .map(|s| s.name)
+        .collect();
+    assert_eq!(
+        names.first().map(String::as_str),
+        Some("brave"),
+        "{names:?}"
+    );
+    assert!(names.iter().any(|n| n == "brave_hearted"), "{names:?}");
+    assert!(names.iter().any(|n| n == "brave_desc"), "{names:?}");
+    // `craven` has no `brave` subsequence — excluded.
+    assert!(!names.iter().any(|n| n == "craven"), "{names:?}");
+
+    // Subsequence query (`cvn` ⊂ `craven`) matches; carries kind + location.
+    let cvn = server.workspace_symbols("cvn");
+    let craven = cvn.iter().find(|s| s.name == "craven").expect("craven");
+    assert_eq!(craven.container_name.as_deref(), Some("trait"));
+    assert!(craven.location.uri.path().ends_with("common/traits/00.txt"));
+
+    // A query matching nothing returns empty.
+    assert!(server.workspace_symbols("zzzzz").is_empty());
+    // Empty query returns a (capped) listing of everything.
+    assert!(server.workspace_symbols("").len() >= 4);
+}
+
+#[test]
 fn rename_rejects_invalid_new_name() {
     let t = TempTree::new();
     t.write("common/traits/00.txt", "brave = { }\n");
