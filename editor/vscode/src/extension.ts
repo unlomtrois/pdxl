@@ -8,10 +8,34 @@ import {
 
 let client: LanguageClient | undefined;
 let output: vscode.OutputChannel | undefined;
+let statusBar: vscode.StatusBarItem | undefined;
 
 function log(msg: string): void {
   console.log(`[pdxl] ${msg}`);
   output?.appendLine(`[${new Date().toISOString()}] ${msg}`);
+}
+
+/** Updates the status-bar button's icon, tooltip, and error colouring. */
+function setStatus(state: "starting" | "running" | "failed"): void {
+  if (!statusBar) return;
+  const errorBg = new vscode.ThemeColor("statusBarItem.errorBackground");
+  switch (state) {
+    case "starting":
+      statusBar.text = "$(loading~spin) pdxl";
+      statusBar.tooltip = "pdxl language server starting… — click for logs";
+      statusBar.backgroundColor = undefined;
+      break;
+    case "running":
+      statusBar.text = "$(check) pdxl";
+      statusBar.tooltip = "pdxl language server running — click for server logs";
+      statusBar.backgroundColor = undefined;
+      break;
+    case "failed":
+      statusBar.text = "$(error) pdxl";
+      statusBar.tooltip = "pdxl language server failed to start — click for logs";
+      statusBar.backgroundColor = errorBg;
+      break;
+  }
 }
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -19,6 +43,24 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(output);
 
   log("pdxl extension activating...");
+
+  // Status-bar button: shows server health at a glance and reveals the
+  // "pdxl (server)" log channel on click.
+  statusBar = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Right,
+    100,
+  );
+  statusBar.command = "pdxl.showServerLog";
+  setStatus("starting");
+  statusBar.show();
+  context.subscriptions.push(statusBar);
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("pdxl.showServerLog", () => {
+      // The LanguageClient's output channel carries the server's stderr (slog).
+      client?.outputChannel.show(true);
+    }),
+  );
 
   // Bridge for the reference-count CodeLens. The server emits a
   // `pdxl.showReferences` command carrying protocol JSON; VS Code's built-in
@@ -100,9 +142,13 @@ export function activate(context: vscode.ExtensionContext): void {
   log("starting language client...");
 
   client.start().then(
-    () => log("language client started successfully"),
+    () => {
+      log("language client started successfully");
+      setStatus("running");
+    },
     (err) => {
       log(`failed to start language client: ${err}`);
+      setStatus("failed");
       vscode.window.showErrorMessage(
         `pdxl: failed to start the language server (${serverPath}). ` +
           `Is the 'pdxl' binary installed and on PATH? ${err}`,

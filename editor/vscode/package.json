@@ -1,8 +1,8 @@
 {
   "name": "pdxl",
-  "displayName": "pdxl — PDXScript",
-  "description": "Live diagnostics for Paradox script (CK3, …) via the pdxl language server.",
-  "version": "0.49.2",
+  "displayName": "pdxl",
+  "description": "Live diagnostics for Paradox script (CK3, ...) via the pdxl language server.",
+  "version": "0.49.3",
   "publisher": "unlomtrois",
   "license": "MIT",
   "repository": {
@@ -23,6 +23,13 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "commands": [
+      {
+        "command": "pdxl.showServerLog",
+        "title": "pdxl: Show Server Log",
+        "category": "pdxl"
+      }
+    ],
     "configuration": {
       "title": "pdxl",
       "properties": {
