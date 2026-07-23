@@ -17,9 +17,7 @@
     "Linters"
   ],
   "activationEvents": [
-    "workspaceContains:**/*.mod",
-    "workspaceContains:**/descriptor.mod",
-    "workspaceContains:pdxl.toml"
+    "onStartupFinished"
   ],
   "main": "./dist/extension.js",
   "contributes": {

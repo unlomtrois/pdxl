@@ -47,7 +47,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // Status-bar button: shows server health at a glance and reveals the
   // "pdxl (server)" log channel on click.
   statusBar = vscode.window.createStatusBarItem(
-    vscode.StatusBarAlignment.Right,
+    vscode.StatusBarAlignment.Left,
     100,
   );
   statusBar.command = "pdxl.showServerLog";
