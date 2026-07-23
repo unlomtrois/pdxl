@@ -771,6 +771,35 @@ fn character_interaction_body_completion_and_hover() {
 }
 
 #[test]
+fn event_type_enum_and_structural_docs() {
+    let t = TempTree::new();
+    let src = "namespace = my\nmy.1 = {\n\ttype = \n\timmediate = { }\n}\n";
+    t.write("events/my.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "events/my.txt");
+
+    // `type = ` completes the event-type enum.
+    let names: Vec<String> = server
+        .completion(&uri, pos_after(src, "type = "))
+        .iter()
+        .map(|i| i.label.clone())
+        .collect();
+    for v in [
+        "character_event",
+        "letter_event",
+        "court_event",
+        "activity_event",
+    ] {
+        assert!(names.iter().any(|n| n == v), "missing `{v}`: {names:?}");
+    }
+
+    // Hover on a structural effect field documents it.
+    let hover = hover_md(&server, &uri, pos_of(src, "immediate = "));
+    assert!(hover.contains("event field immediate"), "{hover}");
+    assert!(hover.to_lowercase().contains("effect"), "{hover}");
+}
+
+#[test]
 fn artifact_enum_field_values_complete_and_hover() {
     let t = TempTree::new();
     let src = "my_crown = {\n\tslot = \n}\n";
