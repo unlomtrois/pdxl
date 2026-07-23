@@ -1,4 +1,4 @@
-//! Game concepts (`common/game_concepts/`, no `.info` file — modeled from the
+//! Game concepts (`common/game_concepts/`, no `.info` file, modeled from the
 //! vanilla corpus). A concept is a documentation entry the engine links from
 //! localization text (`[Concept('vassal', …)]`, `#L_… #!` markup) and the
 //! encyclopedia. Definitions are top-level `NAME = { … }` blocks; 1045 in
@@ -6,7 +6,7 @@
 //! resolvable names).
 //!
 //! References (corpus-validated at 0 unresolved): `parent = X` names another
-//! concept — 683 uses, 12 of which resolve only through an alias
+//! concept: 683 uses, 12 of which resolve only through an alias
 //! (`parent = accolades` → the `accolade` concept), which is exactly why the
 //! alias list must be harvested as extra def names. The rule is gated to the
 //! game_concepts directory and matched at depth 1 ([`RefPattern::KeyValueTop`]),
@@ -17,10 +17,10 @@
 //! `Schema::loc_concept_kind`): the bare `[concept|E]` encyclopedia link
 //! (~47k in vanilla) and the explicit `[Concept('key', …)]` datafunction. `|E`
 //! is an unambiguous concept-link command, so an unresolved one is a broken
-//! link — corpus-validated at 10 unresolved across every language: vanilla's
+//! link, corpus-validated at 10 unresolved across every language: vanilla's
 //! own German/Japanese placeholder links (`intrigue_lqwuljxh`, encoded
 //! debug entries) and a handful of removed concepts (`calamities`, `vigor`,
-//! `head_determination`) plus T4N typos — all genuine dangling links.
+//! `head_determination`) plus T4N typos, all genuine dangling links.
 //! Datafunction chains (`[GetPlayer.Custom('x')|E]`) are deliberately skipped:
 //! only a bare identifier immediately before `|E]` counts.
 //!

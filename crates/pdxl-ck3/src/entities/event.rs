@@ -1,4 +1,4 @@
-//! Events (`events/`) — schema row (event/loc references) plus the rich
+//! Events (`events/`): schema row (event/loc references) plus the rich
 //! `_events.info` structural context (option, portraits, widgets, overrides),
 //! with documented fields and value enums for `type` / `window` / `skill` /
 //! portrait `position` / widget `controller`.
@@ -19,7 +19,7 @@ const fn toggle(doc: &'static str) -> FieldSpec {
     scalar(Setting).doc(doc).values(&["yes", "no"])
 }
 
-/// The six character skills — an option's `skill` marker.
+/// The six character skills, for an option's `skill` marker.
 const SKILLS: &[&str] = &[
     "diplomacy",
     "martial",
@@ -43,7 +43,7 @@ static TRIGGERED_ANIMATION: StructSpec = StructSpec {
         ),
         (
             "scripted_animation",
-            scalar(Setting).doc("A scripted animation key — alternative to `animation`."),
+            scalar(Setting).doc("A scripted animation key (alternative to `animation`)."),
         ),
         (
             "camera",
@@ -95,7 +95,7 @@ static PORTRAIT: StructSpec = StructSpec {
         ),
         (
             "scripted_animation",
-            scalar(Setting).doc("A scripted-animation key — alternative to `animation`."),
+            scalar(Setting).doc("A scripted-animation key (alternative to `animation`)."),
         ),
         (
             "triggered_animation",
@@ -130,7 +130,7 @@ static PORTRAIT: StructSpec = StructSpec {
         ),
         (
             "hide_info",
-            toggle("Show only the portrait — no CoA, tooltips, or clicks (default `no`)."),
+            toggle("Show only the portrait, with no CoA, tooltips, or clicks (default `no`)."),
         ),
     ],
     fallback: Fallback::Deny,
@@ -224,14 +224,14 @@ static WIDGETS: StructSpec = StructSpec {
     fallback: Fallback::Deny,
 };
 
-/// `name = { text = … trigger = { … } }` — the gated option-name candidate.
+/// `name = { text = … trigger = { … } }`: the gated option-name candidate.
 static OPTION_NAME: StructSpec = StructSpec {
     name: "option_name",
     fields: &[
         (
             "text",
             scalar_or_block(LocKey, DynamicDesc)
-                .doc("The name text — a loc key or dynamic-description block."),
+                .doc("The name text: a loc key or dynamic-description block."),
         ),
         (
             "trigger",
@@ -241,8 +241,8 @@ static OPTION_NAME: StructSpec = StructSpec {
     fallback: Fallback::Deny,
 };
 
-/// The event option: known structural fields, and — the key finding from
-/// `_events.info` — **every unknown key is an inline effect**.
+/// The event option: known structural fields, plus the key finding from
+/// `_events.info`, that **every unknown key is an inline effect**.
 static OPTION: StructSpec = StructSpec {
     name: "option",
     fields: &[
@@ -359,9 +359,9 @@ static EVENT: StructSpec = StructSpec {
         ("orphan", toggle("Suppresses the \"unreferenced event\" log warning (useful for debug events).")),
         ("content_source", scalar(Setting).doc("The DLC or mod this event belongs to, shown in the event window.")),
         ("theme", scalar(Setting).doc("The event theme (see 00_event_themes.txt) driving background/icon/sound.")),
-        ("title", scalar_or_block(LocKey, DynamicDesc).doc("Event title — a loc key or a dynamic-description block.")),
-        ("desc", scalar_or_block(LocKey, DynamicDesc).doc("Event body text — a loc key or a dynamic-description block.")),
-        ("opening", scalar_or_block(LocKey, DynamicDesc).doc("Letter-event opening line — a loc key or dynamic-description block.")),
+        ("title", scalar_or_block(LocKey, DynamicDesc).doc("Event title: a loc key or a dynamic-description block.")),
+        ("desc", scalar_or_block(LocKey, DynamicDesc).doc("Event body text: a loc key or a dynamic-description block.")),
+        ("opening", scalar_or_block(LocKey, DynamicDesc).doc("Letter-event opening line: a loc key or dynamic-description block.")),
         ("trigger", block(Trigger).doc("Conditions required for this event to fire at all (root = the event scope).")),
         ("major_trigger", block(Trigger).doc("Extra condition for the event to count as major.")),
         ("immediate", block(Effect).doc("Effect run the moment the event fires, before the window is shown (root = the event scope).")),
@@ -371,7 +371,7 @@ static EVENT: StructSpec = StructSpec {
         (
             "left_portrait",
             scalar_or_block(Target, ClauseKind::Struct(&PORTRAIT))
-                .doc("Left portrait — an event target, or a block for animations / outfits / triggers."),
+                .doc("Left portrait: an event target, or a block for animations, outfits, and triggers."),
         ),
         (
             "right_portrait",
@@ -395,7 +395,7 @@ static EVENT: StructSpec = StructSpec {
         ),
         (
             "sender",
-            scalar_or_block(Target, ClauseKind::Struct(&PORTRAIT)).doc("Letter sender portrait — required for letter events."),
+            scalar_or_block(Target, ClauseKind::Struct(&PORTRAIT)).doc("Letter sender portrait, required for letter events."),
         ),
         ("artifact", block(ClauseKind::Struct(&ARTIFACT)).doc("An artifact shown at a portrait position.")),
         ("court_scene", block(ClauseKind::Struct(&COURT_SCENE)).doc("Court-event scene behavior (roles, owner, pausing).")),
@@ -407,7 +407,7 @@ static EVENT: StructSpec = StructSpec {
             // `{ trigger reference … }` asset block.
             "override_background",
             scalar_or_block(Setting, ClauseKind::Struct(&TRIGGERED_ASSET))
-                .doc("Overrides the theme's background — a key, or `{ trigger reference }`; first matching trigger wins."),
+                .doc("Overrides the theme's background: a key, or `{ trigger reference }`; first matching trigger wins."),
         ),
         (
             "override_transition",

@@ -723,7 +723,7 @@ fn option_field_completion_carries_docs() {
     let Some(lsp_types::Documentation::MarkupContent(doc)) = &trait_item.documentation else {
         panic!("option field should carry documentation");
     };
-    assert!(doc.value.contains("icon"), "{}", doc.value);
+    assert!(doc.value.contains("unlock-reason"), "{}", doc.value);
 }
 
 #[test]

@@ -1,4 +1,4 @@
-//! Schemes (`common/schemes/scheme_types/`) — schema row (scheme-type
+//! Schemes (`common/schemes/scheme_types/`): schema row (scheme-type
 //! references) plus the `_schemes.info` structural context.
 //!
 //! A scheme's key is its type id (`elope`, `murder`, …); it is referenced as
@@ -6,10 +6,10 @@
 //! trigger idiom.
 //!
 //! The text fields `desc` / `success_desc` / `discovery_desc` are loc-key
-//! references (rules live in `loc.rs`, gated to this dir — the target-kind
+//! references (rules live in `loc.rs`, gated to this dir, the target-kind
 //! precedent). The rule also catches the `desc = X` tooltip keys inside the
 //! scripted-modifier blocks (`base_success_chance`, `agent_join_chance`).
-//! Corpus: 97.8% of 743 resolve; the misses exist in no language — genuine
+//! Corpus: 97.8% of 743 resolve; the misses exist in no language, genuine
 //! dead-loc bugs the tool now surfaces.
 //!
 //! The `_schemes.info` warns it "does not currently include all possible
@@ -17,7 +17,7 @@
 //! scheme types across game + T4N). Fields present in the corpus but absent
 //! from the info: `on_start`, `phases_per_agent_charge`, `discovery_desc`,
 //! `base_maximum_success` (the info's `base_maximum_success_chance` is not
-//! used), `starting_agent_slots`. Enum values are corpus-derived too —
+//! used), `starting_agent_slots`. Enum values are corpus-derived too:
 //! `category` gained `political` beyond the info's personal/contract/hostile.
 //!
 //! Sibling dirs `common/schemes/{pulse_actions,agent_types,scheme_countermeasures}/`
@@ -148,7 +148,7 @@ static SCHEME: StructSpec = StructSpec {
         (
             "valid_agent",
             block_scoped(Trigger, "character").doc(
-                "Trigger checking whether an agent is valid for the scheme. Checked frequently — \
+                "Trigger checking whether an agent is valid for the scheme. Checked frequently; \
                  use sparingly.",
             ),
         ),
@@ -280,9 +280,9 @@ impl Entity for Scheme {
             shape: DefShape::TopLevel,
         }),
         refs: &[
-            // `scheme_type = elope` — the common trigger idiom.
+            // `scheme_type = elope`: the common trigger idiom.
             anywhere(RefPattern::KeyValue("scheme_type")),
-            // Bare `scheme = elope` — checks/switches on the scheme type. Scope
+            // Bare `scheme = elope`, checks/switches on the scheme type. Scope
             // values (`scheme = scope:x`) are skipped by skip_ref_value.
             anywhere(RefPattern::KeyValue("scheme")),
             // `start_scheme = { type = elope … }` / `create_scheme = { type = … }`.

@@ -1,4 +1,4 @@
-//! Localization keys — defined outside PDXScript in
+//! Localization keys, defined outside PDXScript in
 //! `localization/<lang>/**/*.yml` (extracted by `pdxl-loc`, so no
 //! `DefSource`), referenced by the text-bearing fields of events and
 //! decisions.
@@ -28,7 +28,7 @@ const fn scheme_loc(key: &'static str) -> RefRule {
 }
 
 /// The person/tense fields of effect/trigger localization entries
-/// (`first`, `third_past`, `global_neg`, …) are loc keys in both dirs —
+/// (`first`, `third_past`, `global_neg`, …) are loc keys in both dirs,
 /// one gated rule per key per directory (98.8% corpus resolution; misses
 /// are genuine missing-loc bugs).
 macro_rules! person_tense_rules {
@@ -74,7 +74,7 @@ pub(crate) struct Loc;
 impl Entity for Loc {
     const KINDS: &'static [KindSpec] = &[
         // Effect/trigger-localization person/tense fields (second row for the
-        // same kind — Schema::new dedups registration).
+        // same kind, Schema::new dedups registration).
         KindSpec {
             kind: kinds::LOC_KEY,
             icon: IconHint::Text,

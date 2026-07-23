@@ -1,5 +1,5 @@
 //! Situations (`common/situation/`, from `_situations.info` /
-//! `_catalysts.info` / `_situation_group_types.info`) — the Khans-of-the-Steppe
+//! `_catalysts.info` / `_situation_group_types.info`): the Khans-of-the-Steppe
 //! situation system: region-bound objects that move through phases, with
 //! characters sorted into participant groups, driven by *catalysts*.
 //!
@@ -11,7 +11,7 @@
 //!   that push phase transitions. Referenced by the `catalysts = { X = n }`
 //!   block *keys* inside a phase's `future_phases` (gated to the situations
 //!   dir) and by `catalyst = X` inside the five situation-catalyst
-//!   effects/triggers. **Not** `activate_struggle_catalyst` — struggle
+//!   effects/triggers. **Not** `activate_struggle_catalyst`, struggle
 //!   catalysts are a separate database (`common/struggle/catalysts/`), so the
 //!   `catalyst` field is matched only under the situation effects, never bare
 //!   (corpus-validated: 54 gated refs, 0 unresolved; the 100 struggle-catalyst
@@ -21,7 +21,7 @@
 //!   situation body (gated, depth 1).
 //!
 //! Not modeled as refs: `gui_window_name` / `gui_participation_window_name`
-//! (gui widget names — the gui layer is name-gated, not enumerable),
+//! (gui widget names; the gui layer is name-gated, not enumerable),
 //! `start_phase` / future-phase keys (phase keys are local to one situation,
 //! no cross-file kind), `map_province_effect` and `geographical_regions`
 //! (kinds not modeled yet). The deep `modifier_named_sets` payload is left
@@ -46,7 +46,7 @@ const fn toggle(doc: &'static str) -> FieldSpec {
 }
 
 /// A reference rule gated to the situations directory (attribute keys reused
-/// elsewhere in script — `icon`, `catalysts` — mean situation things only here).
+/// elsewhere in script (`icon`, `catalysts`) mean situation things only here).
 const fn in_situations(pattern: RefPattern) -> RefRule {
     RefRule {
         pattern,
@@ -115,7 +115,7 @@ static FUTURE_PHASE: StructSpec = StructSpec {
         ("takeover_points", scalar(Setting).doc("Catalyst points at which this phase takes over (with `takeover_type = points`; not with `takeover_duration`).")),
         ("weight", scalar(Setting).doc("Scripted value weighting selection of this phase as the next phase.")),
         ("takeover_duration", block(Struct(&DURATION)).doc("Duration the active phase must have run before takeover (with `takeover_type = duration`; not with `takeover_points`).")),
-        ("catalysts", block(Config).doc("`<catalyst> = <points>` — which catalysts contribute points toward this phase taking over (catalysts from `common/situation/catalysts/`).")),
+        ("catalysts", block(Config).doc("`<catalyst> = <points>`: which catalysts contribute points toward this phase taking over (catalysts from `common/situation/catalysts/`).")),
     ],
     fallback: Fallback::Deny,
 };
@@ -214,7 +214,7 @@ static SITUATION_GROUP_TYPE_BODY: StructSpec = StructSpec {
     fallback: Fallback::Deny,
 };
 
-/// Catalyst bodies are database entries — usually empty; keep unknown keys
+/// Catalyst bodies are database entries, usually empty; keep unknown keys
 /// non-fatal.
 static CATALYST_BODY: StructSpec = StructSpec {
     name: "catalyst",
