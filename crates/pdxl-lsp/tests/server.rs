@@ -1813,6 +1813,130 @@ fn references_work_from_inside_a_loc_yml() {
     assert!(refs[0].uri.path().ends_with("events/my.txt"));
 }
 
+/// Flattens a WorkspaceEdit into (file-suffix, new_text) pairs for assertions.
+fn edit_pairs(edit: &lsp_types::WorkspaceEdit) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for (uri, edits) in edit.changes.as_ref().expect("changes") {
+        for e in edits {
+            out.push((uri.path().to_string(), e.new_text.clone()));
+        }
+    }
+    out.sort();
+    out
+}
+
+#[test]
+fn rename_loc_key_across_yml_and_script() {
+    let t = TempTree::new();
+    let yml = "\u{feff}l_english:\n my.1.t: \"A Title\"\n";
+    t.write("localization/english/my_l_english.yml", yml);
+    t.write(
+        "events/my.txt",
+        "namespace = my\nmy.1 = {\n\ttitle = my.1.t\n}\n",
+    );
+    let (server, _rx) = server_over(&t);
+    let yml_uri = uri_for(&t, "localization/english/my_l_english.yml");
+    let ev_uri = uri_for(&t, "events/my.txt");
+
+    // Rename from the reference site (`title = my.1.t`).
+    let ev_src = "namespace = my\nmy.1 = {\n\ttitle = my.1.t\n}\n";
+    let edit = server
+        .rename(&ev_uri, pos_of(ev_src, "my.1.t\n"), "my.1.title")
+        .expect("workspace edit");
+    let pairs = edit_pairs(&edit);
+    // Both the yml key and the script ref are rewritten.
+    assert!(
+        pairs
+            .iter()
+            .any(|(f, n)| f.ends_with("my_l_english.yml") && n == "my.1.title"),
+        "{pairs:?}"
+    );
+    assert!(
+        pairs
+            .iter()
+            .any(|(f, n)| f.ends_with("events/my.txt") && n == "my.1.title"),
+        "{pairs:?}"
+    );
+
+    // Rename from the definition site (the yml key) yields the same edit set.
+    let from_def = server
+        .rename(&yml_uri, Position::new(1, 1), "my.1.title")
+        .expect("workspace edit");
+    assert_eq!(edit_pairs(&from_def), pairs);
+}
+
+#[test]
+fn rename_preserves_quoting_per_site() {
+    let t = TempTree::new();
+    t.write("common/traits/00.txt", "brave = { }\ncraven = { }\n");
+    t.write(
+        "common/scripted_effects/e.txt",
+        "unquoted = {\n\tadd_trait = brave\n}\nquoted = {\n\tadd_trait = \"brave\"\n}\n",
+    );
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/traits/00.txt");
+
+    // Rename the trait def `brave` → `daring`.
+    let edit = server
+        .rename(&uri, Position::new(0, 0), "daring")
+        .expect("workspace edit");
+    let texts: Vec<String> = edit_pairs(&edit).into_iter().map(|(_, n)| n).collect();
+    // Unquoted ref + def become `daring`; the quoted ref becomes `"daring"`.
+    assert!(texts.contains(&"daring".to_string()), "{texts:?}");
+    assert!(texts.contains(&"\"daring\"".to_string()), "{texts:?}");
+}
+
+#[test]
+fn prepare_rename_selects_identifier_and_rejects_non_symbols() {
+    let t = TempTree::new();
+    t.write("common/traits/00.txt", "brave = { }\n");
+    t.write(
+        "common/scripted_effects/e.txt",
+        "e = {\n\tadd_trait = \"brave\"\n}\n",
+    );
+    let (server, _rx) = server_over(&t);
+    let euri = uri_for(&t, "common/scripted_effects/e.txt");
+
+    // On the quoted ref, prepareRename selects the inner identifier + name.
+    let esrc = "e = {\n\tadd_trait = \"brave\"\n}\n";
+    let resp = server
+        .prepare_rename(&euri, pos_of(esrc, "brave\""))
+        .expect("prepare response");
+    match resp {
+        lsp_types::PrepareRenameResponse::RangeWithPlaceholder { placeholder, range } => {
+            assert_eq!(placeholder, "brave");
+            // Range covers `brave`, not the quotes.
+            assert_eq!(range.start.character, 14);
+            assert_eq!(range.end.character, 19);
+        }
+        other => panic!("unexpected: {other:?}"),
+    }
+
+    // On a non-symbol position (the builtin `add_trait` keyword, not a
+    // def/ref/call), prepareRename is None.
+    assert!(
+        server
+            .prepare_rename(&euri, pos_of(esrc, "add_trait"))
+            .is_none()
+    );
+}
+
+#[test]
+fn rename_rejects_invalid_new_name() {
+    let t = TempTree::new();
+    t.write("common/traits/00.txt", "brave = { }\n");
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/traits/00.txt");
+    // Whitespace / structural chars are refused.
+    assert!(
+        server
+            .rename(&uri, Position::new(0, 0), "bad name")
+            .is_none()
+    );
+    assert!(server.rename(&uri, Position::new(0, 0), "").is_none());
+    assert!(server.rename(&uri, Position::new(0, 0), "a=b").is_none());
+}
+
 #[test]
 fn completion_inside_a_law_offers_law_fields() {
     let (server, _rx, t) = completion_server();

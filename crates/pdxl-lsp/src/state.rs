@@ -21,7 +21,7 @@ use lsp_server::{Message, Notification};
 use lsp_types::notification::{Notification as _, PublishDiagnostics};
 use lsp_types::{
     Diagnostic, DiagnosticSeverity, InlayHint, InlayHintKind, InlayHintTooltip, Location, Position,
-    PublishDiagnosticsParams, Range, Url,
+    PrepareRenameResponse, PublishDiagnosticsParams, Range, TextEdit, Url, WorkspaceEdit,
 };
 use pdxl_analysis::context::ClauseKind;
 use pdxl_analysis::{KindId, LOC_KEY, RefDiag, Schema};
@@ -383,6 +383,105 @@ impl ServerState {
             });
         }
         locations
+    }
+
+    /// `textDocument/prepareRename`: validates that the cursor sits on a
+    /// renameable symbol and returns the identifier span (unquoted) plus the
+    /// current name as the placeholder, so the editor pre-selects `brave`, not
+    /// `"brave"`. Returns `None` on a non-symbol position (F2 is rejected).
+    pub fn prepare_rename(&self, uri: &Url, pos: Position) -> Option<PrepareRenameResponse> {
+        let path = uri_to_path(uri);
+        let project = self.project.as_ref()?;
+        let src = self.read_file(&path).ok()?;
+        let off = position_to_offset(&src, pos);
+        let facts = project.facts_at(&path)?;
+        let (_, _, name) = symbol_at_with_alts(facts, off)?;
+        let (start, end) = span_at(facts, off)?;
+        // A quoted value's span covers the quotes; select only the identifier.
+        let (start, end) = unquoted_span(&src, start, end);
+        Some(PrepareRenameResponse::RangeWithPlaceholder {
+            range: Range {
+                start: offset_to_position(&src, start),
+                end: offset_to_position(&src, end),
+            },
+            placeholder: name.to_string(),
+        })
+    }
+
+    /// `textDocument/rename`: resolves the symbol under the cursor (definition
+    /// name or reference site) and returns a project-wide [`WorkspaceEdit`]
+    /// rewriting its definition and every reference to `new_name`.
+    ///
+    /// Reuses the same resolution as [`Self::references`] / [`Self::definition`]
+    /// (multi-kind refs resolve to whichever kind defines the name). Quoted
+    /// reference sites keep their quotes.
+    ///
+    /// Limitations: loc keys are renamed only in the loaded language (english);
+    /// other-language `.yml` definitions are left untouched. A name reachable
+    /// only through an alias (a trait *group*) renames the reference sites but
+    /// not the `group = X` declaration (which is not a source-backed symbol).
+    /// Returns `None` when `new_name` is invalid or nothing resolves.
+    pub fn rename(&self, uri: &Url, pos: Position, new_name: &str) -> Option<WorkspaceEdit> {
+        if !is_valid_rename(new_name) {
+            return None;
+        }
+        let path = uri_to_path(uri);
+        let project = self.project.as_ref()?;
+        let src = self.read_file(&path).ok()?;
+        let off = position_to_offset(&src, pos);
+        let facts = project.facts_at(&path)?;
+        let (kind, alt, name) = symbol_at_with_alts(facts, off)?;
+        let name = name.to_string();
+
+        // Resolve to the kind that actually defines the name (definition()'s
+        // rule); fall back to the primary kind so an unresolved ref still
+        // renames its sites.
+        let def = std::iter::once(kind)
+            .chain(alt.iter().copied())
+            .find_map(|k| project.table().lookup(k, &name).map(|s| (k, s)));
+        let ref_kind = def.map(|(k, _)| k).unwrap_or(kind);
+
+        let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+        let mut src_cache: HashMap<PathBuf, Option<Vec<u8>>> = HashMap::new();
+        let mut push_edit = |file: PathBuf, start: u32, end: u32| {
+            let text = src_cache
+                .entry(file.clone())
+                .or_insert_with(|| self.read_file(&file).ok());
+            let Some(text) = text else { return };
+            // Preserve the author's quoting: a quoted span stays quoted.
+            let quoted = text.get(start as usize) == Some(&b'"');
+            let new_text = if quoted {
+                format!("\"{new_name}\"")
+            } else {
+                new_name.to_string()
+            };
+            changes
+                .entry(path_to_uri(&file))
+                .or_default()
+                .push(TextEdit {
+                    range: Range {
+                        start: offset_to_position(text, start),
+                        end: offset_to_position(text, end),
+                    },
+                    new_text,
+                });
+        };
+
+        for r in project.references(ref_kind, &name) {
+            push_edit(PathBuf::from(r.file.as_ref()), r.start, r.end);
+        }
+        // The definition, unless it is a zero-width alias marker (no real span).
+        if let Some((_, symbol)) = def
+            && symbol.offset != symbol.end_offset
+            && let Some(def_full) = project.rel_to_full(&symbol.file)
+        {
+            push_edit(def_full.to_path_buf(), symbol.offset, symbol.end_offset);
+        }
+
+        (!changes.is_empty()).then(|| WorkspaceEdit {
+            changes: Some(changes),
+            ..Default::default()
+        })
     }
 
     /// `textDocument/semanticTokens/full`: lexer-driven syntax highlighting.
@@ -2107,6 +2206,29 @@ fn span_at(facts: &pdxl_analysis::FileFacts, off: u32) -> Option<(u32, u32)> {
         }
     }
     None
+}
+
+/// Narrows a value span to exclude surrounding quotes, so a rename selects /
+/// rewrites the identifier rather than `"identifier"`. Reference spans cover the
+/// whole value node (quotes included); definition spans never are.
+fn unquoted_span(src: &[u8], start: u32, end: u32) -> (u32, u32) {
+    if end > start + 1
+        && src.get(start as usize) == Some(&b'"')
+        && src.get(end as usize - 1) == Some(&b'"')
+    {
+        (start + 1, end - 1)
+    } else {
+        (start, end)
+    }
+}
+
+/// Whether `name` is a usable rename target: a non-empty identifier with no
+/// whitespace or PDXScript-structural characters (quotes, braces, `=`, `#`).
+fn is_valid_rename(name: &str) -> bool {
+    !name.is_empty()
+        && !name
+            .chars()
+            .any(|c| c.is_whitespace() || matches!(c, '"' | '=' | '{' | '}' | '#'))
 }
 
 /// Presentation mapping from pdxl symbol kinds to LSP outline icons.

@@ -101,6 +101,12 @@ pub fn run_stdio(opts: Options) -> Result<(), Box<dyn std::error::Error + Sync +
         definition_provider: Some(OneOf::Left(true)),
         document_formatting_provider: Some(OneOf::Left(true)),
         references_provider: Some(OneOf::Left(true)),
+        // Project-wide rename (F2): rewrites a symbol's definition + every
+        // reference. prepareRename validates the cursor position first.
+        rename_provider: Some(OneOf::Right(lsp_types::RenameOptions {
+            prepare_provider: Some(true),
+            work_done_progress_options: Default::default(),
+        })),
         // Reference-count lenses over every definition; two-phase (resolve
         // fills the count lazily for on-screen lenses only).
         code_lens_provider: Some(lsp_types::CodeLensOptions {
@@ -401,6 +407,45 @@ fn handle_request(server: &mut ServerState, out: &Sender<Message>, req: lsp_serv
             let resp = match serde_json::from_value::<lsp_types::DocumentLinkParams>(req.params) {
                 Ok(params) => {
                     Response::new_ok(req.id, server.document_links(&params.text_document.uri))
+                }
+                Err(e) => Response::new_err(
+                    req.id,
+                    lsp_server::ErrorCode::InvalidParams as i32,
+                    e.to_string(),
+                ),
+            };
+            let _ = out.send(Message::Response(resp));
+        }
+        lsp_types::request::PrepareRenameRequest::METHOD => {
+            let resp =
+                match serde_json::from_value::<lsp_types::TextDocumentPositionParams>(req.params) {
+                    Ok(params) => Response::new_ok(
+                        req.id,
+                        server.prepare_rename(&params.text_document.uri, params.position),
+                    ),
+                    Err(e) => Response::new_err(
+                        req.id,
+                        lsp_server::ErrorCode::InvalidParams as i32,
+                        e.to_string(),
+                    ),
+                };
+            let _ = out.send(Message::Response(resp));
+        }
+        lsp_types::request::Rename::METHOD => {
+            let resp = match serde_json::from_value::<lsp_types::RenameParams>(req.params) {
+                Ok(params) => {
+                    match server.rename(
+                        &params.text_document_position.text_document.uri,
+                        params.text_document_position.position,
+                        &params.new_name,
+                    ) {
+                        Some(edit) => Response::new_ok(req.id, edit),
+                        None => Response::new_err(
+                            req.id,
+                            lsp_server::ErrorCode::InvalidRequest as i32,
+                            "cannot rename this symbol".to_string(),
+                        ),
+                    }
                 }
                 Err(e) => Response::new_err(
                     req.id,
