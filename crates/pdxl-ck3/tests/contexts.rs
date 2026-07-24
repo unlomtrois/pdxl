@@ -370,3 +370,45 @@ fn named_colors_container_opens_color_context() {
         ClauseKind::Color
     );
 }
+
+#[test]
+fn faith_color_opens_color_context() {
+    let src = "christianity_religion = {\n\
+               \tfaiths = {\n\
+               \t\tcatholic = {\n\
+               \t\t\tcolor = { 0.8 0.8 0.6 }\n\
+               \t\t\tholy_site = rome\n\
+               \t\t}\n\
+               \t}\n\
+               }\n";
+    let rel = "common/religion/religion_types/00_christianity.txt";
+    assert_eq!(ctx_of(src, rel, "0.6"), ClauseKind::Color);
+    // Unmodeled faith fields stay plain config, not rejected.
+    assert_eq!(ctx_of(src, rel, "rome"), ClauseKind::Config);
+}
+
+#[test]
+fn religion_and_doctrine_bodies_are_modeled() {
+    let rel = "common/religion/religion_types/00.txt";
+    let src = "x = {\n\
+               \tdoctrine_selection_pair = { requires_dlc_flag = f doctrine = d }\n\
+               \tholy_order_names = { { name = HOLY coat_of_arms = c } }\n\
+               \tfaiths = { y = { color = hsv { 0.1 0.2 0.3 } } }\n\
+               }\n";
+    assert_eq!(ctx_of(src, rel, "0.2"), ClauseKind::Color);
+    // Keys report their containing struct: the anonymous holy_order_names
+    // entry opens the per-entry struct (the context_at anonymous-item step).
+    assert_eq!(
+        ctx_of(src, rel, "coat_of_arms"),
+        ClauseKind::Struct(pick_spec("holy order name"))
+    );
+    assert_eq!(
+        ctx_of(src, rel, "requires_dlc_flag"),
+        ClauseKind::Struct(pick_spec("doctrine_selection_pair"))
+    );
+
+    let dsrc = "d = {\n\tcan_pick = { is_adult = yes }\n\tpiety_cost = { value = 5 }\n}\n";
+    let drel = "common/religion/doctrine_types/00.txt";
+    assert_eq!(ctx_of(dsrc, drel, "is_adult"), ClauseKind::Trigger);
+    assert_eq!(ctx_of(dsrc, drel, "value"), ClauseKind::ScriptValue);
+}

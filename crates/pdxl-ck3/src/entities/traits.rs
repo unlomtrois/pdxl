@@ -39,6 +39,15 @@ const fn toggle(doc: &'static str) -> FieldSpec {
 }
 
 /// A reference rule gated to the traits directory.
+/// A reference rule gated to the religion tree (virtue/sin lists).
+const fn in_religion(pattern: RefPattern) -> RefRule {
+    RefRule {
+        pattern,
+        gate: Some("common/religion/"),
+        alt: &[],
+    }
+}
+
 const fn in_traits(pattern: RefPattern) -> RefRule {
     RefRule {
         pattern,
@@ -324,6 +333,14 @@ impl Entity for Traits {
             // *group* names, which resolve via the alias mechanism).
             in_traits(RefPattern::KeyList("opposites")),
             in_traits(RefPattern::KeyBlockKeys("compatibility")),
+            // Religious virtues/sins (religions + doctrines): the lists mix
+            // loose names (`brave`), scaled names (`brave = 0.5`), and block
+            // forms (`brave = { scale = … }`) — the List and BlockKeys shapes
+            // together cover all three. Trait groups resolve via aliases.
+            in_religion(RefPattern::KeyList("virtues")),
+            in_religion(RefPattern::KeyBlockKeys("virtues")),
+            in_religion(RefPattern::KeyList("sins")),
+            in_religion(RefPattern::KeyBlockKeys("sins")),
         ],
         // CK3 traits expose group / group_equivalence names as valid refs.
         aliases: &["group", "group_equivalence"],

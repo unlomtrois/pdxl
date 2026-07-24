@@ -63,3 +63,6 @@ pub const SITUATION_GROUP_TYPE: KindId = KindId::new("situation_group_type");
 pub const PROVINCE: KindId = KindId::new("province");
 pub const TERRAIN_TYPE: KindId = KindId::new("terrain_type");
 pub const NAMED_COLOR: KindId = KindId::new("named_color");
+pub const DOCTRINE: KindId = KindId::new("doctrine");
+pub const HOLY_SITE: KindId = KindId::new("holy_site");
+pub const RELIGION_FAMILY: KindId = KindId::new("religion_family");

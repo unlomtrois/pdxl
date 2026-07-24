@@ -44,6 +44,23 @@ impl Entity for Title {
                 gate: Some(LANDED_TITLES_DIR),
                 alt: &[],
             },
+            // A faith's religious head title (35 corpus refs, 0 unresolved).
+            RefRule {
+                pattern: RefPattern::KeyValue("religious_head"),
+                gate: Some(super::faith::RELIGION_DIR),
+                alt: &[],
+            },
+            // A holy site's location (326 + 75 corpus refs, 0 unresolved).
+            RefRule {
+                pattern: RefPattern::KeyValue("county"),
+                gate: Some(super::holy_site::HOLY_SITES_DIR),
+                alt: &[],
+            },
+            RefRule {
+                pattern: RefPattern::KeyValue("barony"),
+                gate: Some(super::holy_site::HOLY_SITES_DIR),
+                alt: &[],
+            },
         ],
         aliases: &[],
     }];

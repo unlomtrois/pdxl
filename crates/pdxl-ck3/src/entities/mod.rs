@@ -37,6 +37,7 @@ mod culture_tradition;
 mod custom_loc;
 mod death_reason;
 mod decision;
+mod doctrine;
 mod dynasty;
 mod effect_localization;
 mod event;
@@ -45,6 +46,7 @@ mod event_theme;
 mod faith;
 mod game_concept;
 mod gui;
+mod holy_site;
 mod law;
 mod loc;
 mod modifier;
@@ -55,6 +57,7 @@ mod nickname;
 mod on_action;
 mod portrait_animation;
 mod province;
+mod religion_family;
 mod scheme;
 mod scripted;
 mod scripted_gui;
@@ -135,5 +138,8 @@ registry!(
     province::Province,
     terrain::Terrain,
     named_color::NamedColor,
+    doctrine::Doctrine,
+    holy_site::HolySite,
+    religion_family::ReligionFamily,
     loc::Loc,
 );

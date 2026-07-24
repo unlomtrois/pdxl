@@ -2006,3 +2006,57 @@ fn named_color_defs_and_refs() {
             .all(|r| r.kind != pdxl_ck3::kinds::NAMED_COLOR)
     );
 }
+
+// ── religion domain: doctrines, holy sites, families (ANALYSIS_VERSION 57) ───
+
+#[test]
+fn religion_domain_defs_and_refs() {
+    // Doctrines: top-level defs; referenced by doctrine/has_doctrine anywhere.
+    let d = extract(
+        "doctrine_monogamy = { piety_cost = { value = 5 } }\n",
+        "common/religion/doctrine_types/20_doctrines.txt",
+    );
+    assert_eq!(d.defs[0].kind, pdxl_ck3::kinds::DOCTRINE);
+    let e = extract(
+        "e = { has_doctrine = doctrine_monogamy }\n",
+        "common/scripted_triggers/x.txt",
+    );
+    assert_eq!(e.refs[0].kind, pdxl_ck3::kinds::DOCTRINE);
+
+    // Holy sites: defs + faith-body refs; county/barony are title refs.
+    let h = extract(
+        "jerusalem = { county = c_jerusalem barony = b_vaticano }\n",
+        "common/religion/holy_site_types/00.txt",
+    );
+    assert_eq!(h.defs[0].kind, pdxl_ck3::kinds::HOLY_SITE);
+    let titles: Vec<&str> = h
+        .refs
+        .iter()
+        .filter(|r| r.kind == pdxl_ck3::kinds::TITLE)
+        .map(|r| r.name.as_str())
+        .collect();
+    assert_eq!(titles, vec!["c_jerusalem", "b_vaticano"]);
+
+    // Religion bodies: family/doctrine/religious_head/holy_site/virtues refs.
+    let r = extract(
+        "my_religion = {\n\
+         \tfamily = rf_abrahamic\n\
+         \tdoctrine = doctrine_monogamy\n\
+         \ttraits = { virtues = { brave honest = 0.5 } sins = { craven } }\n\
+         \tfaiths = {\n\
+         \t\tmy_faith = { religious_head = k_papal_state holy_site = jerusalem }\n\
+         \t}\n\
+         }\n",
+        "common/religion/religion_types/00.txt",
+    );
+    let kind_of = |n: &str| r.refs.iter().find(|x| x.name == n).expect(n).kind;
+    assert_eq!(kind_of("rf_abrahamic"), pdxl_ck3::kinds::RELIGION_FAMILY);
+    assert_eq!(kind_of("doctrine_monogamy"), pdxl_ck3::kinds::DOCTRINE);
+    assert_eq!(kind_of("k_papal_state"), pdxl_ck3::kinds::TITLE);
+    assert_eq!(kind_of("jerusalem"), pdxl_ck3::kinds::HOLY_SITE);
+    for t in ["brave", "honest", "craven"] {
+        assert_eq!(kind_of(t), pdxl_ck3::kinds::TRAIT, "{t}");
+    }
+    // The faith itself is still the def.
+    assert_eq!(def_names(&r), vec!["my_faith"]);
+}

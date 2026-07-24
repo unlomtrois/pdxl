@@ -244,6 +244,18 @@ pub fn context_at(
     for pair in path.windows(2) {
         let (parent, child) = (pair[0], pair[1]);
         if tree.node(parent).kind != NodeKind::Field {
+            // An anonymous list item — a block directly inside a block
+            // (`holy_order_names = { { name = … } … }`) — steps with an empty
+            // key, matching `context_of_chain`'s treatment.
+            if matches!(
+                tree.node(parent).kind,
+                NodeKind::Block | NodeKind::TaggedBlock
+            ) && matches!(
+                tree.node(child).kind,
+                NodeKind::Block | NodeKind::TaggedBlock
+            ) {
+                ctx = step(ctx, b"", true);
+            }
             continue;
         }
         let kids = tree.child_ids(parent);
