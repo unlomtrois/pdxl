@@ -34,6 +34,11 @@ pub enum ClauseKind {
     /// The dynamic-description mini-language (`desc`, `triggered_desc`,
     /// `first_valid`, `random_valid`, `switch`).
     DynamicDesc,
+    /// A color literal: `{ r g b }` (implicit RGB), or a tagged block —
+    /// `hsv { 0.1 0.5 0.8 }`, `rgb { 225 35 40 }`, `hsv360 { 21 74 45 }`.
+    /// Contains loose numbers only, never keys. Fields of this kind usually
+    /// also accept a scalar named color (`common/named_colors/`).
+    Color,
     /// A structural block with enumerable fields (event root, option,
     /// portrait, …).
     Struct(&'static StructSpec),
@@ -140,6 +145,12 @@ pub const fn scalar_or_block(s: ScalarKind, b: ClauseKind) -> FieldSpec {
         doc: None,
         values: None,
     }
+}
+
+/// A color-valued field: a [`ClauseKind::Color`] block (`{ r g b }`,
+/// `hsv { … }`, `rgb { … }`) or a scalar named color (`common/named_colors/`).
+pub const fn color() -> FieldSpec {
+    scalar_or_block(ScalarKind::Setting, ClauseKind::Color)
 }
 
 impl FieldSpec {
@@ -341,6 +352,8 @@ fn step(ctx: ClauseKind, key: &[u8], value_is_block: bool) -> ClauseKind {
         }
         // Static modifiers are flat `tag = number` data; nothing scoped inside.
         ClauseKind::StaticModifier => ClauseKind::Config,
+        // Color literals hold loose numbers; nothing scoped inside.
+        ClauseKind::Color => ClauseKind::Config,
         // Dynamic descriptions nest arbitrarily; only `trigger` escapes into
         // trigger context. Unknown keys stay (switch cases are dynamic).
         ClauseKind::DynamicDesc => match key {

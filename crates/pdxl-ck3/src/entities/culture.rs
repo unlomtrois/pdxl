@@ -18,7 +18,7 @@
 use crate::kinds;
 use pdxl_analysis::context::ClauseKind::{self, Struct};
 use pdxl_analysis::context::ScalarKind::{LocKey, Setting};
-use pdxl_analysis::context::{Fallback, StructSpec, block, scalar, scalar_or_block};
+use pdxl_analysis::context::{Fallback, StructSpec, block, color, scalar};
 use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
@@ -78,7 +78,7 @@ static CULTURE: StructSpec = StructSpec {
     fields: &[
         (
             "color",
-            scalar_or_block(Setting, Struct(&OPAQUE)).doc(
+            color().doc(
                 "The color of the culture, used e.g. on the map — `{ r g b }`, `hsv{ … }`, \
                  or a named scripted color.",
             ),

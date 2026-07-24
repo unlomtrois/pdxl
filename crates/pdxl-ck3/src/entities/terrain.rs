@@ -17,11 +17,11 @@
 use crate::kinds;
 use pdxl_analysis::context::ClauseKind::{self, StaticModifier, Struct};
 use pdxl_analysis::context::ScalarKind::Setting;
-use pdxl_analysis::context::{Fallback, StructSpec, block, scalar};
+use pdxl_analysis::context::{Fallback, StructSpec, block, color, scalar};
 use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern};
 
 use super::Entity;
-use super::common::{OPAQUE, anywhere};
+use super::common::anywhere;
 
 const TERRAIN_DIR: &str = "common/terrain_types/";
 
@@ -58,11 +58,11 @@ static TERRAIN: StructSpec = StructSpec {
         ),
         (
             "color",
-            block(Struct(&OPAQUE)).doc("Terrain color for the terrain-type map mode."),
+            color().doc("Terrain color for the terrain-type map mode."),
         ),
         (
             "travel_danger_color",
-            block(Struct(&OPAQUE)).doc(
+            color().doc(
                 "Terrain color for the travel-planner map mode if the danger score is \
                  higher than the player's safety.",
             ),

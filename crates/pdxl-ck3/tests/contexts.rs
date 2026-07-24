@@ -333,3 +333,27 @@ fn law_trigger_effect_value_blocks() {
         ClauseKind::Struct(pick_spec("succession"))
     );
 }
+
+#[test]
+fn color_fields_open_color_context() {
+    // All three corpus color forms — tagged hsv/rgb blocks and the implicit
+    // { r g b } — open ClauseKind::Color; the numbers inside are Config.
+    let src = "hills = {\n\
+               \tcolor = hsv { 0.1 0.5 0.8 }\n\
+               \ttravel_danger_color = { 220 45 120 }\n\
+               }\n";
+    assert_eq!(
+        ctx_of(src, "common/terrain_types/00.txt", "0.5"),
+        ClauseKind::Color
+    );
+    assert_eq!(
+        ctx_of(src, "common/terrain_types/00.txt", "45"),
+        ClauseKind::Color
+    );
+    // A scalar named color stays Config (the field accepts both forms).
+    let named = "my_culture = {\n\tcolor = pdx_red\n}\n";
+    assert_eq!(
+        ctx_of(named, "common/culture/cultures/00.txt", "pdx_red"),
+        ClauseKind::Config
+    );
+}

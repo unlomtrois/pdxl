@@ -80,7 +80,8 @@ pub fn items_for(ctx: ClauseKind, table: &SymbolTable, scope: Option<&str>) -> V
         }
         ClauseKind::StaticModifier => push_modifier_items(&mut items),
         ClauseKind::Struct(spec) => push_struct_items(&mut items, spec, table, scope),
-        ClauseKind::Config | ClauseKind::Unknown => {}
+        // Color blocks hold loose numbers — nothing to complete inside.
+        ClauseKind::Color | ClauseKind::Config | ClauseKind::Unknown => {}
     }
     items
 }

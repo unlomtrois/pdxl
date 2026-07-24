@@ -30,7 +30,9 @@
 use crate::kinds;
 use pdxl_analysis::context::ClauseKind::{self, Config, Effect, Struct, Trigger};
 use pdxl_analysis::context::ScalarKind::Setting;
-use pdxl_analysis::context::{Fallback, FieldSpec, StructSpec, block, scalar, scalar_or_block};
+use pdxl_analysis::context::{
+    Fallback, FieldSpec, StructSpec, block, color, scalar, scalar_or_block,
+};
 use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
@@ -63,7 +65,7 @@ static SUB_REGION: StructSpec = StructSpec {
     fields: &[
         ("illustration", scalar(Setting).doc("`.dds` shown in the situation windows (`[SituationSubRegion.GetIllustration]`).")),
         ("icon", scalar(Setting).doc("`.dds` icon (`[SituationSubRegion.GetIcon]`).")),
-        ("map_color", block(Config).doc("RGB `{ r g b }` used by some map modes.")),
+        ("map_color", color().doc("RGB `{ r g b }` used by some map modes.")),
         ("geographical_regions", block(Config).doc("Array of pre-defined `map_data` geographical regions that make up this sub-region.")),
     ],
     fallback: Fallback::Deny,
@@ -83,7 +85,7 @@ static PARTICIPANT_GROUP: StructSpec = StructSpec {
         ("icon", scalar(Setting).doc("`.dds` icon for the group.")),
         ("auto_add_rulers", toggle("Automatically consider landed rulers in a sub-region as potential participants (default `yes`).")),
         ("auto_add_landless_rulers", toggle("Automatically consider rulers with their domicile in a sub-region (default `yes`).")),
-        ("map_color", block(Config).doc("RGB `{ r g b }` used by some map modes.")),
+        ("map_color", color().doc("RGB `{ r g b }` used by some map modes.")),
         ("require_capital_in_sub_region", toggle("Require the participant's capital to be in the region (default `no`).")),
         ("require_domain_in_sub_region", toggle("Require part of the participant's domain to be in the region (default `no`).")),
         ("require_realm_in_sub_region", toggle("Require part of the participant's realm to be in the region (default `yes`).")),

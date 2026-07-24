@@ -16,13 +16,13 @@
 //! misspells it as `martial_tradition` (0 corpus occurrences).
 
 use crate::kinds;
-use pdxl_analysis::context::ClauseKind::{self, Struct};
+use pdxl_analysis::context::ClauseKind;
 use pdxl_analysis::context::ScalarKind::Setting;
-use pdxl_analysis::context::{Fallback, StructSpec, scalar, scalar_or_block};
+use pdxl_analysis::context::{Fallback, StructSpec, color, scalar};
 use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern};
 
 use super::Entity;
-use super::common::{OPAQUE, anywhere};
+use super::common::anywhere;
 use super::culture_shared::{
     PILLARS_DIR, TRAIT_AI_WILL_DO, TRAIT_CAN_PICK, TRAIT_CAN_PICK_FOR_HYBRIDIZATION,
     TRAIT_CHARACTER_MODIFIER, TRAIT_COST, TRAIT_COUNTY_MODIFIER, TRAIT_CULTURE_MODIFIER,
@@ -49,8 +49,7 @@ static CULTURE_PILLAR: StructSpec = StructSpec {
         ),
         (
             "color",
-            scalar_or_block(Setting, Struct(&OPAQUE))
-                .doc("A scripted color or direct color. Only for languages (map coloring)."),
+            color().doc("A scripted color or direct color. Only for languages (map coloring)."),
         ),
         (
             "audio_parameter",
