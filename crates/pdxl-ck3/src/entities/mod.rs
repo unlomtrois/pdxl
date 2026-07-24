@@ -53,6 +53,7 @@ mod namespace;
 mod nickname;
 mod on_action;
 mod portrait_animation;
+mod province;
 mod scheme;
 mod scripted;
 mod scripted_gui;
@@ -129,5 +130,6 @@ registry!(
     culture_misc::CultureMisc,
     game_concept::GameConcept,
     situation::Situation,
+    province::Province,
     loc::Loc,
 );

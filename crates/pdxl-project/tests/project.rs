@@ -337,3 +337,34 @@ fn localization_keys_resolve_event_text_refs() {
         .expect("loc symbol");
     assert_eq!(&*sym.file, "localization/english/my_events_l_english.yml");
 }
+
+// ── province definitions from map_data/definition.csv ────────────────────────
+
+#[test]
+fn province_csv_defs_resolve_history_refs() {
+    let d = TempTree::new();
+    d.write(
+        "map_data/definition.csv",
+        "0;0;0;0;x;x;\n1;42;3;128;VESTFIRDIR;x;\n#2;84;6;1;COMMENTED;x;\n",
+    );
+    d.write(
+        "history/provinces/00.txt",
+        "1 = { holding = none }\n2 = { holding = none }\n",
+    );
+    let mut fs = FileSet::new();
+    fs.set_include_map_data(true);
+    fs.add(&d.path, FileKind::Mod).expect("scan");
+    let (table, diags) = analyze(&fs, &pdxl_ck3::schema()).expect("analyze");
+    assert_eq!(table.count(pdxl_ck3::kinds::PROVINCE), 2, "ids 0 and 1");
+    // Province 2 is a commented-out CSV row, so its history ref dangles.
+    assert_eq!(diags.len(), 1, "{diags:?}");
+    assert!(diags[0].msg.contains("unknown province \"2\""));
+}
+
+#[test]
+fn province_csv_ignored_without_opt_in() {
+    let d = TempTree::new();
+    d.write("map_data/definition.csv", "1;42;3;128;VESTFIRDIR;x;\n");
+    let (table, _) = analyze(&fileset(&d), &pdxl_ck3::schema()).expect("analyze");
+    assert_eq!(table.count(pdxl_ck3::kinds::PROVINCE), 0);
+}

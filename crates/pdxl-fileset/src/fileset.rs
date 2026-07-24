@@ -90,6 +90,9 @@ pub struct FileSet {
     /// When set, `gui/**/*.gui` files also join the overlay (opt-in, same as
     /// localization; default scanning stays `.txt`-only for Go parity).
     include_gui: bool,
+    /// When set, `map_data/definition.csv` also joins the overlay (opt-in;
+    /// it is the source of province-id definitions).
+    include_map_data: bool,
 }
 
 impl FileSet {
@@ -128,6 +131,13 @@ impl FileSet {
     /// default — plain scans stay `.txt`-only (Go parity).
     pub fn set_include_gui(&mut self, include: bool) {
         self.include_gui = include;
+    }
+
+    /// Opts `map_data/definition.csv` into the scan (the province-id
+    /// definition table). Call before [`add`](Self::add). Off by default —
+    /// plain scans stay `.txt`-only (Go parity).
+    pub fn set_include_map_data(&mut self, include: bool) {
+        self.include_map_data = include;
     }
 
     pub fn set_replace_paths<I, P>(&mut self, paths: I)
@@ -219,6 +229,11 @@ impl FileSet {
                 .is_some_and(|r| r.starts_with('/'))
     }
 
+    /// Whether `rel` is the opted-in province-definition CSV.
+    fn is_map_data_file(&self, rel: &str) -> bool {
+        self.include_map_data && normalize_key(rel) == "map_data/definition.csv"
+    }
+
     /// Whether `rel` is an interface script under the opted-in `gui/` tree.
     fn is_gui_file(&self, rel: &str) -> bool {
         if !self.include_gui {
@@ -239,7 +254,11 @@ impl FileSet {
         name: &str,
         kind: FileKind,
     ) {
-        if !has_txt_ext(name) && !self.is_localization_file(rel) && !self.is_gui_file(rel) {
+        if !has_txt_ext(name)
+            && !self.is_localization_file(rel)
+            && !self.is_gui_file(rel)
+            && !self.is_map_data_file(rel)
+        {
             return;
         }
         if self.ignore_files.contains(&to_lower(name)) {

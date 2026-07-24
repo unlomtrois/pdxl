@@ -78,6 +78,9 @@ pub fn extract_facts(
             crate::schema::DefShape::GroupedBlocks { exclude } => {
                 harvest_grouped_defs(tree, node, exclude, rule.kind, rel_path, schema, &mut facts)
             }
+            // CSV-sourced definitions never reach the script extractor — the
+            // project layer routes those files to its own CSV reader.
+            crate::schema::DefShape::IdCsv => {}
         }
     }
 
@@ -511,6 +514,21 @@ fn extract_refs(
         let children = tree.child_ids(node_id);
         if children.len() == 2 {
             let key = tree.node_text(children[0]);
+            // Top-level `X = { … }` block keys as references (province ids in
+            // `history/provinces/`). `@var` script constants are not names.
+            if depth == 0
+                && !key.starts_with(b"@")
+                && matches!(
+                    tree.node(children[1]).kind,
+                    NodeKind::Block | NodeKind::TaggedBlock
+                )
+            {
+                for rule in schema.top_key_rules() {
+                    if rule.applies(rel_path) {
+                        append_ref(tree, rule.kind, &[], children[0], path, schema, refs);
+                    }
+                }
+            }
             extract_field_refs(
                 tree,
                 key,
@@ -606,7 +624,7 @@ fn scan_prefix_refs(
         let end = node.range.start + name_end as u32;
         refs.push(Ref {
             kind: rule.kind,
-            alt: &[],
+            alt: rule.alt,
             name: name.into_owned(),
             file: Arc::from(path),
             start,

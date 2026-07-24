@@ -36,8 +36,8 @@ use std::path::{Path, PathBuf};
 use std::collections::HashSet;
 
 use pdxl_analysis::{
-    CallKinds, CallTargets, FileFacts, KindId, LOC_KEY, Ref, RefDiag, Schema, SymbolTable,
-    extract_calls, extract_facts, merge_and_resolve,
+    CallKinds, CallTargets, DefShape, FileFacts, KindId, LOC_KEY, Ref, RefDiag, Schema,
+    SymbolTable, extract_calls, extract_facts, merge_and_resolve,
 };
 use pdxl_fileset::FileSet;
 
@@ -112,6 +112,9 @@ fn gather_facts(
                 loc_facts(&src, &entry.rel_path, schema.loc_concept_kind())
             } else if entry.rel_path.ends_with(".gui") {
                 gui_defs_for(&entry.full_path, &entry.rel_path, schema)?
+            } else if entry.rel_path.ends_with(".csv") {
+                let src = std::fs::read(&entry.full_path)?;
+                csv_facts(&src, &entry.rel_path, schema)
             } else {
                 let tree = obtain_tree(&entry.full_path, &full, cache)?;
                 extract_facts(&tree, &entry.rel_path, &full, schema, None)
@@ -209,7 +212,11 @@ fn fill_calls(
         let calls: Vec<(usize, Vec<pdxl_analysis::Ref>)> = order
             .par_iter()
             .enumerate()
-            .filter(|(_, key)| !key.rel.ends_with(".yml") && !key.rel.ends_with(".gui"))
+            .filter(|(_, key)| {
+                !key.rel.ends_with(".yml")
+                    && !key.rel.ends_with(".gui")
+                    && !key.rel.ends_with(".csv")
+            })
             .map(|(i, key)| -> io::Result<(usize, Vec<pdxl_analysis::Ref>)> {
                 let full = key.full.to_string_lossy().into_owned();
                 let src = std::fs::read(&key.full)?;
@@ -225,7 +232,7 @@ fn fill_calls(
         return Ok(());
     }
     for key in order {
-        if key.rel.ends_with(".yml") || key.rel.ends_with(".gui") {
+        if key.rel.ends_with(".yml") || key.rel.ends_with(".gui") || key.rel.ends_with(".csv") {
             continue;
         }
         let full = key.full.to_string_lossy().into_owned();
@@ -312,6 +319,9 @@ fn gather_facts_parallel(
                 loc_facts(&src, &entry.rel_path, schema.loc_concept_kind())
             } else if entry.rel_path.ends_with(".gui") {
                 gui_defs_for(&entry.full_path, &entry.rel_path, schema)?
+            } else if entry.rel_path.ends_with(".csv") {
+                let src = std::fs::read(&entry.full_path)?;
+                csv_facts(&src, &entry.rel_path, schema)
             } else {
                 let src = std::fs::read(&entry.full_path)?;
                 let (tree, _) = pdxl_parser::parse(full.clone(), src).into_parts();
@@ -334,6 +344,40 @@ fn gather_facts_parallel(
         order.push(key);
     }
     Ok((order, facts))
+}
+
+/// Extracts numeric-id definitions from a semicolon-separated CSV file (routed
+/// by extension: `.csv` entries only exist when the FileSet was opted in via
+/// `set_include_map_data`). The owning kind comes from the schema's
+/// [`DefShape::IdCsv`] def rule for the file; without one the file yields
+/// empty facts. Rows: `id;r;g;b;name;x;` — the first column is the symbol,
+/// comment lines (`#…`) and rows whose first field isn't all digits are
+/// skipped.
+fn csv_facts(src: &[u8], rel_path: &str, schema: &Schema) -> FileFacts {
+    let mut facts = FileFacts::default();
+    let Some(rule) = schema.rule_for(rel_path) else {
+        return facts;
+    };
+    if !matches!(rule.shape, DefShape::IdCsv) {
+        return facts;
+    }
+    let file: std::sync::Arc<str> = std::sync::Arc::from(rel_path);
+    let mut line_start = 0usize;
+    for line in src.split(|&b| b == b'\n') {
+        let id = line.split(|&b| b == b';').next().unwrap_or(&[]);
+        if !id.is_empty() && id.iter().all(u8::is_ascii_digit) {
+            facts.defs.push(pdxl_analysis::Symbol {
+                name: String::from_utf8_lossy(id).into_owned(),
+                kind: rule.kind,
+                file: file.clone(),
+                offset: line_start as u32,
+                end_offset: (line_start + id.len()) as u32,
+                params: Vec::new(),
+            });
+        }
+        line_start += line.len() + 1;
+    }
+    facts
 }
 
 /// Extracts loc-key definitions from a localization `.yml` file (routed by
@@ -550,6 +594,8 @@ impl Project {
     fn replace_facts(&mut self, key: &FileKey, src: Vec<u8>) {
         let facts = if key.rel.ends_with(".yml") {
             loc_facts(&src, &key.rel, self.schema.loc_concept_kind())
+        } else if key.rel.ends_with(".csv") {
+            csv_facts(&src, &key.rel, &self.schema)
         } else if key.rel.ends_with(".gui") {
             // Defs from the edited buffer, then name-gated refs against the
             // project-wide template/type sets (rebuilt from all facts so a

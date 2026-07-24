@@ -75,6 +75,11 @@ pub enum DefShape {
     /// `default`, `flag`, `@vars` — are excluded for free by the block
     /// check.)
     GroupedBlocks { exclude: &'static [&'static str] },
+    /// Definitions come from a semicolon-separated CSV file whose **first
+    /// column is a numeric id** (CK3 `map_data/definition.csv`). Not a script
+    /// shape: the project layer routes matching files to a CSV reader instead
+    /// of the parser, so the extraction engine never sees this variant.
+    IdCsv,
 }
 
 /// Where a kind's definitions come from: files under `dir_prefix` (a
@@ -115,6 +120,11 @@ pub enum RefPattern {
     /// position (key, value, or list item, at any depth). The extracted range
     /// covers exactly `X`, so editor features land on it precisely.
     ScopePrefix(&'static str),
+    /// `X = { … }` at file top level — every top-level block's **key** is a
+    /// reference to the kind (CK3 `history/provinces/`: the keys are province
+    /// ids defined elsewhere, in `map_data/definition.csv`). `@var` script
+    /// constants are skipped. Only meaningful gated to a directory.
+    TopLevelBlockKeys,
 }
 
 /// A reference rule: a pattern, optionally gated to files under a `RelPath`
@@ -189,6 +199,14 @@ pub(crate) struct ScopeRule {
     pub(crate) prefix: &'static str,
     pub(crate) kind: KindId,
     pub(crate) gate: Option<&'static str>,
+    pub(crate) alt: &'static [KindId],
+}
+
+/// A compiled top-level-block-keys rule ([`RefPattern::TopLevelBlockKeys`]).
+#[derive(Clone, Debug)]
+pub(crate) struct TopKeyRule {
+    pub(crate) kind: KindId,
+    pub(crate) gate: Option<&'static str>,
 }
 
 /// Everything the extraction engine needs to know about a game's conventions,
@@ -203,6 +221,8 @@ pub struct Schema {
     key_rules: HashMap<&'static str, Vec<KeyRule>>,
     /// Scope-literal prefixes, checked against every scalar.
     scope_rules: Vec<ScopeRule>,
+    /// Top-level-block-keys rules, checked against every top-level field.
+    top_key_rules: Vec<TopKeyRule>,
     /// kind → its alias field keys.
     alias_keys: HashMap<KindId, &'static [&'static str]>,
     /// kind → its presentation hint.
@@ -289,6 +309,14 @@ impl Schema {
                     RefPattern::ScopePrefix(prefix) => {
                         schema.scope_rules.push(ScopeRule {
                             prefix,
+                            kind: spec.kind,
+                            gate: rule.gate,
+                            alt: rule.alt,
+                        });
+                        continue;
+                    }
+                    RefPattern::TopLevelBlockKeys => {
+                        schema.top_key_rules.push(TopKeyRule {
                             kind: spec.kind,
                             gate: rule.gate,
                         });
@@ -420,6 +448,10 @@ impl Schema {
         &self.scope_rules
     }
 
+    pub(crate) fn top_key_rules(&self) -> &[TopKeyRule] {
+        &self.top_key_rules
+    }
+
     pub(crate) fn alias_keys(&self, kind: KindId) -> Option<&'static [&'static str]> {
         self.alias_keys.get(&kind).copied()
     }
@@ -433,6 +465,12 @@ impl KeyRule {
 }
 
 impl ScopeRule {
+    pub(crate) fn applies(&self, rel_path: &str) -> bool {
+        self.gate.is_none_or(|g| rel_path.starts_with(g))
+    }
+}
+
+impl TopKeyRule {
     pub(crate) fn applies(&self, rel_path: &str) -> bool {
         self.gate.is_none_or(|g| rel_path.starts_with(g))
     }

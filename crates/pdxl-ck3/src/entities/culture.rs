@@ -211,6 +211,7 @@ impl Entity for Culture {
         refs: &[
             anywhere(RefPattern::ScopePrefix("culture")),
             culture_in("history/characters/"),
+            culture_in("history/provinces/"),
             culture_in("common/dynasties/"),
             // Hybrid/divergent ancestry inside a culture body.
             in_cultures(RefPattern::KeyList("parents")),

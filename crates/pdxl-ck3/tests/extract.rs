@@ -1305,11 +1305,18 @@ fn title_refs_resolve_against_tree_defs() {
     let (table, diags) = merge_and_resolve(&order, &facts);
 
     assert_eq!(table.count(pdxl_ck3::kinds::TITLE), 7);
-    assert_eq!(diags.len(), 1, "{diags:?}");
+    // Two diags: the missing title, plus the fixture's `province = 1` (no
+    // province defs in this two-file miniature project).
+    assert_eq!(diags.len(), 2, "{diags:?}");
     assert!(
-        diags[0].msg.contains("unknown title \"d_gone\""),
-        "{}",
-        diags[0].msg
+        diags
+            .iter()
+            .any(|d| d.msg.contains("unknown title \"d_gone\""))
+    );
+    assert!(
+        diags
+            .iter()
+            .any(|d| d.msg.contains("unknown province \"1\""))
     );
 }
 
@@ -1589,11 +1596,22 @@ fn building_defs_and_refs() {
          }\n",
         "history/provinces/x.txt",
     );
+    // The top-level key is a province ref; the rest are building refs.
     assert_eq!(
         ref_names(&h),
-        vec!["hadrians_wall_01", "curtain_walls_01", "military_camps_01"]
+        vec![
+            "100",
+            "hadrians_wall_01",
+            "curtain_walls_01",
+            "military_camps_01"
+        ]
     );
-    assert!(h.refs.iter().all(|r| r.kind == pdxl_ck3::kinds::BUILDING));
+    assert_eq!(h.refs[0].kind, pdxl_ck3::kinds::PROVINCE);
+    assert!(
+        h.refs[1..]
+            .iter()
+            .all(|r| r.kind == pdxl_ck3::kinds::BUILDING)
+    );
     // … but a `buildings` list elsewhere means nothing.
     let elsewhere = extract("e = { buildings = { castle_01 } }\n", "events/x.txt");
     assert!(ref_names(&elsewhere).is_empty());
@@ -1763,4 +1781,73 @@ fn scheme_text_fields_are_loc_refs() {
     // Those keys are loc refs only inside the schemes dir.
     let elsewhere = extract("x = { discovery_desc = Y }\n", "common/traits/00.txt");
     assert!(ref_names(&elsewhere).is_empty());
+}
+
+// ── provinces (ANALYSIS_VERSION 50) ──────────────────────────────────────────
+
+#[test]
+fn province_history_top_level_keys_are_refs_not_defs() {
+    let f = extract(
+        "@score = 100\n\
+         8289 = {\n\
+         \tculture = ethiopian\n\
+         \tholding = castle_holding\n\
+         \t1100.1.1 = { religion = coptic }\n\
+         }\n\
+         8290 = { holding = none }\n",
+        "history/provinces/k_abyssinia.txt",
+    );
+    assert!(f.defs.is_empty(), "province history declares nothing");
+    let provinces: Vec<&str> = f
+        .refs
+        .iter()
+        .filter(|r| r.kind == pdxl_ck3::kinds::PROVINCE)
+        .map(|r| r.name.as_str())
+        .collect();
+    // `@score` is a script constant, not a province id; nested date blocks
+    // (`1100.1.1`) are not top-level, so they don't fire either.
+    assert_eq!(provinces, vec!["8289", "8290"]);
+
+    // Body attributes cross-reference their own kinds (rules live in
+    // culture.rs / faith.rs), at both the entry and the date level.
+    let by_name = |n: &str| f.refs.iter().find(|r| r.name == n).expect("body ref");
+    assert_eq!(by_name("ethiopian").kind, pdxl_ck3::kinds::CULTURE);
+    assert_eq!(by_name("coptic").kind, pdxl_ck3::kinds::FAITH);
+}
+
+#[test]
+fn province_top_level_keys_only_in_province_history_dir() {
+    let f = extract("8289 = { x = y }\n", "common/scripted_effects/e.txt");
+    assert!(
+        f.refs.iter().all(|r| r.kind != pdxl_ck3::kinds::PROVINCE),
+        "{:?}",
+        f.refs
+    );
+}
+
+#[test]
+fn province_ref_in_landed_titles_and_scope_literal() {
+    let f = extract(
+        "c_shore = { b_port = { province = 1337 } }\n",
+        "common/landed_titles/00.txt",
+    );
+    let r = f
+        .refs
+        .iter()
+        .find(|r| r.name == "1337")
+        .expect("barony province id extracted");
+    assert_eq!(r.kind, pdxl_ck3::kinds::PROVINCE);
+
+    // `province:X` works anywhere; a barony title key chains as the alt kind.
+    let e = extract(
+        "e = { scope:p = province:8780 loc = province:b_constantinople }\n",
+        "common/scripted_effects/e.txt",
+    );
+    let by_name = |n: &str| e.refs.iter().find(|r| r.name == n).expect("scope ref");
+    assert_eq!(by_name("8780").kind, pdxl_ck3::kinds::PROVINCE);
+    assert_eq!(
+        by_name("b_constantinople").alt,
+        &[pdxl_ck3::kinds::TITLE],
+        "title keys are the alternate resolution for province: literals"
+    );
 }

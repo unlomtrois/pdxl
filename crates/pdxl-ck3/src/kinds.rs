@@ -60,3 +60,4 @@ pub const GAME_CONCEPT: KindId = KindId::new("game_concept");
 pub const SITUATION_TYPE: KindId = KindId::new("situation_type");
 pub const CATALYST: KindId = KindId::new("catalyst");
 pub const SITUATION_GROUP_TYPE: KindId = KindId::new("situation_group_type");
+pub const PROVINCE: KindId = KindId::new("province");
