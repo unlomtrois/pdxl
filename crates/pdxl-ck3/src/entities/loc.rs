@@ -156,6 +156,17 @@ impl Entity for Loc {
                 scheme_loc("success_desc"),
                 scheme_loc("discovery_desc"),
                 anywhere(RefPattern::KeyValue("custom_tooltip")),
+                // Religion/faith `localization = { AnyKey = loc_key }` maps —
+                // dynamic keys, loc-key values, single or listed
+                // (`key = { TAG TAG }`); accessed via `[Faith.Custom('key')]`.
+                // Corpus: 19 unresolved, all genuine vanilla bugs (keys like
+                // CHARACTER_HERSELFHIMSELF_HIMSELF or witchgodname_paganism
+                // that no localization file defines).
+                RefRule {
+                    pattern: RefPattern::KeyBlockValues("localization"),
+                    gate: Some("common/religion/"),
+                    alt: &[],
+                },
             ],
             aliases: &[],
         },

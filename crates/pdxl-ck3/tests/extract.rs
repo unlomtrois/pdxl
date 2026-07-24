@@ -2060,3 +2060,40 @@ fn religion_domain_defs_and_refs() {
     // The faith itself is still the def.
     assert_eq!(def_names(&r), vec!["my_faith"]);
 }
+
+// ── religion localization maps (ANALYSIS_VERSION 58) ─────────────────────────
+
+#[test]
+fn religion_localization_values_are_loc_refs() {
+    let f = extract(
+        "x = {\n\
+         \tlocalization = {\n\
+         \t\tHighGodName = generic_high_god_name\n\
+         \t\tPantheon = { PANTHEON_A PANTHEON_B }\n\
+         \t}\n\
+         \tfaiths = { y = { localization = { DevilName = devil_name } } }\n\
+         }\n",
+        "common/religion/religion_types/00.txt",
+    );
+    let locs: Vec<&str> = f
+        .refs
+        .iter()
+        .filter(|r| r.kind == pdxl_analysis::LOC_KEY)
+        .map(|r| r.name.as_str())
+        .collect();
+    assert_eq!(
+        locs,
+        vec![
+            "generic_high_god_name",
+            "PANTHEON_A",
+            "PANTHEON_B",
+            "devil_name"
+        ]
+    );
+    // The dynamic keys themselves are NOT references.
+    assert!(f.refs.iter().all(|r| r.name != "HighGodName"));
+
+    // `localization` blocks outside common/religion/ mean nothing.
+    let e = extract("e = { localization = { K = some_key } }\n", "events/x.txt");
+    assert!(e.refs.iter().all(|r| r.kind != pdxl_analysis::LOC_KEY));
+}
