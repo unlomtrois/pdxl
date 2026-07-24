@@ -15,10 +15,15 @@ function log(msg: string): void {
   output?.appendLine(`[${new Date().toISOString()}] ${msg}`);
 }
 
-/** Updates the status-bar button's icon, tooltip, and error colouring. */
-function setStatus(state: "starting" | "running" | "failed"): void {
+/** Updates the status-bar button's icon, tooltip, and error colouring.
+ *  `version` (from the server's initialize `serverInfo`) is shown when known. */
+function setStatus(
+  state: "starting" | "running" | "failed",
+  version?: string,
+): void {
   if (!statusBar) return;
   const errorBg = new vscode.ThemeColor("statusBarItem.errorBackground");
+  const label = version ? `pdxl v${version}` : "pdxl";
   switch (state) {
     case "starting":
       statusBar.text = "$(loading~spin) pdxl";
@@ -26,8 +31,8 @@ function setStatus(state: "starting" | "running" | "failed"): void {
       statusBar.backgroundColor = undefined;
       break;
     case "running":
-      statusBar.text = "$(check) pdxl";
-      statusBar.tooltip = "pdxl language server running — click for server logs";
+      statusBar.text = `$(check) ${label}`;
+      statusBar.tooltip = `${label} language server running — click for server logs`;
       statusBar.backgroundColor = undefined;
       break;
     case "failed":
@@ -143,8 +148,13 @@ export function activate(context: vscode.ExtensionContext): void {
 
   client.start().then(
     () => {
-      log("language client started successfully");
-      setStatus("running");
+      // The binary reports its version in the initialize handshake's
+      // serverInfo (baked in from Cargo at compile time).
+      const version = client?.initializeResult?.serverInfo?.version;
+      log(
+        `language client started successfully (server ${version ?? "unknown version"})`,
+      );
+      setStatus("running", version);
     },
     (err) => {
       log(`failed to start language client: ${err}`);

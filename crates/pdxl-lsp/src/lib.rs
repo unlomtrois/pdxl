@@ -163,7 +163,9 @@ pub fn run_stdio(opts: Options) -> Result<(), Box<dyn std::error::Error + Sync +
         init_id,
         serde_json::json!({
             "capabilities": capabilities,
-            "serverInfo": { "name": "pdxl" },
+            // The version is baked in at compile time; the extension shows it
+            // on the status-bar button.
+            "serverInfo": { "name": "pdxl", "version": env!("CARGO_PKG_VERSION") },
         }),
     )?;
 
