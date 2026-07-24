@@ -9,7 +9,7 @@ async function main() {
     bundle: true,
     format: "cjs",
     platform: "node",
-    target: "node18",
+    target: "node22",
     outfile: "dist/extension.js",
     // 'vscode' is provided by the extension host; never bundle it.
     external: ["vscode"],
