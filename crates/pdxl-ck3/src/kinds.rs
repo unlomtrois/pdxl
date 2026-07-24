@@ -66,3 +66,4 @@ pub const NAMED_COLOR: KindId = KindId::new("named_color");
 pub const DOCTRINE: KindId = KindId::new("doctrine");
 pub const HOLY_SITE: KindId = KindId::new("holy_site");
 pub const RELIGION_FAMILY: KindId = KindId::new("religion_family");
+pub const GAME_RULE_SETTING: KindId = KindId::new("game_rule_setting");

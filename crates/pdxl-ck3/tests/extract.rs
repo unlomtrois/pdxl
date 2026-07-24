@@ -2097,3 +2097,48 @@ fn religion_localization_values_are_loc_refs() {
     let e = extract("e = { localization = { K = some_key } }\n", "events/x.txt");
     assert!(e.refs.iter().all(|r| r.kind != pdxl_analysis::LOC_KEY));
 }
+
+// ── game rules (ANALYSIS_VERSION 59) ─────────────────────────────────────────
+
+#[test]
+fn game_rule_settings_defs_and_refs() {
+    let f = extract(
+        "difficulty = {\n\
+         \tcategories = { difficulty ai }\n\
+         \tdefault = normal_difficulty\n\
+         \tnormal_difficulty = { }\n\
+         \thard_difficulty = {\n\
+         \t\tapply_modifier = ai:hard_difficulty\n\
+         \t\tflag = blocks_achievements\n\
+         \t}\n\
+         }\n",
+        "common/game_rules/00_game_rules.txt",
+    );
+    // Settings are the defs; `categories` (block attribute) and the rule
+    // itself are not.
+    assert_eq!(def_names(&f), vec!["normal_difficulty", "hard_difficulty"]);
+    assert!(
+        f.defs
+            .iter()
+            .all(|d| d.kind == pdxl_ck3::kinds::GAME_RULE_SETTING)
+    );
+    // `default` references a setting; `apply_modifier`'s ai: literal
+    // references a static modifier.
+    let kind_of = |n: &str| f.refs.iter().find(|r| r.name == n).expect(n).kind;
+    assert_eq!(
+        kind_of("normal_difficulty"),
+        pdxl_ck3::kinds::GAME_RULE_SETTING
+    );
+    assert_eq!(kind_of("hard_difficulty"), pdxl_ck3::kinds::MODIFIER);
+
+    // The trigger resolves anywhere.
+    let t = extract(
+        "e = { has_game_rule = hard_difficulty }\n",
+        "common/scripted_triggers/x.txt",
+    );
+    assert_eq!(t.refs[0].kind, pdxl_ck3::kinds::GAME_RULE_SETTING);
+
+    // `ai:`/`player:` literals mean nothing outside the game-rules dir.
+    let e = extract("e = { x = ai:whatever }\n", "common/scripted_effects/e.txt");
+    assert!(e.refs.iter().all(|r| r.kind != pdxl_ck3::kinds::MODIFIER));
+}

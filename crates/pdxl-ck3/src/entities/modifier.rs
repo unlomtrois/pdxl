@@ -61,6 +61,25 @@ impl Entity for Modifier {
             scalar_modifier("add_house_modifier"),
             scalar_modifier("add_dynasty_modifier"),
             scalar_modifier("add_travel_plan_modifier"),
+            // Game-rule settings apply modifiers as `apply_modifier =
+            // <category>:<modifier>` (categories: player/ai/all) — the
+            // colon literal form, gated to the game-rules dir (19 corpus
+            // refs, 0 unresolved).
+            RefRule {
+                pattern: RefPattern::ScopePrefix("player"),
+                gate: Some("common/game_rules/"),
+                alt: &[],
+            },
+            RefRule {
+                pattern: RefPattern::ScopePrefix("ai"),
+                gate: Some("common/game_rules/"),
+                alt: &[],
+            },
+            RefRule {
+                pattern: RefPattern::ScopePrefix("all"),
+                gate: Some("common/game_rules/"),
+                alt: &[],
+            },
         ],
         aliases: &[],
     }];
