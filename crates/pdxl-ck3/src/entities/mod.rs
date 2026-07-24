@@ -59,6 +59,7 @@ mod scripted;
 mod scripted_gui;
 mod secret_type;
 mod situation;
+mod terrain;
 mod title;
 mod traits;
 
@@ -131,5 +132,6 @@ registry!(
     game_concept::GameConcept,
     situation::Situation,
     province::Province,
+    terrain::Terrain,
     loc::Loc,
 );

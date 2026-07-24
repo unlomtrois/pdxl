@@ -1851,3 +1851,49 @@ fn province_ref_in_landed_titles_and_scope_literal() {
         "title keys are the alternate resolution for province: literals"
     );
 }
+
+// ── terrain types (ANALYSIS_VERSION 52) ──────────────────────────────────────
+
+#[test]
+fn terrain_defs_and_ungated_refs() {
+    let d = extract(
+        "@cost = 25\n\
+         hills = {\n\
+         \tprovision_cost = @cost\n\
+         \tprovince_modifier = { supply_limit_mult = -0.1 }\n\
+         }\n",
+        "common/terrain_types/00_terrains.txt",
+    );
+    assert_eq!(def_names(&d), vec!["hills"]);
+    assert_eq!(d.defs[0].kind, pdxl_ck3::kinds::TERRAIN_TYPE);
+
+    // `terrain = X` resolves anywhere: province history, triggers (bare and
+    // inside county_has_province_with_terrain), activity script.
+    for (src, rel) in [
+        ("100 = { terrain = hills }\n", "history/provinces/x.txt"),
+        (
+            "e = { county_has_province_with_terrain = { terrain = hills } }\n",
+            "common/scripted_effects/e.txt",
+        ),
+    ] {
+        let f = extract(src, rel);
+        let r = f
+            .refs
+            .iter()
+            .find(|r| r.name == "hills")
+            .unwrap_or_else(|| panic!("terrain ref in {rel}"));
+        assert_eq!(r.kind, pdxl_ck3::kinds::TERRAIN_TYPE);
+    }
+
+    // Macro values are skipped by the engine.
+    let m = extract(
+        "e = { terrain = $TERRAIN$ }\n",
+        "common/scripted_effects/e.txt",
+    );
+    assert!(
+        m.refs
+            .iter()
+            .all(|r| r.kind != pdxl_ck3::kinds::TERRAIN_TYPE)
+    );
+}
+
