@@ -26,6 +26,16 @@
         "command": "pdxl.showServerLog",
         "title": "pdxl: Show Server Log",
         "category": "pdxl"
+      },
+      {
+        "command": "pdxl.installServer",
+        "title": "pdxl: Install/Update Language Server",
+        "category": "pdxl"
+      },
+      {
+        "command": "pdxl.pickServerPath",
+        "title": "pdxl: Pick Server Binary Path",
+        "category": "pdxl"
       }
     ],
     "configuration": {
@@ -33,8 +43,8 @@
       "properties": {
         "pdxl.serverPath": {
           "type": "string",
-          "default": "pdxl",
-          "description": "Path to the pdxl executable (on PATH by default)."
+          "default": "",
+          "description": "Path to the pdxl executable. Empty (default) = use the extension-managed binary (downloaded from GitHub releases), falling back to `pdxl` on PATH."
         },
         "pdxl.gamePath": {
           "type": "string",
@@ -90,6 +100,7 @@
     "vsix": "npx --yes @vscode/vsce package"
   },
   "dependencies": {
+    "@octokit/rest": "^22.0.1",
     "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
