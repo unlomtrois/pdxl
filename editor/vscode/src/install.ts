@@ -167,6 +167,27 @@ export function extractSingleFileTarGz(archive: Buffer): {
   throw new Error("no regular file found in archive");
 }
 
+/** A GitHub release as far as the installer cares. */
+interface Release {
+  tag_name: string;
+  assets: { name: string; browser_download_url: string }[];
+}
+
+/** GETs a GitHub API JSON resource; `undefined` on 404, throws otherwise. */
+async function githubJson(url: string): Promise<Release | undefined> {
+  const res = await fetch(url, {
+    headers: {
+      Accept: "application/vnd.github+json",
+      "User-Agent": "pdxl-vscode-extension",
+    },
+  });
+  if (res.status === 404) return undefined;
+  if (!res.ok) {
+    throw new Error(`GitHub API ${res.status} ${res.statusText} for ${url}`);
+  }
+  return (await res.json()) as Release;
+}
+
 async function fetchBuffer(
   url: string,
   onChunk?: (received: number, total: number | undefined) => void,
@@ -206,36 +227,19 @@ export async function installServer(
   }
 
   progress?.(`looking up release v${version}…`);
-  // Dynamic import: @octokit/rest v22 is ESM-only; the extension type-checks
-  // as CJS but esbuild bundles the dynamic import statically either way.
-  const { Octokit } = await import("@octokit/rest");
-  const octokit = new Octokit(); // unauthenticated: public repo, 1–2 calls
-  let release;
-  try {
-    release = await octokit.rest.repos.getReleaseByTag({
-      owner: OWNER,
-      repo: REPO,
-      tag: `v${version}`,
-    });
-  } catch (err: unknown) {
-    if ((err as { status?: number }).status !== 404) {
-      throw err;
-    }
+  // Two unauthenticated JSON GETs against the public API — a full GitHub
+  // client would add ~95 KB to the bundle for exactly this.
+  const api = `https://api.github.com/repos/${OWNER}/${REPO}/releases`;
+  let release = await githubJson(`${api}/tags/v${version}`);
+  if (!release) {
     // The pinned tag may not exist (an extension build published between
     // server releases). Fall back to the newest release rather than failing.
     progress?.(`release v${version} not found — using the latest release…`);
-    try {
-      release = await octokit.rest.repos.getLatestRelease({
-        owner: OWNER,
-        repo: REPO,
-      });
-    } catch (latestErr: unknown) {
-      if ((latestErr as { status?: number }).status === 404) {
-        throw new Error(`no releases found on github.com/${OWNER}/${REPO}`);
-      }
-      throw latestErr;
+    release = await githubJson(`${api}/latest`);
+    if (!release) {
+      throw new Error(`no releases found on github.com/${OWNER}/${REPO}`);
     }
-    const tag = release.data.tag_name;
+    const tag = release.tag_name;
     if (!/^v\d+\.\d+\.\d+$/.test(tag)) {
       throw new Error(`latest release has unexpected tag ${JSON.stringify(tag)}`);
     }
@@ -243,7 +247,7 @@ export async function installServer(
   }
 
   const archiveName = `pdxl-v${version}-${triple}.tar.gz`;
-  const assets = release.data.assets;
+  const assets = release.assets;
   const archiveAsset = assets.find((a) => a.name === archiveName);
   const sidecarAsset = assets.find((a) => a.name === `${archiveName}.sha256`);
   if (!archiveAsset) {
