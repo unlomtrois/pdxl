@@ -76,6 +76,12 @@ impl ServerState {
         }
     }
 
+    /// The loaded project, if the build has completed (read-only; benchmarks
+    /// and tests peek at facts through this).
+    pub fn project(&self) -> Option<&Project> {
+        self.project.as_ref()
+    }
+
     /// The async build completed. Re-analyze any documents opened while it ran
     /// (their buffers override disk), then publish for every mod file.
     pub fn project_ready(&mut self, project: std::io::Result<Box<Project>>) {
@@ -395,23 +401,40 @@ impl ServerState {
             return locations;
         }
 
-        // Convert refs to locations, reading each file once (Go's srcCache).
-        let mut src_cache: HashMap<PathBuf, Option<Vec<u8>>> = HashMap::new();
-        let mut locations = Vec::new();
-        for r in project.references(kind, &name) {
-            let file = PathBuf::from(r.file.as_ref());
-            let text = src_cache
-                .entry(file.clone())
-                .or_insert_with(|| self.read_file(&file).ok());
-            let Some(text) = text else { continue };
-            locations.push(Location {
-                uri: path_to_uri(&file),
-                range: Range {
-                    start: offset_to_position(text, r.start),
-                    end: offset_to_position(text, r.end),
-                },
-            });
+        // Convert refs to locations: group by file, read each file once, and
+        // map all of its offsets in ONE linear pass (offsets_to_positions).
+        // A per-ref offset_to_position call rescans the file from byte 0 each
+        // time — O(refs × file size), which took ~5s per popular named color
+        // in the multi-MB coat-of-arms files.
+        let matched = project.references(kind, &name);
+        let mut by_file: HashMap<&str, Vec<usize>> = HashMap::new();
+        for (i, r) in matched.iter().enumerate() {
+            by_file.entry(r.file.as_ref()).or_default().push(i);
         }
+        let mut slots: Vec<Option<Location>> = vec![None; matched.len()];
+        for (file, idxs) in by_file {
+            let file = PathBuf::from(file);
+            let Ok(text) = self.read_file(&file) else {
+                continue;
+            };
+            let offsets: Vec<u32> = idxs
+                .iter()
+                .flat_map(|&i| [matched[i].start, matched[i].end])
+                .collect();
+            let positions = offsets_to_positions(&text, &offsets);
+            let uri = path_to_uri(&file);
+            for (j, &i) in idxs.iter().enumerate() {
+                slots[i] = Some(Location {
+                    uri: uri.clone(),
+                    range: Range {
+                        start: positions[2 * j],
+                        end: positions[2 * j + 1],
+                    },
+                });
+            }
+        }
+        // Walk order preserved (slot order = matched order).
+        let mut locations: Vec<Location> = slots.into_iter().flatten().collect();
 
         if include_declaration
             && let Some(symbol) = project.table().lookup(kind, &name)
@@ -512,41 +535,50 @@ impl ServerState {
             .find_map(|k| project.table().lookup(k, &name).map(|s| (k, s)));
         let ref_kind = def.map(|(k, _)| k).unwrap_or(kind);
 
-        let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
-        let mut src_cache: HashMap<PathBuf, Option<Vec<u8>>> = HashMap::new();
-        let mut push_edit = |file: PathBuf, start: u32, end: u32| {
-            let text = src_cache
-                .entry(file.clone())
-                .or_insert_with(|| self.read_file(&file).ok());
-            let Some(text) = text else { return };
-            // Preserve the author's quoting: a quoted span stays quoted.
-            let quoted = text.get(start as usize) == Some(&b'"');
-            let new_text = if quoted {
-                format!("\"{new_name}\"")
-            } else {
-                new_name.to_string()
-            };
-            changes
-                .entry(path_to_uri(&file))
-                .or_default()
-                .push(TextEdit {
-                    range: Range {
-                        start: offset_to_position(text, start),
-                        end: offset_to_position(text, end),
-                    },
-                    new_text,
-                });
-        };
-
-        for r in project.references(ref_kind, &name) {
-            push_edit(PathBuf::from(r.file.as_ref()), r.start, r.end);
-        }
+        // Collect every edit span, then convert per file in ONE linear pass
+        // (offsets_to_positions) — a per-span offset_to_position rescans the
+        // file from byte 0 each time, quadratic on many-ref symbols.
+        let mut spans: Vec<(PathBuf, u32, u32)> = project
+            .references(ref_kind, &name)
+            .into_iter()
+            .map(|r| (PathBuf::from(r.file.as_ref()), r.start, r.end))
+            .collect();
         // The definition, unless it is a zero-width alias marker (no real span).
         if let Some((_, symbol)) = def
             && symbol.offset != symbol.end_offset
             && let Some(def_full) = project.rel_to_full(&symbol.file)
         {
-            push_edit(def_full.to_path_buf(), symbol.offset, symbol.end_offset);
+            spans.push((def_full.to_path_buf(), symbol.offset, symbol.end_offset));
+        }
+
+        let mut by_file: HashMap<PathBuf, Vec<(u32, u32)>> = HashMap::new();
+        for (file, start, end) in spans {
+            by_file.entry(file).or_default().push((start, end));
+        }
+        let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+        for (file, spans) in by_file {
+            let Ok(text) = self.read_file(&file) else {
+                continue;
+            };
+            let offsets: Vec<u32> = spans.iter().flat_map(|&(s, e)| [s, e]).collect();
+            let positions = offsets_to_positions(&text, &offsets);
+            let edits = changes.entry(path_to_uri(&file)).or_default();
+            for (j, &(start, _)) in spans.iter().enumerate() {
+                // Preserve the author's quoting: a quoted span stays quoted.
+                let quoted = text.get(start as usize) == Some(&b'"');
+                let new_text = if quoted {
+                    format!("\"{new_name}\"")
+                } else {
+                    new_name.to_string()
+                };
+                edits.push(TextEdit {
+                    range: Range {
+                        start: positions[2 * j],
+                        end: positions[2 * j + 1],
+                    },
+                    new_text,
+                });
+            }
         }
 
         (!changes.is_empty()).then(|| WorkspaceEdit {
