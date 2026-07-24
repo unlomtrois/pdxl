@@ -16,6 +16,7 @@ import type * as vscode from "vscode";
 
 const OWNER = "unlomtrois";
 const REPO = "pdxl";
+const RELEASES_API = `https://api.github.com/repos/${OWNER}/${REPO}/releases`;
 
 export interface ResolvedServer {
   command: string;
@@ -167,6 +168,27 @@ export function extractSingleFileTarGz(archive: Buffer): {
   throw new Error("no regular file found in archive");
 }
 
+/** The version of the newest published release (`"0.58.1"`), or `undefined`
+ *  when there is none or its tag isn't a plain `vX.Y.Z`. */
+export async function latestReleaseVersion(): Promise<string | undefined> {
+  const release = await githubJson(`${RELEASES_API}/latest`);
+  const tag = release?.tag_name;
+  return tag && /^v\d+\.\d+\.\d+$/.test(tag) ? tag.slice(1) : undefined;
+}
+
+/** Whether semver-ish `a` is strictly newer than `b` (numeric x.y.z parts;
+ *  missing parts count as 0). */
+export function isNewerVersion(a: string, b: string): boolean {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const da = pa[i] ?? 0;
+    const db = pb[i] ?? 0;
+    if (da !== db) return da > db;
+  }
+  return false;
+}
+
 /** A GitHub release as far as the installer cares. */
 interface Release {
   tag_name: string;
@@ -229,13 +251,12 @@ export async function installServer(
   progress?.(`looking up release v${version}…`);
   // Two unauthenticated JSON GETs against the public API — a full GitHub
   // client would add ~95 KB to the bundle for exactly this.
-  const api = `https://api.github.com/repos/${OWNER}/${REPO}/releases`;
-  let release = await githubJson(`${api}/tags/v${version}`);
+  let release = await githubJson(`${RELEASES_API}/tags/v${version}`);
   if (!release) {
     // The pinned tag may not exist (an extension build published between
     // server releases). Fall back to the newest release rather than failing.
     progress?.(`release v${version} not found — using the latest release…`);
-    release = await githubJson(`${api}/latest`);
+    release = await githubJson(`${RELEASES_API}/latest`);
     if (!release) {
       throw new Error(`no releases found on github.com/${OWNER}/${REPO}`);
     }

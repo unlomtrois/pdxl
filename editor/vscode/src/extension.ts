@@ -5,7 +5,12 @@ import {
   ServerOptions,
   TransportKind,
 } from "vscode-languageclient/node";
-import { installServer, resolveServer } from "./install";
+import {
+  installServer,
+  isNewerVersion,
+  latestReleaseVersion,
+  resolveServer,
+} from "./install";
 
 let client: LanguageClient | undefined;
 let output: vscode.OutputChannel | undefined;
@@ -62,10 +67,13 @@ function pinnedVersion(context: vscode.ExtensionContext): string {
   return (context.extension.packageJSON as { version: string }).version;
 }
 
-/** Builds and starts the language client against `command`. */
+/** Builds and starts the language client against `command`. `source` is how
+ *  the command was resolved — update suggestions are skipped for explicit
+ *  `setting` paths (the user manages those). */
 async function startClient(
   context: vscode.ExtensionContext,
   command: string,
+  source: "setting" | "managed" | "path" = "managed",
 ): Promise<void> {
   const config = vscode.workspace.getConfiguration("pdxl");
   const gamePath = config.get<string>("gamePath", "");
@@ -114,6 +122,9 @@ async function startClient(
       );
     }
     setStatus("running", version);
+    if (source !== "setting" && version) {
+      void checkForUpdate(context, version);
+    }
   } catch (err) {
     log(`failed to start language client: ${err}`);
     setStatus("failed");
@@ -124,17 +135,60 @@ async function startClient(
   }
 }
 
+/** Once per session: compares the running server version against the newest
+ *  GitHub release and offers to update. Fire-and-forget; network failures are
+ *  logged and ignored. "Skip this version" is remembered per version. */
+let updateCheckDone = false;
+async function checkForUpdate(
+  context: vscode.ExtensionContext,
+  runningVersion: string,
+): Promise<void> {
+  if (updateCheckDone) return;
+  updateCheckDone = true;
+  let latest: string | undefined;
+  try {
+    latest = await latestReleaseVersion();
+  } catch (err) {
+    log(`update check failed: ${err}`);
+    return;
+  }
+  if (!latest || !isNewerVersion(latest, runningVersion)) {
+    log(`update check: running v${runningVersion}, latest v${latest ?? "?"} — up to date`);
+    return;
+  }
+  const skipKey = `pdxl.skipUpdate.${latest}`;
+  if (context.globalState.get<boolean>(skipKey)) {
+    log(`update check: v${latest} available but skipped by user`);
+    return;
+  }
+  log(`update check: v${latest} available (running v${runningVersion})`);
+  const update = `Update to v${latest}`;
+  const skip = "Skip this version";
+  const choice = await vscode.window.showInformationMessage(
+    `pdxl v${latest} is available (running v${runningVersion}).`,
+    update,
+    skip,
+  );
+  if (choice === update) {
+    const installed = await runInstallWithProgress(context, latest);
+    if (installed) await restartClient(context, installed);
+  } else if (choice === skip) {
+    await context.globalState.update(skipKey, true);
+  }
+}
+
 /** Restarts (or first-starts) the client against a freshly resolved command. */
 async function restartClient(
   context: vscode.ExtensionContext,
   command: string,
+  source: "setting" | "managed" | "path" = "managed",
 ): Promise<void> {
   if (client) {
     log("stopping language client for restart...");
     await client.stop().catch(() => undefined);
     client = undefined;
   }
-  await startClient(context, command);
+  await startClient(context, command, source);
 }
 
 /** Opens a file dialog and persists the chosen binary as pdxl.serverPath. */
@@ -159,8 +213,9 @@ async function pickServerPath(): Promise<string | undefined> {
  *  Returns the installed path, or undefined on failure (already reported). */
 async function runInstallWithProgress(
   context: vscode.ExtensionContext,
+  versionOverride?: string,
 ): Promise<string | undefined> {
-  const version = pinnedVersion(context);
+  const version = versionOverride ?? pinnedVersion(context);
   try {
     return await vscode.window.withProgress(
       {
@@ -187,7 +242,7 @@ async function runInstallWithProgress(
     );
     if (pick === "Pick path…") {
       const path = await pickServerPath();
-      if (path) await restartClient(context, path);
+      if (path) await restartClient(context, path, "setting");
     }
     return undefined;
   }
@@ -213,7 +268,7 @@ async function promptInstall(
     if (installed) await restartClient(context, installed);
   } else if (choice === pick) {
     const path = await pickServerPath();
-    if (path) await restartClient(context, path);
+    if (path) await restartClient(context, path, "setting");
   }
 }
 
@@ -245,7 +300,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand("pdxl.pickServerPath", async () => {
       const path = await pickServerPath();
-      if (path) await restartClient(context, path);
+      if (path) await restartClient(context, path, "setting");
     }),
   );
 
@@ -293,7 +348,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const resolved = resolveServer(context, serverPath, pinnedVersion(context));
   if (resolved) {
     log(`resolved server from ${resolved.source}: ${resolved.command}`);
-    void startClient(context, resolved.command);
+    void startClient(context, resolved.command, resolved.source);
   } else {
     setStatus("failed", undefined, "install");
     void promptInstall(
