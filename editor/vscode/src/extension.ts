@@ -110,8 +110,11 @@ async function startClient(
   try {
     await client.start();
     // The binary reports its version in the initialize handshake's
-    // serverInfo (baked in from Cargo at compile time).
-    const version = client.initializeResult?.serverInfo?.version;
+    // serverInfo (baked in from Cargo since v0.58.1); older binaries don't,
+    // so fall back to the version encoded in the managed install path.
+    const version =
+      client.initializeResult?.serverInfo?.version ??
+      /[/\\]v(\d+\.\d+\.\d+)[/\\]/.exec(command)?.[1];
     log(
       `language client started successfully (server ${version ?? "unknown version"})`,
     );
@@ -122,7 +125,9 @@ async function startClient(
       );
     }
     setStatus("running", version);
-    if (source !== "setting" && version) {
+    // Old binaries without a reported version are exactly the ones that
+    // need updating — check regardless of whether the version is known.
+    if (source !== "setting") {
       void checkForUpdate(context, version);
     }
   } catch (err) {
@@ -141,7 +146,7 @@ async function startClient(
 let updateCheckDone = false;
 async function checkForUpdate(
   context: vscode.ExtensionContext,
-  runningVersion: string,
+  runningVersion: string | undefined,
 ): Promise<void> {
   if (updateCheckDone) return;
   updateCheckDone = true;
@@ -152,8 +157,12 @@ async function checkForUpdate(
     log(`update check failed: ${err}`);
     return;
   }
-  if (!latest || !isNewerVersion(latest, runningVersion)) {
-    log(`update check: running v${runningVersion}, latest v${latest ?? "?"} — up to date`);
+  // An unknown running version (a pre-0.58.1 binary from PATH) is treated
+  // as outdated: those are exactly the binaries that need updating.
+  if (!latest || (runningVersion && !isNewerVersion(latest, runningVersion))) {
+    log(
+      `update check: running v${runningVersion ?? "?"}, latest v${latest ?? "?"} — up to date`,
+    );
     return;
   }
   const skipKey = `pdxl.skipUpdate.${latest}`;
@@ -161,11 +170,12 @@ async function checkForUpdate(
     log(`update check: v${latest} available but skipped by user`);
     return;
   }
-  log(`update check: v${latest} available (running v${runningVersion})`);
+  log(`update check: v${latest} available (running v${runningVersion ?? "?"})`);
+  const running = runningVersion ? `v${runningVersion}` : "an unknown version";
   const update = `Update to v${latest}`;
   const skip = "Skip this version";
   const choice = await vscode.window.showInformationMessage(
-    `pdxl v${latest} is available (running v${runningVersion}).`,
+    `pdxl v${latest} is available (running ${running}).`,
     update,
     skip,
   );
