@@ -19,6 +19,7 @@
 
 #[macro_use]
 mod log;
+mod color;
 mod completion;
 mod gui_completion;
 mod position;
@@ -114,6 +115,9 @@ pub fn run_stdio(opts: Options) -> Result<(), Box<dyn std::error::Error + Sync +
             resolve_provider: Some(true),
         }),
         document_symbol_provider: Some(OneOf::Left(true)),
+        // Inline color swatches + picker over ClauseKind::Color literals
+        // ({ r g b }, hsv { … }, rgb { … }, hsv360 { … }).
+        color_provider: Some(lsp_types::ColorProviderCapability::Simple(true)),
         // Fuzzy project-wide symbol search (VS Code Ctrl-T / nvim
         // workspace_symbol) over every definition in the SymbolTable.
         workspace_symbol_provider: Some(OneOf::Left(true)),
@@ -310,6 +314,31 @@ fn handle_request(server: &mut ServerState, out: &Sender<Message>, req: lsp_serv
                     e.to_string(),
                 ),
             };
+            let _ = out.send(Message::Response(resp));
+        }
+        lsp_types::request::DocumentColor::METHOD => {
+            let resp = match serde_json::from_value::<lsp_types::DocumentColorParams>(req.params) {
+                Ok(params) => {
+                    Response::new_ok(req.id, server.document_color(&params.text_document.uri))
+                }
+                Err(e) => Response::new_err(
+                    req.id,
+                    lsp_server::ErrorCode::InvalidParams as i32,
+                    e.to_string(),
+                ),
+            };
+            let _ = out.send(Message::Response(resp));
+        }
+        lsp_types::request::ColorPresentationRequest::METHOD => {
+            let resp =
+                match serde_json::from_value::<lsp_types::ColorPresentationParams>(req.params) {
+                    Ok(params) => Response::new_ok(req.id, server.color_presentation(&params)),
+                    Err(e) => Response::new_err(
+                        req.id,
+                        lsp_server::ErrorCode::InvalidParams as i32,
+                        e.to_string(),
+                    ),
+                };
             let _ = out.send(Message::Response(resp));
         }
         lsp_types::request::DocumentSymbolRequest::METHOD => {

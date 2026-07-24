@@ -701,6 +701,69 @@ impl ServerState {
         lens
     }
 
+    /// `textDocument/documentColor`: every color literal in the file (located
+    /// via [`ClauseKind::Color`] contexts), so the editor renders inline
+    /// swatches. Works from the live buffer.
+    ///
+    /// [`ClauseKind::Color`]: pdxl_analysis::context::ClauseKind::Color
+    pub fn document_color(&self, uri: &Url) -> Vec<lsp_types::ColorInformation> {
+        let path = uri_to_path(uri);
+        let Some(project) = &self.project else {
+            return Vec::new();
+        };
+        let Some(rel) = project.rel_at(&path).map(str::to_owned) else {
+            return Vec::new();
+        };
+        let Ok(src) = self.read_file(&path) else {
+            return Vec::new();
+        };
+        let (tree, _) =
+            pdxl_parser::parse(path.to_string_lossy().into_owned(), src.clone()).into_parts();
+        let spans =
+            crate::color::document_colors(&tree, &src, &rel, pdxl_ck3::contexts::context_schema());
+        // One linear pass for every span boundary.
+        let offsets: Vec<u32> = spans.iter().flat_map(|s| [s.start, s.end]).collect();
+        let positions = offsets_to_positions(&src, &offsets);
+        spans
+            .iter()
+            .enumerate()
+            .map(|(i, s)| lsp_types::ColorInformation {
+                range: Range {
+                    start: positions[2 * i],
+                    end: positions[2 * i + 1],
+                },
+                color: s.color,
+            })
+            .collect()
+    }
+
+    /// `textDocument/colorPresentation`: the text a picked color should write
+    /// back — rendered in the same form (`hsv`/`hsv360`/`rgb`/implicit) as
+    /// the literal it replaces.
+    pub fn color_presentation(
+        &self,
+        params: &lsp_types::ColorPresentationParams,
+    ) -> Vec<lsp_types::ColorPresentation> {
+        let path = uri_to_path(&params.text_document.uri);
+        let Ok(src) = self.read_file(&path) else {
+            return Vec::new();
+        };
+        let start = position_to_offset(&src, params.range.start) as usize;
+        let end = (position_to_offset(&src, params.range.end) as usize).min(src.len());
+        if start >= end {
+            return Vec::new();
+        }
+        let label = crate::color::present(&src[start..end], &params.color);
+        vec![lsp_types::ColorPresentation {
+            label: label.clone(),
+            text_edit: Some(lsp_types::TextEdit {
+                range: params.range,
+                new_text: label,
+            }),
+            additional_text_edits: None,
+        }]
+    }
+
     /// `textDocument/documentSymbol`: the file's definitions as a flat outline.
     /// Built from `FileFacts.defs` — a feature the Go server does not have.
     pub fn document_symbol(&self, uri: &Url) -> Vec<lsp_types::DocumentSymbol> {
