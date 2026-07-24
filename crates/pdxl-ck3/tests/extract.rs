@@ -1954,3 +1954,55 @@ fn script_constants_resolve_per_file() {
     assert_eq!(diags.len(), 1, "{diags:?}");
     assert!(diags[0].msg.contains("unknown script_constant \"@cost\""));
 }
+
+// ── named colors (ANALYSIS_VERSION 55) ───────────────────────────────────────
+
+#[test]
+fn named_color_defs_and_refs() {
+    let d = extract(
+        "colors = {\n\
+         \tenglish = { 0.8 0.2 0.2 }\n\
+         \tbrown = hsv360 { 21 74 45 }\n\
+         }\n",
+        "common/named_colors/default_colors.txt",
+    );
+    assert_eq!(def_names(&d), vec!["english", "brown"]);
+    assert!(
+        d.defs
+            .iter()
+            .all(|d| d.kind == pdxl_ck3::kinds::NAMED_COLOR)
+    );
+
+    // Scalar color fields reference named colors in their gated dirs.
+    let c = extract(
+        "my_culture = { color = english }\n",
+        "common/culture/cultures/00.txt",
+    );
+    let r = c.refs.iter().find(|r| r.name == "english").expect("ref");
+    assert_eq!(r.kind, pdxl_ck3::kinds::NAMED_COLOR);
+
+    // CoA slot indirection and the list selector are skips, not names.
+    let coa = extract(
+        "d_norm = {\n\
+         \tcolor1 = english\n\
+         \tcolored_emblem = { color1 = color2 color2 = list \"fp2_standard\" }\n\
+         }\n",
+        "common/coat_of_arms/coat_of_arms/00.txt",
+    );
+    let names: Vec<&str> = coa
+        .refs
+        .iter()
+        .filter(|r| r.kind == pdxl_ck3::kinds::NAMED_COLOR)
+        .map(|r| r.name.as_str())
+        .collect();
+    assert_eq!(names, vec!["english"]);
+
+    // `color = X` outside the gated dirs (genes, modifier formats) is not a ref.
+    let genes = extract("e = { color = hair }\n", "common/genes/00.txt");
+    assert!(
+        genes
+            .refs
+            .iter()
+            .all(|r| r.kind != pdxl_ck3::kinds::NAMED_COLOR)
+    );
+}

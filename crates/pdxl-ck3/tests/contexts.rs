@@ -357,3 +357,16 @@ fn color_fields_open_color_context() {
         ClauseKind::Config
     );
 }
+
+#[test]
+fn named_colors_container_opens_color_context() {
+    let src = "colors = {\n\tenglish = { 0.8 0.2 0.2 }\n\tred = hsv { 0.02 0.8 0.45 }\n}\n";
+    assert_eq!(
+        ctx_of(src, "common/named_colors/default.txt", "0.2"),
+        ClauseKind::Color
+    );
+    assert_eq!(
+        ctx_of(src, "common/named_colors/default.txt", "0.45"),
+        ClauseKind::Color
+    );
+}

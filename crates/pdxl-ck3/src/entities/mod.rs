@@ -49,6 +49,7 @@ mod law;
 mod loc;
 mod modifier;
 mod name_list;
+mod named_color;
 mod namespace;
 mod nickname;
 mod on_action;
@@ -133,5 +134,6 @@ registry!(
     situation::Situation,
     province::Province,
     terrain::Terrain,
+    named_color::NamedColor,
     loc::Loc,
 );

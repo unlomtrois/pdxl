@@ -241,9 +241,10 @@ fn push_struct_items(
         Fallback::Effect => push_effect_items(items, table, scope),
         Fallback::Trigger => push_trigger_items(items, table, scope),
         Fallback::Modifier => push_modifier_items(items),
-        // Struct-fallback (law group): the unknown key is a new definition
-        // name the author types; offer only the known attribute fields.
-        Fallback::Ignore | Fallback::Deny | Fallback::Struct(_) => {}
+        // Struct-fallback (law group) and Color-fallback (named colors): the
+        // unknown key is a new definition name the author types; offer only
+        // the known attribute fields.
+        Fallback::Ignore | Fallback::Deny | Fallback::Struct(_) | Fallback::Color => {}
     }
 }
 

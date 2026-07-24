@@ -38,6 +38,16 @@ const SCOPE_KEYWORDS: &[&str] = &[
     "prevprev",
     "prevprevprev",
     "prevprevprevprev",
+    // Coat-of-arms color values that are relative references, not names:
+    // `color1 = color2` reuses another slot of the same CoA, and
+    // `color1 = list "x"` picks from a color list (the quoted list name is a
+    // separate scalar the rule never sees).
+    "color1",
+    "color2",
+    "color3",
+    "color4",
+    "color5",
+    "list",
 ];
 
 /// Typed-definition keywords: `KEYWORD NAME = { … }` defines `NAME` of the

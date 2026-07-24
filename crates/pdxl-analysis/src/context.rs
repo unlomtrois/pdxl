@@ -63,6 +63,9 @@ pub enum Fallback {
     /// Unknown keys are static-modifier tags (trait bodies, XP-track levels:
     /// "any other unknown property is read in as a modifier").
     Modifier,
+    /// Unknown block-valued keys are color literals (the `colors = { … }`
+    /// container of `common/named_colors/`, whose keys are the definitions).
+    Color,
     /// Unknown block-valued keys are definitions of another struct (a law
     /// group's arbitrarily-named laws open the law spec).
     Struct(&'static StructSpec),
@@ -382,6 +385,8 @@ fn step_struct(spec: &'static StructSpec, key: &[u8], value_is_block: bool) -> C
         Fallback::Ignore => ClauseKind::Config,
         Fallback::Deny => ClauseKind::Unknown,
         Fallback::Modifier => ClauseKind::StaticModifier,
+        Fallback::Color if value_is_block => ClauseKind::Color,
+        Fallback::Color => ClauseKind::Config,
         Fallback::Struct(s) if value_is_block => ClauseKind::Struct(s),
         // A scalar unknown key in a struct-fallback block is not a definition.
         Fallback::Struct(_) => ClauseKind::Config,

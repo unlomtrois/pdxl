@@ -62,3 +62,4 @@ pub const CATALYST: KindId = KindId::new("catalyst");
 pub const SITUATION_GROUP_TYPE: KindId = KindId::new("situation_group_type");
 pub const PROVINCE: KindId = KindId::new("province");
 pub const TERRAIN_TYPE: KindId = KindId::new("terrain_type");
+pub const NAMED_COLOR: KindId = KindId::new("named_color");
