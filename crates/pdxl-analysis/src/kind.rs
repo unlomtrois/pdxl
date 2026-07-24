@@ -32,6 +32,12 @@ impl KindId {
 /// per-game schema. Games reference this rather than redeclaring it.
 pub const LOC_KEY: KindId = KindId::new("loc_key");
 
+/// Script constants (`@name = value` at file top level) — the second engine-
+/// owned kind: the `@` syntax is universal PDXScript, and the symbols are
+/// **file-local** (corpus-verified: zero cross-file uses in CK3 vanilla), so
+/// they resolve per file and never enter the global symbol table.
+pub const SCRIPT_CONSTANT: KindId = KindId::new("script_constant");
+
 /// The kinds a game's call-by-name references resolve to (scripted effects and
 /// triggers matched in *key* position, script values in *value* position).
 /// Supplied by the game schema so the engine's extractor stays kind-agnostic.

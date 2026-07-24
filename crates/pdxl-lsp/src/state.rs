@@ -310,7 +310,21 @@ impl ServerState {
             .refs
             .iter()
             .chain(facts.calls.iter())
+            .chain(facts.constant_refs.iter())
             .find(|r| r.start <= off && off < r.end)?;
+
+        // Script constants are file-local: resolve against this file's own
+        // `@name = …` definitions, never the global table.
+        if reference.kind == pdxl_analysis::SCRIPT_CONSTANT {
+            let symbol = facts.constants.iter().find(|c| c.name == reference.name)?;
+            return Some(Location {
+                uri: path_to_uri(&path),
+                range: Range {
+                    start: offset_to_position(&src, symbol.offset),
+                    end: offset_to_position(&src, symbol.end_offset),
+                },
+            });
+        }
 
         // Primary kind first, then the rule's alternates (multi-kind refs
         // like custom_description's text resolve to whichever kind defines
@@ -351,6 +365,35 @@ impl ServerState {
             return Vec::new();
         };
         let name = name.to_string();
+
+        // Script constants are file-local: only this file's `@name` uses (and
+        // optionally its definition) are returned.
+        if kind == pdxl_analysis::SCRIPT_CONSTANT {
+            let mut locations: Vec<Location> = facts
+                .constant_refs
+                .iter()
+                .filter(|r| r.name == name)
+                .map(|r| Location {
+                    uri: path_to_uri(&path),
+                    range: Range {
+                        start: offset_to_position(&src, r.start),
+                        end: offset_to_position(&src, r.end),
+                    },
+                })
+                .collect();
+            if include_declaration
+                && let Some(symbol) = facts.constants.iter().find(|c| c.name == name)
+            {
+                locations.push(Location {
+                    uri: path_to_uri(&path),
+                    range: Range {
+                        start: offset_to_position(&src, symbol.offset),
+                        end: offset_to_position(&src, symbol.end_offset),
+                    },
+                });
+            }
+            return locations;
+        }
 
         // Convert refs to locations, reading each file once (Go's srcCache).
         let mut src_cache: HashMap<PathBuf, Option<Vec<u8>>> = HashMap::new();
@@ -433,6 +476,33 @@ impl ServerState {
         let facts = project.facts_at(&path)?;
         let (kind, alt, name) = symbol_at_with_alts(facts, off)?;
         let name = name.to_string();
+
+        // Script constants rename file-locally: every `@name` use in this
+        // file plus the `@name = …` definition.
+        if kind == pdxl_analysis::SCRIPT_CONSTANT {
+            let mut edits = Vec::new();
+            let mut push = |start: u32, end: u32| {
+                edits.push(TextEdit {
+                    range: Range {
+                        start: offset_to_position(&src, start),
+                        end: offset_to_position(&src, end),
+                    },
+                    new_text: new_name.to_string(),
+                });
+            };
+            for r in facts.constant_refs.iter().filter(|r| r.name == name) {
+                push(r.start, r.end);
+            }
+            if let Some(d) = facts.constants.iter().find(|c| c.name == name) {
+                push(d.offset, d.end_offset);
+            }
+            let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+            changes.insert(path_to_uri(&path), edits);
+            return Some(WorkspaceEdit {
+                changes: Some(changes),
+                ..WorkspaceEdit::default()
+            });
+        }
 
         // Resolve to the kind that actually defines the name (definition()'s
         // rule); fall back to the primary kind so an unresolved ref still
@@ -2238,6 +2308,18 @@ fn symbol_at_with_alts(
             return Some((r.kind, r.alt, &r.name));
         }
     }
+    // File-local script constants: both the `@name = …` definition and its
+    // `= @name` uses answer, so find-references works from either end.
+    for d in &facts.constants {
+        if d.offset <= off && off < d.end_offset {
+            return Some((d.kind, &[], &d.name));
+        }
+    }
+    for r in &facts.constant_refs {
+        if r.start <= off && off < r.end {
+            return Some((r.kind, r.alt, &r.name));
+        }
+    }
     None
 }
 
@@ -2254,6 +2336,16 @@ fn span_at(facts: &pdxl_analysis::FileFacts, off: u32) -> Option<(u32, u32)> {
         }
     }
     for r in &facts.calls {
+        if r.start <= off && off < r.end {
+            return Some((r.start, r.end));
+        }
+    }
+    for d in &facts.constants {
+        if d.offset <= off && off < d.end_offset {
+            return Some((d.offset, d.end_offset));
+        }
+    }
+    for r in &facts.constant_refs {
         if r.start <= off && off < r.end {
             return Some((r.start, r.end));
         }

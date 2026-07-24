@@ -61,6 +61,16 @@ pub fn extract_facts(
             harvest_keyed_value_def(tree, node, kv_kind, rel_path, &mut facts);
             continue;
         }
+        // A script-constant definition (`@name = value`) is skipped here so
+        // shapes like TopLevelValued (script values) don't claim it as a
+        // definition of their own kind; the dedicated walk below harvests it
+        // (constants may also be defined nested, e.g. inside ethnicities).
+        if kind == NodeKind::Field
+            && let Some(&key_id) = tree.child_ids(node).first()
+            && tree.node_text(key_id).starts_with(b"@")
+        {
+            continue;
+        }
         let Some(rule) = rule else { continue };
         match rule.shape {
             crate::schema::DefShape::TopLevel => {
@@ -84,6 +94,8 @@ pub fn extract_facts(
         }
     }
 
+    harvest_constant_defs(tree, tree.root(), rel_path, &mut facts);
+
     extract_refs(
         tree,
         tree.root(),
@@ -94,6 +106,13 @@ pub fn extract_facts(
         schema,
         &mut facts.refs,
     );
+    // Constant references are collected inline (they need no separate walk)
+    // and split out afterwards: they resolve file-locally, so they must not
+    // reach the global reference stream.
+    facts.constant_refs = facts
+        .refs
+        .extract_if(.., |r| r.kind == crate::kind::SCRIPT_CONSTANT)
+        .collect();
 
     // Call-by-name references (`my_effect = yes`).
     if let Some(targets) = calls {
@@ -374,6 +393,37 @@ fn push_alias(facts: &mut FileFacts, name: String, kind: KindId, rel_path: &str,
     });
 }
 
+/// Recursively records script-constant definitions: every `@name = value`
+/// field, at any depth — most sit at file top level, but ethnicities and
+/// coats of arms define them inside blocks (the engine treats them as
+/// file-scoped either way). The symbol name keeps its `@` so definitions and
+/// references match textually.
+fn harvest_constant_defs(
+    tree: &SyntaxTree,
+    node_id: NodeId,
+    rel_path: &str,
+    facts: &mut FileFacts,
+) {
+    let node = tree.node(node_id);
+    if node.kind == NodeKind::Field {
+        let children = tree.child_ids(node_id);
+        if children.len() == 2 && tree.node_text(children[0]).starts_with(b"@") {
+            facts.constants.push(Symbol {
+                name: String::from_utf8_lossy(tree.node_text(children[0])).into_owned(),
+                kind: crate::kind::SCRIPT_CONSTANT,
+                file: Arc::from(rel_path),
+                offset: node.range.start,
+                end_offset: tree.node(children[0]).range.end,
+                params: Vec::new(),
+            });
+            return;
+        }
+    }
+    for child in tree.children(node_id) {
+        harvest_constant_defs(tree, child, rel_path, facts);
+    }
+}
+
 /// The keyed-value kind of a top-level `KEY = value` field (`namespace = X` →
 /// Namespace), or `None` if `KEY` isn't a keyed-value key.
 fn keyed_value_kind(tree: &SyntaxTree, node_id: NodeId, schema: &Schema) -> Option<KindId> {
@@ -540,19 +590,11 @@ fn extract_refs(
                 schema,
                 refs,
             );
-            // The key itself is a scalar position (scope literals like
-            // `title:k_x = { … }` appear as keys); the value's subtree gets
-            // this field's key as its parent.
-            extract_refs(
-                tree,
-                children[0],
-                rel_path,
-                path,
-                parent_key,
-                depth,
-                schema,
-                refs,
-            );
+            // The key itself is a scalar position for scope literals only
+            // (`title:k_x = { … }` appears as a key) — never for script
+            // constants, whose `@name` keys are the definitions. The value's
+            // subtree gets this field's key as its parent.
+            scan_prefix_refs(tree, children[0], rel_path, path, schema, refs);
             extract_refs(
                 tree,
                 children[1],
@@ -571,6 +613,20 @@ fn extract_refs(
     // tree is scanned, not just known-key values.
     if node.kind == NodeKind::Scalar {
         scan_prefix_refs(tree, node_id, rel_path, path, schema, refs);
+        // A `@name` scalar below file top level is a script-constant
+        // reference (top-level `@name` keys are the definitions). `@[…]`
+        // inline math is skipped — its variables appear un-prefixed inside.
+        let text = tree.node_text(node_id);
+        if depth >= 1 && text.len() > 1 && text[0] == b'@' && text[1] != b'[' {
+            refs.push(Ref {
+                kind: crate::kind::SCRIPT_CONSTANT,
+                alt: &[],
+                name: String::from_utf8_lossy(text).into_owned(),
+                file: Arc::from(path),
+                start: node.range.start,
+                end: node.range.end,
+            });
+        }
     }
     for child in tree.children(node_id) {
         extract_refs(tree, child, rel_path, path, parent_key, depth, schema, refs);

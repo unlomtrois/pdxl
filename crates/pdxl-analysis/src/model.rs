@@ -62,6 +62,15 @@ pub struct FileFacts {
     /// builtin we don't model — so these live outside `refs` and the `check`
     /// path; they power editor find-references / CodeLens only.
     pub calls: Vec<Ref>,
+    /// Script-constant definitions (`@name = value` at file top level).
+    /// **File-local**: resolved against `constant_refs` of the same file only,
+    /// never merged into the global table (the same `@name` recurs across
+    /// files with different values).
+    pub constants: Vec<Symbol>,
+    /// Script-constant references (`key = @name` in any value position).
+    /// Diagnosed per file against `constants`. `@[…]` inline-math scalars are
+    /// not extracted (their variables appear un-prefixed inside the brackets).
+    pub constant_refs: Vec<Ref>,
 }
 
 /// The names of every defined scripted effect / trigger in the project, used to

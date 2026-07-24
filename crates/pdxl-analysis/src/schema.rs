@@ -392,9 +392,10 @@ impl Schema {
     /// (`$X$`), scope/data-function chains (`foo:bar`), file paths
     /// (`gfx/…dds`), relative-scope keywords, and empties (Go's `skipRefValue`).
     pub fn skip_ref_value(&self, val: &str) -> bool {
-        if val.is_empty() || val.contains(['$', ':', '/']) || val.starts_with('[') {
+        if val.is_empty() || val.contains(['$', ':', '/']) || val.starts_with(['[', '@']) {
             // `[...]` values are inline datafunction text, not names; a `/`
-            // means a texture/sound path, never a symbol key.
+            // means a texture/sound path, never a symbol key; `@…` is a script
+            // constant (extracted separately, resolved file-locally).
             return true;
         }
         // A scope keyword — bare (`has_trait = prev`) or heading a chain

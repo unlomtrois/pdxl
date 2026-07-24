@@ -52,7 +52,29 @@ pub fn merge_and_resolve(
         }
     }
 
-    let diags = resolve_refs(&table, refs.iter().copied());
+    let mut diags = resolve_refs(&table, refs.iter().copied());
+
+    // Script constants resolve file-locally: `@name` references check only
+    // their own file's `@name = …` definitions (the global table never sees
+    // them — the same name recurs across files with different values).
+    for rel in order {
+        let Some(f) = facts.get(*rel) else { continue };
+        if f.constant_refs.is_empty() {
+            continue;
+        }
+        let defined: std::collections::HashSet<&str> =
+            f.constants.iter().map(|c| c.name.as_str()).collect();
+        for r in &f.constant_refs {
+            if !defined.contains(r.name.as_str()) {
+                diags.push(RefDiag {
+                    file: r.file.clone(),
+                    start: r.start,
+                    end: r.end,
+                    msg: format!("unknown {} {:?}", r.kind.name(), r.name),
+                });
+            }
+        }
+    }
     (table, diags)
 }
 

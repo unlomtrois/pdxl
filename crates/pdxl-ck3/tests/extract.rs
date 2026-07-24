@@ -1897,3 +1897,60 @@ fn terrain_defs_and_ungated_refs() {
     );
 }
 
+// ── file-local script constants (ANALYSIS_VERSION 53) ────────────────────────
+
+#[test]
+fn script_constants_defs_and_refs() {
+    let f = extract(
+        "@cost = 25\n\
+         plains = {\n\
+         \tprovision_cost = @cost\n\
+         \ttravel_danger_score = @missing\n\
+         \tmath = @[cost * 2]\n\
+         }\n",
+        "common/terrain_types/00.txt",
+    );
+    // The @def is a constant, never a directory-kind definition.
+    assert_eq!(def_names(&f), vec!["plains"]);
+    assert_eq!(f.constants.len(), 1);
+    assert_eq!(f.constants[0].name, "@cost");
+    assert_eq!(f.constants[0].kind, pdxl_analysis::SCRIPT_CONSTANT);
+    // Uses are constant refs (inline math @[…] is skipped); they never leak
+    // into the global ref stream.
+    let names: Vec<&str> = f.constant_refs.iter().map(|r| r.name.as_str()).collect();
+    assert_eq!(names, vec!["@cost", "@missing"]);
+    assert!(f.refs.iter().all(|r| !r.name.starts_with('@')));
+}
+
+#[test]
+fn script_constants_not_script_value_defs() {
+    // In common/script_values/ (TopLevelValued), @defs must not be claimed as
+    // script values.
+    let f = extract(
+        "@base = 10\nmy_value = @base\n",
+        "common/script_values/00.txt",
+    );
+    assert_eq!(def_names(&f), vec!["my_value"]);
+    assert_eq!(f.constants[0].name, "@base");
+}
+
+#[test]
+fn script_constants_resolve_per_file() {
+    use pdxl_analysis::merge_and_resolve;
+    use std::collections::HashMap;
+
+    // File A defines @cost; file B uses it without defining it — the use in B
+    // must NOT resolve against A (constants are file-local).
+    let a = extract("@cost = 1\nx = { }\n", "common/traits/a.txt");
+    let b = extract(
+        "y = { potential = { gold = @cost } }\n",
+        "common/traits/b.txt",
+    );
+    let mut facts = HashMap::new();
+    facts.insert("common/traits/a.txt".to_string(), a);
+    facts.insert("common/traits/b.txt".to_string(), b);
+    let order = ["common/traits/a.txt", "common/traits/b.txt"];
+    let (_, diags) = merge_and_resolve(&order, &facts);
+    assert_eq!(diags.len(), 1, "{diags:?}");
+    assert!(diags[0].msg.contains("unknown script_constant \"@cost\""));
+}

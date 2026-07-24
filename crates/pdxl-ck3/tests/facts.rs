@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use pdxl_analysis::{FileFacts, Symbol, extract_facts};
 
 /// Facts dump schema version. Bump on any format change.
-const FACTS_DUMP_VERSION: u32 = 1;
+const FACTS_DUMP_VERSION: u32 = 2; // 2: file-local script constants (+constants/+constant_refs)
 
 /// Canonical dump of one extraction run: defs, aliases, and refs as JSON, one
 /// per line, so a line diff pinpoints the first divergence.
@@ -30,28 +30,37 @@ fn dump_facts(facts: &FileFacts, rel_path: &str) -> String {
     out.push_str("],\n\"aliases\":[");
     push_symbols(&mut out, &facts.aliases);
     out.push_str("],\n\"refs\":[");
-    if !facts.refs.is_empty() {
-        out.push('\n');
-        for (i, r) in facts.refs.iter().enumerate() {
-            out.push_str("{\"kind\":\"");
-            out.push_str(r.kind.name());
-            out.push_str("\",\"name\":\"");
-            push_escaped(&mut out, &r.name);
-            out.push_str("\",\"file\":\"");
-            push_escaped(&mut out, &r.file);
-            out.push_str("\",\"start\":");
-            out.push_str(&r.start.to_string());
-            out.push_str(",\"end\":");
-            out.push_str(&r.end.to_string());
-            out.push('}');
-            if i + 1 < facts.refs.len() {
-                out.push(',');
-            }
-            out.push('\n');
-        }
-    }
+    push_refs(&mut out, &facts.refs);
+    out.push_str("],\n\"constants\":[");
+    push_symbols(&mut out, &facts.constants);
+    out.push_str("],\n\"constant_refs\":[");
+    push_refs(&mut out, &facts.constant_refs);
     out.push_str("]\n}\n");
     out
+}
+
+fn push_refs(out: &mut String, refs: &[pdxl_analysis::Ref]) {
+    if refs.is_empty() {
+        return;
+    }
+    out.push('\n');
+    for (i, r) in refs.iter().enumerate() {
+        out.push_str("{\"kind\":\"");
+        out.push_str(r.kind.name());
+        out.push_str("\",\"name\":\"");
+        push_escaped(out, &r.name);
+        out.push_str("\",\"file\":\"");
+        push_escaped(out, &r.file);
+        out.push_str("\",\"start\":");
+        out.push_str(&r.start.to_string());
+        out.push_str(",\"end\":");
+        out.push_str(&r.end.to_string());
+        out.push('}');
+        if i + 1 < refs.len() {
+            out.push(',');
+        }
+        out.push('\n');
+    }
 }
 
 fn push_symbols(out: &mut String, symbols: &[Symbol]) {
