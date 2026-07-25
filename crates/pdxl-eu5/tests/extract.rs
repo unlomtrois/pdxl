@@ -283,3 +283,60 @@ fn age_body_and_estate_refs() {
     );
     assert_eq!(ctx, ClauseKind::StaticModifier);
 }
+
+#[test]
+fn subject_type_defs_refs_and_body() {
+    let f = extract(
+        "maona = {\n\
+         \tcolor = subject_vassal\n\
+         \tlevel = 1\n\
+         \tjoin_defensive_wars_always = { scope:actor = { is_subject_of = scope:recipient } }\n\
+         \tsubject_pays = subject_pays_vassal\n\
+         }\n",
+        "in_game/common/subject_types/cci_maona.txt",
+    );
+    assert_eq!(f.defs[0].name, "maona");
+    assert_eq!(f.defs[0].kind, pdxl_eu5::kinds::SUBJECT_TYPE);
+    let color = f
+        .refs
+        .iter()
+        .find(|r| r.name == "subject_vassal")
+        .expect("color ref");
+    assert_eq!(color.kind, pdxl_eu5::kinds::NAMED_COLOR);
+
+    // Both reference forms resolve anywhere; chain forms skip.
+    let e = extract(
+        "e = {\n\
+         \tsubject_type = maona\n\
+         \tx = subject_type:tributary\n\
+         \tsubject_type = scope:st\n\
+         }\n",
+        "in_game/common/scripted_effects/x.txt",
+    );
+    let names: Vec<&str> = e
+        .refs
+        .iter()
+        .filter(|r| r.kind == pdxl_eu5::kinds::SUBJECT_TYPE)
+        .map(|r| r.name.as_str())
+        .collect();
+    assert_eq!(names, vec!["maona", "tributary"]);
+
+    // Body contexts: availability triggers are Trigger clauses; lifecycle
+    // effects are Effect clauses.
+    use pdxl_analysis::context::{ClauseKind, context_of_chain};
+    let ctx = context_of_chain(
+        [
+            b"maona".as_slice(),
+            b"join_defensive_wars_always".as_slice(),
+        ],
+        "in_game/common/subject_types/x.txt",
+        pdxl_eu5::contexts::context_schema(),
+    );
+    assert_eq!(ctx, ClauseKind::Trigger);
+    let on_enable = context_of_chain(
+        [b"maona".as_slice(), b"on_enable".as_slice()],
+        "in_game/common/subject_types/x.txt",
+        pdxl_eu5::contexts::context_schema(),
+    );
+    assert_eq!(on_enable, ClauseKind::Effect);
+}

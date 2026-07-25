@@ -14,6 +14,7 @@ mod estate;
 mod named_color;
 mod religion;
 mod scripted;
+mod subject_type;
 mod unlocks;
 
 /// The uniform surface every game concept declares (see `pdxl-ck3`).
@@ -44,6 +45,7 @@ registry!(
     unlocks::Unlocks,
     coat_of_arms::CoatOfArms,
     estate::Estate,
+    subject_type::SubjectType,
     culture::Culture,
     religion::Religion,
     named_color::NamedColor,
