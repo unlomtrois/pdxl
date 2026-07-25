@@ -8,9 +8,11 @@ use pdxl_analysis::context::ClauseKind;
 
 mod advance;
 mod coat_of_arms;
+pub(crate) mod common;
 mod country;
 mod culture;
 mod estate;
+mod government_reform;
 mod named_color;
 mod religion;
 mod scripted;
@@ -46,6 +48,7 @@ registry!(
     coat_of_arms::CoatOfArms,
     estate::Estate,
     subject_type::SubjectType,
+    government_reform::GovernmentReform,
     culture::Culture,
     religion::Religion,
     named_color::NamedColor,

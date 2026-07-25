@@ -432,3 +432,45 @@ fn readme_unlock_targets_and_dual_site_production_methods() {
         ClauseKind::StaticModifier
     );
 }
+
+#[test]
+fn government_reform_body_and_refs() {
+    // The mod's maona charter reform: derived government_reform: literal,
+    // scaled country_modifier, locked/potential triggers.
+    let f = extract(
+        "maona_charter = {\n\
+         \tage = age_2_renaissance\n\
+         \tgovernment = republic\n\
+         \tpotential = { has_reform = government_reform:maona_charter }\n\
+         \tcountry_modifier = {\n\
+         \t\tpotential_trigger = { is_at_war = no }\n\
+         \t\ttrade_efficiency = 0.1\n\
+         \t}\n\
+         \tyears = 0\n\
+         }\n",
+        "in_game/common/government_reforms/cci_maona_reform.txt",
+    );
+    assert_eq!(f.defs[0].kind, pdxl_eu5::kinds::GOVERNMENT_REFORM);
+    let kind_of = |n: &str| f.refs.iter().find(|r| r.name == n).expect(n).kind;
+    assert_eq!(kind_of("age_2_renaissance"), pdxl_eu5::kinds::AGE);
+    assert_eq!(kind_of("republic"), pdxl_eu5::kinds::GOVERNMENT_TYPE);
+    // The derived scope-link literal self-references the reform.
+    assert_eq!(kind_of("maona_charter"), pdxl_eu5::kinds::GOVERNMENT_REFORM);
+
+    // Body contexts: locked/potential are triggers; the scaled modifier's
+    // loose keys are modifier tags.
+    use pdxl_analysis::context::{ClauseKind, context_of_chain};
+    let cm = context_of_chain(
+        [b"maona_charter".as_slice(), b"country_modifier".as_slice()],
+        "in_game/common/government_reforms/x.txt",
+        pdxl_eu5::contexts::context_schema(),
+    );
+    assert_eq!(
+        pdxl_analysis::context::resolve_key(cm, "trade_efficiency", false),
+        ClauseKind::StaticModifier
+    );
+    assert_eq!(
+        pdxl_analysis::context::resolve_key(cm, "potential_trigger", true),
+        ClauseKind::Trigger
+    );
+}

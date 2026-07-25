@@ -15,7 +15,7 @@
 use crate::kinds;
 use pdxl_analysis::context::ClauseKind::{self, ScriptedModifier, StaticModifier, Struct, Trigger};
 use pdxl_analysis::context::ScalarKind::Setting;
-use pdxl_analysis::context::{Fallback, StructSpec, block, scalar, scalar_or_block};
+use pdxl_analysis::context::{Fallback, StructSpec, block, scalar};
 use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
@@ -115,25 +115,6 @@ const fn in_advances(key: &'static str) -> RefRule {
         alt: &[],
     }
 }
-
-/// `modifier_while_progressing = { … }` — a triggered, scaled modifier
-/// applied while the advance is being researched (readme).
-static MODIFIER_WHILE_PROGRESSING: StructSpec = StructSpec {
-    name: "modifier while progressing",
-    fields: &[
-        (
-            "potential_trigger",
-            block(Trigger).doc("Conditions for the modifier to apply while researching."),
-        ),
-        (
-            "scale",
-            scalar_or_block(Setting, ClauseKind::ScriptValue)
-                .doc("Scale factor for the modifiers (a maths/script value)."),
-        ),
-    ],
-    // Everything else in the block is the modifier tags themselves.
-    fallback: Fallback::Modifier,
-};
 
 /// The body of one advance (`readme.txt` + corpus).
 static ADVANCE: StructSpec = StructSpec {
@@ -246,7 +227,7 @@ static ADVANCE: StructSpec = StructSpec {
         ),
         (
             "modifier_while_progressing",
-            block(Struct(&MODIFIER_WHILE_PROGRESSING)).doc(
+            block(Struct(&super::common::SCALED_MODIFIER)).doc(
                 "Triggered, scaled modifier applied to the country while this advance is \
                  being researched.",
             ),
@@ -283,7 +264,16 @@ impl Entity for Advance {
         },
         KindSpec {
             // The `age:` literal is table-derived (`crate::derived`).
-            refs: &[in_advances("age")],
+            refs: &[
+                in_advances("age"),
+                // Government reforms name their availability age (161 refs,
+                // 0 unresolved).
+                RefRule {
+                    pattern: RefPattern::KeyValue("age"),
+                    gate: Some(super::government_reform::REFORMS_DIR),
+                    alt: &[],
+                },
+            ],
             ..def_only(kinds::AGE, IconHint::Hierarchy, AGE_DIR)
         },
     ];

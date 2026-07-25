@@ -30,6 +30,7 @@ pub const LEVY: KindId = KindId::new("levy");
 pub const GOVERNMENT_REFORM: KindId = KindId::new("government_reform");
 pub const CASUS_BELLI: KindId = KindId::new("casus_belli");
 pub const PRODUCTION_METHOD: KindId = KindId::new("production_method");
+pub const GOVERNMENT_TYPE: KindId = KindId::new("government_type");
 pub const ADVANCE: KindId = KindId::new("advance");
 pub const AGE: KindId = KindId::new("age");
 pub const BUILDING: KindId = KindId::new("building");

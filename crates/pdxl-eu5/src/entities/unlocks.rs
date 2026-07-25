@@ -80,14 +80,7 @@ impl Entity for Unlocks {
             refs: &[unlock("unlock_levy")],
             ..def_only(kinds::LEVY, IconHint::Object, "in_game/common/levies/")
         },
-        KindSpec {
-            refs: &[unlock("unlock_government_reform")],
-            ..def_only(
-                kinds::GOVERNMENT_REFORM,
-                IconHint::Action,
-                "in_game/common/government_reforms/",
-            )
-        },
+        // Government reforms moved to their own entity (full body model).
         KindSpec {
             refs: &[unlock("unlock_casus_belli")],
             ..def_only(
