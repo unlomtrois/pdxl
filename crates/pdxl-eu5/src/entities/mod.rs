@@ -6,11 +6,13 @@
 use pdxl_analysis::KindSpec;
 use pdxl_analysis::context::ClauseKind;
 
+mod advance;
 mod country;
 mod culture;
 mod named_color;
 mod religion;
 mod scripted;
+mod unlocks;
 
 /// The uniform surface every game concept declares (see `pdxl-ck3`).
 pub(crate) trait Entity {
@@ -36,6 +38,8 @@ macro_rules! registry {
 registry!(
     scripted::Scripted,
     country::Country,
+    advance::Advance,
+    unlocks::Unlocks,
     culture::Culture,
     religion::Religion,
     named_color::NamedColor,

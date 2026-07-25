@@ -23,7 +23,9 @@ pub mod tables;
 use pdxl_analysis::{CallKinds, KindId, Schema};
 
 /// Relative-scope keywords (`prev`, `this`, …) skipped during resolution.
-const SCOPE_KEYWORDS: &[&str] = &["root", "this", "prev", "from", "fromfrom"];
+// `yes`/`no` are toggle values, never symbol names — corpus:
+// `unlock_unit = yes` (a bare enablement, not a unit reference).
+const SCOPE_KEYWORDS: &[&str] = &["root", "this", "prev", "from", "fromfrom", "yes", "no"];
 
 /// `namespace = X` declares an event namespace (same convention as CK3).
 const KEYED_VALUE_DEFS: &[(&str, KindId)] = &[("namespace", kinds::NAMESPACE)];

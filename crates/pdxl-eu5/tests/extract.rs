@@ -130,3 +130,50 @@ fn start_scenario_countries_nested_container() {
     let (_, diags) = merge_and_resolve(&order, &facts);
     assert!(diags.is_empty(), "{diags:?}");
 }
+
+#[test]
+fn advance_domain_defs_and_refs() {
+    let f = extract(
+        "central_bank_advance = {\n\
+         \tage = age_5_absolutism\n\
+         \tunlock_building = central_bank\n\
+         \tmax_bonds = 5\n\
+         \trequires = manufactories_advance\n\
+         \tallow = { has_embraced_institution = institution:banking }\n\
+         \tai_weight = { add = 100 }\n\
+         }\n",
+        "in_game/common/advances/0_age_of_absolutism.txt",
+    );
+    assert_eq!(f.defs[0].kind, pdxl_eu5::kinds::ADVANCE);
+    let kind_of = |n: &str| f.refs.iter().find(|r| r.name == n).expect(n).kind;
+    assert_eq!(kind_of("age_5_absolutism"), pdxl_eu5::kinds::AGE);
+    assert_eq!(kind_of("manufactories_advance"), pdxl_eu5::kinds::ADVANCE);
+    assert_eq!(kind_of("central_bank"), pdxl_eu5::kinds::BUILDING);
+
+    // has_advance resolves anywhere; `requires` means nothing elsewhere.
+    let t = extract(
+        "e = { has_advance = sanitation_advance requires = whatever }\n",
+        "in_game/common/scripted_triggers/x.txt",
+    );
+    assert_eq!(t.refs.len(), 1, "{:?}", t.refs);
+    assert_eq!(t.refs[0].kind, pdxl_eu5::kinds::ADVANCE);
+
+    // `unlock_unit = yes` is a toggle, not a unit reference.
+    let y = extract(
+        "x = { unlock_unit = yes }\n",
+        "in_game/common/building_types/00.txt",
+    );
+    assert!(y.refs.iter().all(|r| r.kind != pdxl_eu5::kinds::UNIT));
+
+    // Loose advance body keys are modifier tags (context check).
+    use pdxl_analysis::context::{ClauseKind, context_of_chain};
+    let ctx = context_of_chain(
+        [b"central_bank_advance".as_slice()],
+        "in_game/common/advances/0.txt",
+        pdxl_eu5::contexts::context_schema(),
+    );
+    let modifier_tag = pdxl_analysis::context::resolve_key(ctx, "global_life_expectancy", false);
+    assert_eq!(modifier_tag, ClauseKind::StaticModifier); // Modifier fallback
+    let allow = pdxl_analysis::context::resolve_key(ctx, "allow", true);
+    assert_eq!(allow, ClauseKind::Trigger);
+}
