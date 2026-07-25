@@ -669,18 +669,20 @@ fn doc_ref_is_clickable_document_link() {
 }
 
 #[test]
-fn doc_ref_gets_reference_colored_semantic_token() {
-    // The `![Name]` name is colored as a reference (TYPE=6), the rest comment.
+fn doc_ref_semantic_color_reflects_resolution() {
+    // Resolved smart-doc refs are TYPE; unresolved ones remain COMMENT.
     let t = TempTree::new();
-    let src = "#! doc ![brave]\nfx = { }\n";
+    t.write("common/traits/00.txt", "brave = { }\n");
+    let src = "#! doc ![brave] but not ![nope]\nfx = { }\n";
     t.write("events/e.txt", src);
     let (server, _rx) = server_over(&t);
     let uri = uri_for(&t, "events/e.txt");
     let tokens = server.semantic_tokens(&uri).expect("tokens").data;
     // Legend (semantic.rs TOKEN_TYPES): comment=5, type=9.
-    assert!(
-        tokens.iter().any(|t| t.token_type == 9),
-        "expected a TYPE token for the doc ref"
+    assert_eq!(
+        tokens.iter().filter(|t| t.token_type == 9).count(),
+        1,
+        "only the resolved doc ref should be TYPE: {tokens:?}"
     );
     assert!(tokens.iter().any(|t| t.token_type == 5), "comment segments");
 }

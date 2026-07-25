@@ -9,14 +9,57 @@
 use crate::kinds;
 use pdxl_analysis::context::ClauseKind::{self, StaticModifier, Struct, Trigger};
 use pdxl_analysis::context::ScalarKind::Setting;
-use pdxl_analysis::context::{Fallback, StructSpec, block, scalar};
+use pdxl_analysis::context::{Fallback, StructSpec, block, block_scoped, scalar};
 use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
 
 pub(crate) const PARLIAMENT_TYPES_DIR: &str = "in_game/common/parliament_types/";
 
-/// The body of one parliament type, complete against the directory readme.
+macro_rules! parliament_spec {
+    ($name:ident, $scope:literal) => {
+        static $name: StructSpec = StructSpec {
+            name: "parliament type",
+            fields: &[
+                (
+                    "type",
+                    scalar(Setting)
+                        .doc("Whose parliament this is (decides the trigger root).")
+                        .values(&["country", "international_organization"]),
+                ),
+                (
+                    "potential",
+                    block_scoped(Trigger, $scope)
+                        .doc("Is this parliament type visible at all (root follows `type`)."),
+                ),
+                (
+                    "allow",
+                    block_scoped(Trigger, $scope)
+                        .doc("Can this parliament type be used (root follows `type`)."),
+                ),
+                (
+                    "locked",
+                    block_scoped(Trigger, $scope)
+                        .doc("Is this parliament type locked (root follows `type`)."),
+                ),
+                (
+                    "modifier",
+                    block(StaticModifier).doc("Country modifiers applied by this parliament type."),
+                ),
+            ],
+            fallback: Fallback::Deny,
+        };
+    };
+}
+
+// Vanilla separates country and IO parliament types by file, allowing their
+// trigger roots to be pinned for scope inlay hints. The directory fallback
+// remains unscoped for mods which may mix both `type` values in one file.
+parliament_spec!(COUNTRY_PARLIAMENT_TYPE, "country");
+parliament_spec!(IO_PARLIAMENT_TYPE, "international_organization");
+
+/// Generic, unscoped body for mod files where the sibling `type` value cannot
+/// be selected by the path-based structural context engine.
 static PARLIAMENT_TYPE: StructSpec = StructSpec {
     name: "parliament type",
     fields: &[
@@ -28,15 +71,15 @@ static PARLIAMENT_TYPE: StructSpec = StructSpec {
         ),
         (
             "potential",
-            block(Trigger).doc("Is this parliament type visible at all (root follows `type`)."),
+            block(Trigger).doc("Visibility trigger (root follows `type`)."),
         ),
         (
             "allow",
-            block(Trigger).doc("Can this parliament type be used (root follows `type`)."),
+            block(Trigger).doc("Availability trigger (root follows `type`)."),
         ),
         (
             "locked",
-            block(Trigger).doc("Is this parliament type locked (root follows `type`)."),
+            block(Trigger).doc("Lock trigger (root follows `type`)."),
         ),
         (
             "modifier",
@@ -71,6 +114,15 @@ impl Entity for ParliamentType {
         aliases: &[],
     }];
 
-    const ROOTS: &'static [(&'static str, ClauseKind)] =
-        &[(PARLIAMENT_TYPES_DIR, Struct(&PARLIAMENT_TYPE))];
+    const ROOTS: &'static [(&'static str, ClauseKind)] = &[
+        (
+            "in_game/common/parliament_types/00_default.txt",
+            Struct(&COUNTRY_PARLIAMENT_TYPE),
+        ),
+        (
+            "in_game/common/parliament_types/01_international_organization.txt",
+            Struct(&IO_PARLIAMENT_TYPE),
+        ),
+        (PARLIAMENT_TYPES_DIR, Struct(&PARLIAMENT_TYPE)),
+    ];
 }

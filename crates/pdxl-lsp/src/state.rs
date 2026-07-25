@@ -613,6 +613,25 @@ impl ServerState {
                         })
                         .map(|r| (r.start, r.end))
                         .collect();
+
+                    // Smart-doc refs are not analysis facts, but use the same
+                    // resolved-span channel for semantic coloring. Keep only
+                    // refs which resolve through the symbol table; unresolved
+                    // `![name]` remains ordinary comment text.
+                    let mut cache: HashMap<PathBuf, Option<Vec<u8>>> = HashMap::new();
+                    for (start, end) in doc_ref_ranges(&src) {
+                        let content = &src[start as usize..end as usize];
+                        let (kind, off) = parse_doc_ref(content, project.schema());
+                        let Ok(name) = std::str::from_utf8(&content[off..]) else {
+                            continue;
+                        };
+                        if self
+                            .resolve_doc_ref(kind, name, project, &mut cache)
+                            .is_some()
+                        {
+                            spans.push((start + off as u32, end));
+                        }
+                    }
                     spans.sort_by_key(|&(start, _)| start);
                     spans
                 })

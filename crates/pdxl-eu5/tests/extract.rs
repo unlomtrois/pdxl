@@ -42,6 +42,25 @@ fn parliament_type_defs_refs_and_body() {
         schema,
     );
     assert!(matches!(body, ClauseKind::Struct(spec) if spec.name == "parliament type"));
+    let ClauseKind::Struct(country_spec) = body else {
+        unreachable!()
+    };
+    assert_eq!(
+        country_spec.field("potential").unwrap().scope,
+        Some("country")
+    );
+    let io_body = context_of_chain(
+        [b"union_royal_assembly".as_slice()],
+        "in_game/common/parliament_types/01_international_organization.txt",
+        schema,
+    );
+    let ClauseKind::Struct(io_spec) = io_body else {
+        panic!("IO parliament body should be structural")
+    };
+    assert_eq!(
+        io_spec.field("locked").unwrap().scope,
+        Some("international_organization")
+    );
     assert_eq!(
         pdxl_analysis::context::resolve_key(body, "potential", true),
         ClauseKind::Trigger

@@ -150,12 +150,13 @@ fn in_resolved(resolved: &[(u32, u32)], off: u32) -> bool {
 /// value byte-ranges the analyzer resolved to a defined symbol (empty when no
 /// project is available yet — builtins and scope prefixes still work).
 /// Emits semantic tokens for a single `#!` doc comment run `[start, end)`:
-/// each `![Name]`'s name is colored as a reference ([`TYPE`]); everything else,
-/// including the `![` / `]` markers, stays [`COMMENT`].
+/// each resolved `![Name]` is colored as a reference ([`TYPE`]); unresolved
+/// names and everything else stay [`COMMENT`].
 fn emit_doc_comment(
     src: &[u8],
     start: usize,
     end: usize,
+    resolved: &[(u32, u32)],
     schema: Option<&Schema>,
     emit: &mut Vec<(u32, u32, u32, u32)>,
 ) {
@@ -172,10 +173,14 @@ fn emit_doc_comment(
                 });
                 let name_start = bracket + off;
                 emit.push((seg as u32, name_start as u32, COMMENT, 0));
-                if content_end > name_start {
+                if content_end > name_start && in_resolved(resolved, name_start as u32) {
                     emit.push((name_start as u32, content_end as u32, TYPE, 0));
+                    seg = content_end; // the `]` and beyond resume as comment
+                } else {
+                    // Keep the unresolved name and closing bracket in the
+                    // pending comment segment, preserving the muted styling.
+                    seg = name_start;
                 }
-                seg = content_end; // the `]` and beyond resume as comment
                 k = content_end;
                 continue;
             }
@@ -365,7 +370,7 @@ fn tokens_impl(
                 // A `#!` doc comment: color each `![Name]`'s name like a
                 // reference; the rest stays comment.
                 if src.get(i + 1) == Some(&b'!') {
-                    emit_doc_comment(src, i, j, schema, emit);
+                    emit_doc_comment(src, i, j, resolved, schema, emit);
                 } else {
                     emit.push((i as u32, j as u32, COMMENT, 0));
                 }
