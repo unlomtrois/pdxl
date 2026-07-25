@@ -99,13 +99,26 @@ jobs:
         if: ${{ !matrix.windows }}
         run: cargo test --locked --workspace --features pdxl-cli/ck3,pdxl-mcp/ck3
 
-      - name: Build release binary
-        run: cargo build --locked --release -p pdxl-cli --features ck3
-
-      - name: Package binary
+      # One binary per game (the schema is compiled in — see pdxl-game).
+      # `pdxl-v*` stays the CK3 binary so pre-0.61 extensions keep resolving;
+      # the EU5 binary ships as `pdxl-eu5-v*`.
+      - name: Build and package (ck3)
         shell: bash
         run: |
+          cargo build --locked --release -p pdxl-cli --features ck3
           archive="pdxl-v${{ needs.validate.outputs.version }}-${{ matrix.target }}.tar.gz"
+          tar -C target/release -czf "$archive" "${{ matrix.bin }}"
+          if command -v shasum >/dev/null 2>&1; then
+            shasum -a 256 "$archive" > "$archive.sha256"
+          else
+            sha256sum "$archive" > "$archive.sha256"
+          fi
+
+      - name: Build and package (eu5)
+        shell: bash
+        run: |
+          cargo build --locked --release -p pdxl-cli --features eu5
+          archive="pdxl-eu5-v${{ needs.validate.outputs.version }}-${{ matrix.target }}.tar.gz"
           tar -C target/release -czf "$archive" "${{ matrix.bin }}"
           if command -v shasum >/dev/null 2>&1; then
             shasum -a 256 "$archive" > "$archive.sha256"
@@ -120,6 +133,8 @@ jobs:
           path: |
             pdxl-v${{ needs.validate.outputs.version }}-${{ matrix.target }}.tar.gz
             pdxl-v${{ needs.validate.outputs.version }}-${{ matrix.target }}.tar.gz.sha256
+            pdxl-eu5-v${{ needs.validate.outputs.version }}-${{ matrix.target }}.tar.gz
+            pdxl-eu5-v${{ needs.validate.outputs.version }}-${{ matrix.target }}.tar.gz.sha256
           if-no-files-found: error
 
   vsix:

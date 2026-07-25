@@ -18,6 +18,16 @@ const OWNER = "unlomtrois";
 const REPO = "pdxl";
 const RELEASES_API = `https://api.github.com/repos/${OWNER}/${REPO}/releases`;
 
+/// The game a workspace targets — decides which release binary is used
+/// (the schema is compiled into the binary).
+export type Game = "ck3" | "eu5";
+
+/// Release asset prefix per game. `pdxl` (no suffix) stays the CK3 binary
+/// so older extensions keep resolving their assets.
+function assetPrefix(game: Game): string {
+  return game === "ck3" ? "pdxl" : "pdxl-eu5";
+}
+
 export interface ResolvedServer {
   command: string;
   source: "setting" | "managed" | "path";
@@ -32,9 +42,16 @@ function exeName(): string {
  *  own `v<version>` dir, misses, and reinstalls. */
 export function managedBinaryPath(
   ctx: vscode.ExtensionContext,
+  game: Game,
   version: string,
 ): string {
-  return path.join(ctx.globalStorageUri.fsPath, "bin", `v${version}`, exeName());
+  return path.join(
+    ctx.globalStorageUri.fsPath,
+    "bin",
+    game,
+    `v${version}`,
+    exeName(),
+  );
 }
 
 /** The installed managed binary: the exact pinned version when present,
@@ -43,11 +60,12 @@ export function managedBinaryPath(
  *  next activation). */
 function findManagedBinary(
   ctx: vscode.ExtensionContext,
+  game: Game,
   version: string,
 ): string | undefined {
-  const exact = managedBinaryPath(ctx, version);
+  const exact = managedBinaryPath(ctx, game, version);
   if (fs.existsSync(exact)) return exact;
-  const binDir = path.join(ctx.globalStorageUri.fsPath, "bin");
+  const binDir = path.join(ctx.globalStorageUri.fsPath, "bin", game);
   let entries: string[];
   try {
     entries = fs.readdirSync(binDir);
@@ -74,6 +92,7 @@ function onPath(name: string): boolean {
  *  nothing is runnable (the caller offers to install). */
 export function resolveServer(
   ctx: vscode.ExtensionContext,
+  game: Game,
   serverPathSetting: string,
   version: string,
 ): ResolvedServer | undefined {
@@ -86,7 +105,7 @@ export function resolveServer(
     }
     return onPath(setting) ? { command: setting, source: "setting" } : undefined;
   }
-  const managed = findManagedBinary(ctx, version);
+  const managed = findManagedBinary(ctx, game, version);
   if (managed) {
     return { command: managed, source: "managed" };
   }
@@ -237,6 +256,7 @@ async function fetchBuffer(
  *  message is user-readable. */
 export async function installServer(
   ctx: vscode.ExtensionContext,
+  game: Game,
   version: string,
   progress?: (message: string, percent?: number) => void,
 ): Promise<string> {
@@ -267,7 +287,7 @@ export async function installServer(
     version = tag.slice(1);
   }
 
-  const archiveName = `pdxl-v${version}-${triple}.tar.gz`;
+  const archiveName = `${assetPrefix(game)}-v${version}-${triple}.tar.gz`;
   const assets = release.assets;
   const archiveAsset = assets.find((a) => a.name === archiveName);
   const sidecarAsset = assets.find((a) => a.name === `${archiveName}.sha256`);
@@ -296,7 +316,7 @@ export async function installServer(
   const { data } = extractSingleFileTarGz(archive);
 
   // Atomic install: write next to the final path, chmod, rename.
-  const finalPath = managedBinaryPath(ctx, version);
+  const finalPath = managedBinaryPath(ctx, game, version);
   fs.mkdirSync(path.dirname(finalPath), { recursive: true });
   const tmpPath = `${finalPath}.tmp-${process.pid}`;
   fs.writeFileSync(tmpPath, data);
@@ -304,13 +324,30 @@ export async function installServer(
     fs.chmodSync(tmpPath, 0o755);
   }
   fs.renameSync(tmpPath, finalPath);
-  cleanupOldVersions(ctx, version);
+  cleanupOldVersions(ctx, game, version);
   return finalPath;
 }
 
-/** Best-effort removal of previously installed version directories. */
-function cleanupOldVersions(ctx: vscode.ExtensionContext, keep: string): void {
-  const binDir = path.join(ctx.globalStorageUri.fsPath, "bin");
+/** Best-effort removal of previously installed version directories (for
+ *  `game`; other games' installs are untouched). Also sweeps the pre-0.61
+ *  layout (`bin/v*` without a game dir). */
+function cleanupOldVersions(
+  ctx: vscode.ExtensionContext,
+  game: Game,
+  keep: string,
+): void {
+  // Legacy layout: bin/v* (no game dir) — always stale now.
+  const legacyDir = path.join(ctx.globalStorageUri.fsPath, "bin");
+  try {
+    for (const entry of fs.readdirSync(legacyDir)) {
+      if (/^v\d/.test(entry)) {
+        fs.rmSync(path.join(legacyDir, entry), { recursive: true, force: true });
+      }
+    }
+  } catch {
+    // Best-effort.
+  }
+  const binDir = path.join(ctx.globalStorageUri.fsPath, "bin", game);
   let entries: string[];
   try {
     entries = fs.readdirSync(binDir);
@@ -326,4 +363,23 @@ function cleanupOldVersions(ctx: vscode.ExtensionContext, keep: string): void {
       }
     }
   }
+}
+
+/** Detects which game a workspace folder targets: the EU5-era mod layout
+ *  (`.metadata/metadata.json`) or EU5 module roots (`in_game`/`main_menu`)
+ *  mean EU5; everything else is CK3. */
+export function detectGame(workspaceRoot: string | undefined): Game {
+  if (!workspaceRoot) return "ck3";
+  try {
+    if (
+      fs.existsSync(path.join(workspaceRoot, ".metadata", "metadata.json")) ||
+      fs.existsSync(path.join(workspaceRoot, "in_game")) ||
+      fs.existsSync(path.join(workspaceRoot, "main_menu"))
+    ) {
+      return "eu5";
+    }
+  } catch {
+    // Unreadable workspace: assume CK3.
+  }
+  return "ck3";
 }

@@ -6,6 +6,8 @@ import {
   TransportKind,
 } from "vscode-languageclient/node";
 import {
+  Game,
+  detectGame,
   installServer,
   isNewerVersion,
   latestReleaseVersion,
@@ -16,6 +18,8 @@ let client: LanguageClient | undefined;
 let output: vscode.OutputChannel | undefined;
 let statusBar: vscode.StatusBarItem | undefined;
 let installPromptShown = false;
+/** The game this workspace targets (detected once at activation). */
+let game: Game = "ck3";
 
 function log(msg: string): void {
   console.log(`[pdxl] ${msg}`);
@@ -33,7 +37,7 @@ function setStatus(
 ): void {
   if (!statusBar) return;
   const errorBg = new vscode.ThemeColor("statusBarItem.errorBackground");
-  const label = version ? `pdxl v${version}` : "pdxl";
+  const label = version ? `pdxl ${game} v${version}` : `pdxl ${game}`;
   statusBar.command = "pdxl.showServerLog";
   switch (state) {
     case "starting":
@@ -235,7 +239,7 @@ async function runInstallWithProgress(
       },
       async (progress) => {
         let lastPercent = 0;
-        return installServer(context, version, (message, percent) => {
+        return installServer(context, game, version, (message, percent) => {
           const increment =
             percent !== undefined ? percent - lastPercent : undefined;
           if (percent !== undefined) lastPercent = percent;
@@ -266,7 +270,7 @@ async function promptInstall(
   if (installPromptShown) return;
   installPromptShown = true;
   const version = pinnedVersion(context);
-  const download = `Download pdxl v${version} from GitHub`;
+  const download = `Download pdxl (${game}) v${version} from GitHub`;
   const pick = "Pick path…";
   const choice = await vscode.window.showInformationMessage(
     reason,
@@ -350,12 +354,24 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
   );
 
+  // Which game is this workspace? Explicit pdxl.game setting wins;
+  // "auto" inspects the workspace layout (EU5-era .metadata/metadata.json
+  // or in_game/main_menu module roots → eu5; anything else → ck3).
+  const gameSetting = vscode.workspace
+    .getConfiguration("pdxl")
+    .get<string>("game", "auto");
+  game =
+    gameSetting === "ck3" || gameSetting === "eu5"
+      ? gameSetting
+      : detectGame(vscode.workspace.workspaceFolders?.[0]?.uri.fsPath);
+  log(`game: ${game} (setting: ${gameSetting})`);
+
   // Resolve the server: explicit setting → managed binary → PATH. When
   // nothing is runnable, offer to download the pinned release.
   const serverPath = vscode.workspace
     .getConfiguration("pdxl")
     .get<string>("serverPath", "");
-  const resolved = resolveServer(context, serverPath, pinnedVersion(context));
+  const resolved = resolveServer(context, game, serverPath, pinnedVersion(context));
   if (resolved) {
     log(`resolved server from ${resolved.source}: ${resolved.command}`);
     void startClient(context, resolved.command, resolved.source);

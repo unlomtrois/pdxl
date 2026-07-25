@@ -61,6 +61,16 @@
             "error"
           ],
           "description": "Log level for the pdxl language server."
+        },
+        "pdxl.game": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "ck3",
+            "eu5"
+          ],
+          "default": "auto",
+          "description": "Which game this workspace targets (selects the server binary; the schema is compiled in). \"auto\" detects the EU5-era mod layout (.metadata/metadata.json or in_game/main_menu roots) and falls back to CK3."
         }
       }
     },
