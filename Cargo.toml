@@ -25,6 +25,8 @@ members = [
     "crates/pdxl-mcp",      # MCP server for agent-facing semantic queries
     # dev tooling
     "crates/pdxl-gamedocs", # parses the game's doc dumps; gen-tables renders pdxl-ck3 tables
+    "crates/pdxl-eu5",      # the EU5 schema (starter): kinds, entities, contexts
+    "crates/pdxl-game",     # compile-time game facade (feature ck3 XOR eu5)
     # test infrastructure
     "crates/pdxl-testutil", # shared test helpers (temp trees, repo root)
 ]
@@ -36,7 +38,7 @@ debug = "line-tables-only"
 
 [workspace.package]
 # Bumped on each new feature; tracks ANALYSIS_VERSION (0.<N>.0).
-version = "0.59.0"
+version = "0.59.2"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/unlomtrois/pdxl"
@@ -56,6 +58,9 @@ pdxl-fmt = { path = "crates/pdxl-fmt" }
 pdxl-loc = { path = "crates/pdxl-loc" }
 pdxl-ck3 = { path = "crates/pdxl-ck3" }
 pdxl-gui = { path = "crates/pdxl-gui" }
+pdxl-gamedocs = { path = "crates/pdxl-gamedocs" }
+pdxl-eu5 = { path = "crates/pdxl-eu5" }
+pdxl-game = { path = "crates/pdxl-game" }
 pdxl-project = { path = "crates/pdxl-project" }
 pdxl-lsp = { path = "crates/pdxl-lsp" }
 pdxl-testutil = { path = "crates/pdxl-testutil" }

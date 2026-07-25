@@ -41,8 +41,8 @@ use lsp_types::{
     DidSaveTextDocumentParams, GotoDefinitionParams, GotoDefinitionResponse, InitializeParams,
     OneOf, ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind,
 };
-use pdxl_ck3::schema;
 use pdxl_fileset::{FileKind, FileSet};
+use pdxl_game::schema;
 use pdxl_project::Project;
 
 /// Server configuration (Go `Options`, minus the config file for now).

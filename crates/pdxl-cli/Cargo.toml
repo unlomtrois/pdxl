@@ -7,6 +7,10 @@ repository.workspace = true
 rust-version.workspace = true
 description = "The pdxl command-line tool (Rust port): lex, parse, check."
 
+[features]
+ck3 = ["pdxl-game/ck3", "pdxl-lsp/ck3"]
+eu5 = ["pdxl-game/eu5", "pdxl-lsp/eu5"]
+
 [dependencies]
 pdxl-lexer.workspace = true
 pdxl-parser.workspace = true
@@ -16,7 +20,7 @@ pdxl-path.workspace = true
 pdxl-fileset.workspace = true
 pdxl-moddesc.workspace = true
 pdxl-analysis.workspace = true
-pdxl-ck3.workspace = true
+pdxl-game.workspace = true
 pdxl-gui.workspace = true
 pdxl-project.workspace = true
 pdxl-lsp.workspace = true

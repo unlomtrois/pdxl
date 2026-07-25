@@ -7,10 +7,14 @@ repository.workspace = true
 rust-version.workspace = true
 description = "PDXScript language server (port of internal/lsp): live diagnostics + go-to-definition over pdxl-project."
 
+[features]
+ck3 = ["pdxl-game/ck3"]
+eu5 = ["pdxl-game/eu5"]
+
 [dependencies]
 pdxl-analysis.workspace = true
 pdxl-ast.workspace = true
-pdxl-ck3.workspace = true
+pdxl-game.workspace = true
 pdxl-fileset.workspace = true
 pdxl-fmt.workspace = true
 pdxl-lexer.workspace = true

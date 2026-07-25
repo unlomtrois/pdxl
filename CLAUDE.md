@@ -11,11 +11,16 @@ MILESTONE-*.md, SCHEMA-SCALING.md, STRUCTURAL-CONTEXTS.md).
 
 ## Commands
 
+Game schemas are **feature-gated** (one game per binary): every build/test of
+`pdxl-cli`/`pdxl-lsp`/`pdxl-mcp` needs a game feature — `ck3` or `eu5` — which
+selects the rules crate through the `pdxl-game` facade.
+
 ```sh
-cargo test --workspace                                   # all tests incl. goldens
-cargo clippy --workspace --all-targets --all-features -- -D warnings   # must be clean
+cargo test --workspace --features pdxl-cli/ck3,pdxl-mcp/ck3   # all tests incl. goldens
+cargo clippy --workspace --all-targets --features pdxl-cli/ck3,pdxl-mcp/ck3 -- -D warnings
 cargo fmt --all --check
-cargo build --release -p pdxl-cli                        # → target/release/pdxl
+cargo build --release -p pdxl-cli --features ck3         # → target/release/pdxl (CK3)
+cargo build --release -p pdxl-cli --features eu5         # → target/release/pdxl (EU5)
 ```
 
 Golden regression suites (regenerate deliberately, review the diff like code):

@@ -3,7 +3,7 @@
 //! Combines the three knowledge sources the analysis layers provide:
 //! - `pdxl_analysis::context::context_at` — is the cursor in an effect
 //!   clause, a trigger clause, a struct with known fields, …
-//! - the generated doc tables (`pdxl_ck3::tables`) — every built-in effect
+//! - the generated doc tables (`pdxl_game::tables`) — every built-in effect
 //!   and trigger name, with its supported scopes as detail text
 //! - the project symbol table — scripted effects/triggers defined by the
 //!   mod+game corpus
@@ -17,7 +17,7 @@ use lsp_types::{
 };
 use pdxl_analysis::context::{ClauseKind, Fallback, StructSpec};
 use pdxl_analysis::{IconHint, KindId, Schema, SymbolTable};
-use pdxl_ck3::tables::{DocRow, EFFECTS, MODIFIERS, SCOPE_LINKS, TRIGGERS};
+use pdxl_game::tables::{DocRow, EFFECTS, MODIFIERS, SCOPE_LINKS, TRIGGERS};
 
 /// Control keywords legal inside effect clauses (not in the doc tables:
 /// they are flow structure, not effects).
@@ -252,7 +252,7 @@ fn push_effect_items(items: &mut Vec<CompletionItem>, table: &SymbolTable, scope
     push_scripted(
         items,
         table,
-        pdxl_ck3::kinds::SCRIPTED_EFFECT,
+        pdxl_game::kinds::SCRIPTED_EFFECT,
         "scripted effect",
     );
     push_keywords(items, EFFECT_CONTROL, "effect control");
@@ -263,7 +263,7 @@ fn push_trigger_items(items: &mut Vec<CompletionItem>, table: &SymbolTable, scop
     push_scripted(
         items,
         table,
-        pdxl_ck3::kinds::SCRIPTED_TRIGGER,
+        pdxl_game::kinds::SCRIPTED_TRIGGER,
         "scripted trigger",
     );
     push_keywords(items, TRIGGER_CONTROL, "trigger control");

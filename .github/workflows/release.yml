@@ -48,10 +48,10 @@ jobs:
         run: cargo fmt --all --check
 
       - name: Run Clippy
-        run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+        run: cargo clippy --locked --workspace --all-targets --features pdxl-cli/ck3,pdxl-mcp/ck3 -- -D warnings
 
       - name: Run tests
-        run: cargo test --locked --workspace
+        run: cargo test --locked --workspace --features pdxl-cli/ck3,pdxl-mcp/ck3
 
   build:
     name: Build ${{ matrix.target }}
@@ -97,10 +97,10 @@ jobs:
       # per-platform check that the code compiles for the MSVC target.
       - name: Test
         if: ${{ !matrix.windows }}
-        run: cargo test --locked --workspace
+        run: cargo test --locked --workspace --features pdxl-cli/ck3,pdxl-mcp/ck3
 
       - name: Build release binary
-        run: cargo build --locked --release -p pdxl-cli
+        run: cargo build --locked --release -p pdxl-cli --features ck3
 
       - name: Package binary
         shell: bash

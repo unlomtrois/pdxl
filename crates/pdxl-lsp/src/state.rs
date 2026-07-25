@@ -99,13 +99,9 @@ impl ServerState {
         }
         self.project = Some(project);
         log_info!(
-            "project ready: {} symbols ({} titles), {} diagnostics, {} open docs",
+            "project ready ({}): {} symbols, {} diagnostics, {} open docs",
+            pdxl_game::GAME,
             self.project.as_ref().unwrap().table().total(),
-            self.project
-                .as_ref()
-                .unwrap()
-                .table()
-                .count(pdxl_ck3::kinds::TITLE),
             self.project.as_ref().unwrap().diags().len(),
             self.docs.len()
         );
@@ -214,7 +210,7 @@ impl ServerState {
         // recomputed from the current buffer/disk state. Warnings, not
         // errors — the registry is a snapshot of one game version.
         let mut gui_diags: BTreeMap<PathBuf, Vec<Diagnostic>> = BTreeMap::new();
-        let registry = pdxl_ck3::datafn_registry();
+        let registry = pdxl_game::datafn_registry();
         for path in project.gui_file_paths() {
             if !self.under_mod_root(&path) {
                 continue;
@@ -720,7 +716,7 @@ impl ServerState {
         let (tree, _) =
             pdxl_parser::parse(path.to_string_lossy().into_owned(), src.clone()).into_parts();
         let spans =
-            crate::color::document_colors(&tree, &src, &rel, pdxl_ck3::contexts::context_schema());
+            crate::color::document_colors(&tree, &src, &rel, pdxl_game::contexts::context_schema());
         // One linear pass for every span boundary.
         let offsets: Vec<u32> = spans.iter().flat_map(|s| [s.start, s.end]).collect();
         let positions = offsets_to_positions(&src, &offsets);
@@ -1231,7 +1227,7 @@ impl ServerState {
                 cursor.chain.iter().map(Vec::as_slice),
                 cursor.root_override,
                 &rel,
-                pdxl_ck3::contexts::context_schema(),
+                pdxl_game::contexts::context_schema(),
             );
             if let pdxl_analysis::context::ClauseKind::Struct(spec) = ctx
                 && let Some(field) = spec.field(key)
@@ -1262,7 +1258,7 @@ impl ServerState {
             cursor.chain.iter().map(Vec::as_slice),
             cursor.root_override,
             &rel,
-            pdxl_ck3::contexts::context_schema(),
+            pdxl_game::contexts::context_schema(),
         );
         crate::completion::items_for(ctx, project.table(), scope_at(&src, &rel, off).as_deref())
     }
@@ -1560,7 +1556,7 @@ fn scope_hints(src: &[u8], rel_path: &str, requested: Range) -> Vec<InlayHint> {
                         pdxl_analysis::context::context_of_chain(
                             chain,
                             rel_path,
-                            pdxl_ck3::contexts::context_schema(),
+                            pdxl_game::contexts::context_schema(),
                         )
                     };
                     // Show a hint when this block *changes* the scope (a
@@ -1730,7 +1726,7 @@ fn event_body_context(stack: &[ScopeFrame], rel_path: &str) -> bool {
         pdxl_analysis::context::context_of_chain(
             stack.iter().map(|frame| frame.key.as_slice()),
             rel_path,
-            pdxl_ck3::contexts::context_schema(),
+            pdxl_game::contexts::context_schema(),
         ),
         ClauseKind::Struct(spec) if spec.name == "event"
     )
@@ -1772,7 +1768,7 @@ fn block_scope(
     let context = pdxl_analysis::context::context_of_chain(
         parent_keys,
         rel_path,
-        pdxl_ck3::contexts::context_schema(),
+        pdxl_game::contexts::context_schema(),
     );
     let key = std::str::from_utf8(key).ok()?;
     // A structural field can pin a fixed root scope its script can't infer
@@ -1784,8 +1780,8 @@ fn block_scope(
         return Some(scope.to_string());
     }
     let rows = match context {
-        ClauseKind::Effect => pdxl_ck3::tables::EFFECTS,
-        ClauseKind::Trigger => pdxl_ck3::tables::TRIGGERS,
+        ClauseKind::Effect => pdxl_game::tables::EFFECTS,
+        ClauseKind::Trigger => pdxl_game::tables::TRIGGERS,
         _ => &[],
     };
     if let Some(row) = rows.iter().find(|row| row.name == key)
@@ -1799,7 +1795,7 @@ fn block_scope(
         && recent[n - 4].kind == pdxl_lexer::TokenKind::Identifier
     {
         let link_name = std::str::from_utf8(token_text(src, recent[n - 4])).ok()?;
-        if let Some(link) = pdxl_ck3::tables::SCOPE_LINKS.iter().find(|link| {
+        if let Some(link) = pdxl_game::tables::SCOPE_LINKS.iter().find(|link| {
             link.name == link_name
                 && (link.global_link
                     || inherited
@@ -1869,7 +1865,7 @@ fn scope_link_chain_scope(before: &[pdxl_lexer::Token], src: &[u8]) -> Option<St
         return None;
     }
     let prefix = std::str::from_utf8(token_text(src, chain[0])).ok()?;
-    let first = pdxl_ck3::tables::SCOPE_LINKS
+    let first = pdxl_game::tables::SCOPE_LINKS
         .iter()
         .find(|link| link.name == prefix && link.requires_data && link.output_scopes.len() == 1)?;
     let mut scope = first.output_scopes[0];
@@ -1879,7 +1875,7 @@ fn scope_link_chain_scope(before: &[pdxl_lexer::Token], src: &[u8]) -> Option<St
             return None;
         }
         let name = std::str::from_utf8(token_text(src, chain[i + 1])).ok()?;
-        let link = pdxl_ck3::tables::SCOPE_LINKS.iter().find(|link| {
+        let link = pdxl_game::tables::SCOPE_LINKS.iter().find(|link| {
             link.name == name
                 && !link.requires_data
                 && !link.global_link
@@ -1957,7 +1953,7 @@ fn builtin_hover(src: &[u8], off: u32, rel_path: &str) -> Option<lsp_types::Hove
         std::str::from_utf8(&src[token.range.start as usize..token.range.end as usize]).ok()?;
 
     if is_scope_link_token(src, token.range.start, token.range.end) {
-        let link = pdxl_ck3::tables::SCOPE_LINKS
+        let link = pdxl_game::tables::SCOPE_LINKS
             .iter()
             .find(|link| link.name == name)?;
         let mut text = format!("```pdxscript\nscope link {name}\n```");
@@ -1988,7 +1984,7 @@ fn builtin_hover(src: &[u8], off: u32, rel_path: &str) -> Option<lsp_types::Hove
         cursor.chain.iter().map(Vec::as_slice),
         cursor.root_override,
         rel_path,
-        pdxl_ck3::contexts::context_schema(),
+        pdxl_game::contexts::context_schema(),
     );
     // A structural field key (law `can_keep`, event `immediate`, …): describe
     // the clause it opens and the root scope, if pinned.
@@ -2029,7 +2025,7 @@ fn builtin_hover(src: &[u8], off: u32, rel_path: &str) -> Option<lsp_types::Hove
     }
     // In a static-modifier body, a key is a built-in modifier tag.
     if matches!(ctx, ClauseKind::StaticModifier) {
-        let row = pdxl_ck3::tables::MODIFIERS
+        let row = pdxl_game::tables::MODIFIERS
             .iter()
             .find(|row| row.tag == name)?;
         let text = format!(
@@ -2049,13 +2045,13 @@ fn builtin_hover(src: &[u8], off: u32, rel_path: &str) -> Option<lsp_types::Hove
     let (label, row) = match key_ctx {
         ClauseKind::Effect => (
             "effect",
-            pdxl_ck3::tables::EFFECTS
+            pdxl_game::tables::EFFECTS
                 .iter()
                 .find(|row| row.name == name)?,
         ),
         ClauseKind::Trigger => (
             "trigger",
-            pdxl_ck3::tables::TRIGGERS
+            pdxl_game::tables::TRIGGERS
                 .iter()
                 .find(|row| row.name == name)?,
         ),
@@ -2157,7 +2153,7 @@ fn scope_member_context(src: &[u8], off: u32) -> Option<ScopeMemberContext> {
         return None;
     }
     let link_name = std::str::from_utf8(token_text(src, chain[0])).ok()?;
-    let link = pdxl_ck3::tables::SCOPE_LINKS.iter().find(|link| {
+    let link = pdxl_game::tables::SCOPE_LINKS.iter().find(|link| {
         link.name == link_name && link.requires_data && link.output_scopes.len() == 1
     })?;
     let mut scope = link.output_scopes[0];
@@ -2195,7 +2191,7 @@ fn scope_member_context(src: &[u8], off: u32) -> Option<ScopeMemberContext> {
             });
         }
         let name = std::str::from_utf8(token_text(src, chain[index])).ok()?;
-        let link = pdxl_ck3::tables::SCOPE_LINKS.iter().find(|link| {
+        let link = pdxl_game::tables::SCOPE_LINKS.iter().find(|link| {
             link.name == name
                 && !link.requires_data
                 && !link.global_link
@@ -2548,7 +2544,7 @@ fn gui_datafn_hover(src: &[u8], off: u32) -> Option<lsp_types::Hover> {
     use pdxl_gui::datafn;
     let parsed = pdxl_gui::parse(String::new(), src.to_vec());
     let tree = parsed.tree();
-    let registry = pdxl_ck3::datafn_registry();
+    let registry = pdxl_game::datafn_registry();
     for span in datafn::datafn_spans(tree) {
         if off < span.start || off >= span.end {
             continue;

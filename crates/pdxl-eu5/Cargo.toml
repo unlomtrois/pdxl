@@ -1,21 +1,16 @@
 [package]
-name = "pdxl-ck3"
+name = "pdxl-eu5"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "CK3 rules for pdxl-analysis: definition directories, reference keys, skip lists (port of schema_ck3.go)."
+description = "EU5 schema for pdxl: kinds, entities, structural contexts (starter)."
 
 [dependencies]
 pdxl-analysis.workspace = true
-pdxl-ast.workspace = true
 pdxl-gui.workspace = true
 pdxl-gamedocs.workspace = true
-pdxl-parser.workspace = true
-
-[dev-dependencies]
-pdxl-testutil.workspace = true
 
 [lints.rust]
 unsafe_code = "forbid"

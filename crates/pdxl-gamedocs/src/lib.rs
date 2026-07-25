@@ -496,3 +496,4 @@ mod tests {
         assert_eq!(entries[2].kind, DataFnKind::Type);
     }
 }
+pub mod rows;

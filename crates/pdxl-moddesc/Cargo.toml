@@ -10,6 +10,7 @@ description = ".mod descriptor parsing for Paradox mods (port of internal/files 
 [dependencies]
 pdxl-parser.workspace = true
 pdxl-path.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 pdxl-testutil.workspace = true

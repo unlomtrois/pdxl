@@ -125,7 +125,7 @@ pub fn items(project: &Project, src: &[u8], off: u32) -> Vec<CompletionItem> {
     let Some(kinds) = project.schema().gui_kinds() else {
         return Vec::new();
     };
-    let registry = pdxl_ck3::datafn_registry();
+    let registry = pdxl_game::datafn_registry();
 
     // 1. Datafunction chains.
     if let Some(prefix) = datafn_prefix(src, off as usize) {

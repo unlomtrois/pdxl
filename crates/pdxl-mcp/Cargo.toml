@@ -12,6 +12,8 @@ publish = false
 [features]
 default = []
 mcp = ["dep:rmcp", "dep:tokio"]
+ck3 = ["pdxl-game/ck3"]
+eu5 = ["pdxl-game/eu5"]
 
 [[bin]]
 name = "pdxl-mcp"
@@ -19,7 +21,7 @@ path = "src/main.rs"
 required-features = ["mcp"]
 
 [dependencies]
-pdxl-ck3.workspace = true
+pdxl-game.workspace = true
 rmcp = { workspace = true, optional = true }
 schemars.workspace = true
 serde.workspace = true

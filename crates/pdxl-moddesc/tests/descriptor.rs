@@ -149,3 +149,76 @@ fn unix_absolute_path_kept_verbatim() {
     let m = parse_mod(&mod_file).unwrap();
     assert_eq!(m.path, PathBuf::from("/opt/mods/AbsMod"));
 }
+
+// ── VIC3/EU5-era .metadata/metadata.json descriptors ─────────────────────────
+
+use pdxl_moddesc::{parse_metadata_json, resolve_mod};
+
+/// A launcher-shaped metadata.json, BOM included (the launcher writes one).
+const METADATA: &str = "\u{feff}{\n\
+    \t\"name\":\t\"Test Mod\",\n\
+    \t\"id\":\t\"test.mod\",\n\
+    \t\"version\":\t\"0.1\",\n\
+    \t\"game_custom_data\":\t{\n\
+    \t\t\"replace_paths\": [\"in_game/common/cultures\", \"main_menu/setup\"]\n\
+    \t}\n\
+    }\n";
+
+#[test]
+fn metadata_json_name_path_and_replace_paths() {
+    let d = pdxl_testutil::TempTree::new();
+    d.write("mymod/.metadata/metadata.json", METADATA);
+    let root = d.path.join("mymod");
+
+    // All three argument spellings resolve to the same descriptor.
+    for arg in [
+        root.clone(),
+        root.join(".metadata"),
+        root.join(".metadata/metadata.json"),
+    ] {
+        let m = parse_metadata_json(&arg).unwrap();
+        assert_eq!(m.name, "Test Mod", "{}", arg.display());
+        assert_eq!(m.path, root);
+        assert_eq!(
+            m.replace_paths,
+            vec!["in_game/common/cultures", "main_menu/setup"]
+        );
+    }
+}
+
+#[test]
+fn metadata_json_without_custom_data() {
+    let d = pdxl_testutil::TempTree::new();
+    d.write(
+        "m/.metadata/metadata.json",
+        "{\"name\": \"Plain\", \"game_custom_data\": {}}",
+    );
+    let m = parse_metadata_json(d.path.join("m")).unwrap();
+    assert_eq!(m.name, "Plain");
+    assert!(m.replace_paths.is_empty());
+}
+
+#[test]
+fn resolve_mod_dispatches_by_shape() {
+    let d = pdxl_testutil::TempTree::new();
+    // EU5-style dir.
+    d.write("eu5mod/.metadata/metadata.json", "{\"name\": \"E\"}");
+    // CK3-style .mod file.
+    d.write("ck3.mod", "name = \"C\"\npath = \"ck3dir\"\n");
+    d.write("ck3dir/keep", "");
+    // Plain content dir.
+    d.write("plain/common/traits/00.txt", "x = { }\n");
+
+    let e = resolve_mod(d.path.join("eu5mod")).unwrap();
+    assert_eq!(e.name, "E");
+    assert_eq!(e.path, d.path.join("eu5mod"));
+
+    let c = resolve_mod(d.path.join("ck3.mod")).unwrap();
+    assert_eq!(c.name, "C");
+    assert!(c.path.ends_with("ck3dir"));
+
+    let p = resolve_mod(d.path.join("plain")).unwrap();
+    assert_eq!(p.name, "");
+    assert_eq!(p.path, d.path.join("plain"));
+    assert!(p.replace_paths.is_empty());
+}

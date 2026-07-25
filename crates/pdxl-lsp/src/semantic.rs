@@ -71,10 +71,10 @@ pub fn legend() -> SemanticTokensLegend {
 fn builtins() -> &'static HashSet<&'static str> {
     static SET: OnceLock<HashSet<&'static str>> = OnceLock::new();
     SET.get_or_init(|| {
-        pdxl_ck3::tables::EFFECTS
+        pdxl_game::tables::EFFECTS
             .iter()
             .map(|row| row.name)
-            .chain(pdxl_ck3::tables::TRIGGERS.iter().map(|row| row.name))
+            .chain(pdxl_game::tables::TRIGGERS.iter().map(|row| row.name))
             .collect()
     })
 }
@@ -258,7 +258,7 @@ fn gui_overrides(src: &[u8], lexed: &[pdxl_lexer::Token]) -> Vec<(u32, u32, u32,
     // Datafunction pass: chain segments (bare and embedded-in-string forms),
     // resolved against the DumpDataTypes registry.
     let parsed = pdxl_gui::parse(String::new(), src.to_vec());
-    let registry = pdxl_ck3::datafn_registry();
+    let registry = pdxl_game::datafn_registry();
     for span in pdxl_gui::datafn::datafn_spans(parsed.tree()) {
         let text = &src[span.start as usize..span.end as usize];
         let Some(segments) = pdxl_gui::datafn::parse_chain(text, span.start) else {

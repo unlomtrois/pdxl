@@ -1,0 +1,19 @@
+[package]
+name = "pdxl-game"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Compile-time game selection facade: re-exports exactly one rules crate (ck3 or eu5) by feature."
+
+[features]
+ck3 = ["dep:pdxl-ck3"]
+eu5 = ["dep:pdxl-eu5"]
+
+[dependencies]
+pdxl-ck3 = { workspace = true, optional = true }
+pdxl-eu5 = { workspace = true, optional = true }
+
+[lints.rust]
+unsafe_code = "forbid"

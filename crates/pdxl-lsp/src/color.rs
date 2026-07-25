@@ -304,7 +304,7 @@ mod tests {
             &tree,
             src.as_bytes(),
             rel,
-            pdxl_ck3::contexts::context_schema(),
+            pdxl_game::contexts::context_schema(),
         )
         .into_iter()
         .map(|s| (src[s.start as usize..s.end as usize].to_string(), s.color))

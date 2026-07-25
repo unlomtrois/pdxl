@@ -48,7 +48,7 @@ pub fn run(
     _no_cache: bool, // accepted for Go interface compatibility; no effect
 ) -> io::Result<ExitCode> {
     let fs = build_project_fileset(game, mod_arg)?;
-    let schema = pdxl_ck3::schema();
+    let schema = pdxl_game::schema();
     let (table, diags) = pdxl_project::analyze(&fs, &schema)?;
 
     // Interface scripts: datafunction chain typing against the DumpDataTypes
@@ -64,7 +64,7 @@ pub fn run(
 /// Validates every `.gui` file's datafunction chains, returning
 /// `file:line:col: message` strings.
 fn check_gui_datafns(fs: &FileSet) -> io::Result<Vec<String>> {
-    let registry = pdxl_ck3::datafn_registry();
+    let registry = pdxl_game::datafn_registry();
     let mut out = Vec::new();
     for entry in fs.iter() {
         if !entry.rel_path.ends_with(".gui") {
@@ -90,19 +90,14 @@ fn build_project_fileset(game: Option<&str>, mod_arg: Option<&str>) -> io::Resul
         ));
     }
 
-    // Resolve mod: .mod file or plain directory.
+    // Resolve mod: a .mod file (CK3-era), a directory with
+    // .metadata/metadata.json (VIC3/EU5-era), or a plain content directory.
     let (mod_dir, replace_paths) = match mod_arg {
         None => (None, Vec::new()),
         Some(arg) => {
-            let meta = std::fs::metadata(arg)
-                .map_err(|e| io::Error::new(e.kind(), format!("mod: {e}")))?;
-            if meta.is_dir() || !arg.to_lowercase().ends_with(".mod") {
-                (Some(arg.to_string()), Vec::new())
-            } else {
-                let m = pdxl_moddesc::parse_mod(arg)
-                    .map_err(|e| io::Error::new(e.kind(), format!("parsing .mod file: {e}")))?;
-                (Some(m.path.to_string_lossy().into_owned()), m.replace_paths)
-            }
+            let m = pdxl_moddesc::resolve_mod(arg)
+                .map_err(|e| io::Error::new(e.kind(), format!("resolving mod {arg}: {e}")))?;
+            (Some(m.path.to_string_lossy().into_owned()), m.replace_paths)
         }
     };
 

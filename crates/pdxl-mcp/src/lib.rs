@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 
-use pdxl_ck3::tables::{EFFECTS, MODIFIERS, SCOPE_LINKS, TRIGGERS};
+use pdxl_game::tables::{EFFECTS, MODIFIERS, SCOPE_LINKS, TRIGGERS};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
