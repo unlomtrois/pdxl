@@ -54,7 +54,13 @@ fn formable_tag_alias_resolves_c_literal() {
     );
     let r = user.refs.iter().find(|r| r.name == "RUS").expect("c: ref");
     assert_eq!(r.kind, pdxl_eu5::kinds::COUNTRY);
-    assert_eq!(r.alt, &[pdxl_eu5::kinds::FORMABLE_COUNTRY]);
+    assert_eq!(
+        r.alt,
+        &[
+            pdxl_eu5::kinds::FORMABLE_COUNTRY,
+            pdxl_eu5::kinds::START_COUNTRY
+        ]
+    );
 
     // End-to-end: the alias satisfies the alt chain.
     let mut facts = HashMap::new();
@@ -88,4 +94,39 @@ fn named_color_defs_and_color_context() {
         pdxl_eu5::contexts::context_schema(),
     );
     assert_eq!(ctx, ClauseKind::Color);
+}
+
+#[test]
+fn start_scenario_countries_nested_container() {
+    use pdxl_analysis::merge_and_resolve;
+    use std::collections::HashMap;
+
+    // The start file nests the container: countries = { countries = { … } }.
+    let start = extract(
+        "current_age = age_1\n\
+         countries = {\n\
+         \tcountries = {\n\
+         \t\tGEN = {\n\t\t\town_control_core = { genova }\n\t\t}\n\
+         \t}\n\
+         }\n",
+        "main_menu/setup/start/10_countries.txt",
+    );
+    assert_eq!(start.defs.len(), 1, "{:?}", start.defs);
+    assert_eq!(start.defs[0].name, "GEN");
+    assert_eq!(start.defs[0].kind, pdxl_eu5::kinds::START_COUNTRY);
+
+    // `c:GEN` resolves through the alt chain even with no data entry.
+    let user = extract(
+        "e = { x = c:GEN }\n",
+        "in_game/common/scripted_effects/x.txt",
+    );
+    let mut facts = HashMap::new();
+    facts.insert("main_menu/setup/start/10_countries.txt".to_string(), start);
+    facts.insert("in_game/common/scripted_effects/x.txt".to_string(), user);
+    let order = [
+        "main_menu/setup/start/10_countries.txt",
+        "in_game/common/scripted_effects/x.txt",
+    ];
+    let (_, diags) = merge_and_resolve(&order, &facts);
+    assert!(diags.is_empty(), "{diags:?}");
 }

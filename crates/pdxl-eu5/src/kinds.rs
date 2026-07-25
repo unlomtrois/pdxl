@@ -17,3 +17,4 @@ pub const CULTURE: KindId = KindId::new("culture");
 pub const RELIGION: KindId = KindId::new("religion");
 pub const NAMED_COLOR: KindId = KindId::new("named_color");
 pub const COUNTRY_DESCRIPTION_CATEGORY: KindId = KindId::new("country_description_category");
+pub const START_COUNTRY: KindId = KindId::new("start_country");

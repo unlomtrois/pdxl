@@ -247,7 +247,15 @@ fn harvest_container_defs(
             )
         {
             for child in tree.children(children[1]) {
-                harvest_def(tree, child, kind, rel_path, schema, facts);
+                // Containers may nest (EU5 start scenarios:
+                // `countries = { countries = { TAG = { … } } }`) — a child
+                // that is itself a named container is descended into, not
+                // harvested as a definition.
+                if is_container_field(tree, child, containers) {
+                    harvest_container_defs(tree, child, containers, kind, rel_path, schema, facts);
+                } else {
+                    harvest_def(tree, child, kind, rel_path, schema, facts);
+                }
             }
             return;
         }
@@ -255,6 +263,22 @@ fn harvest_container_defs(
     for child in tree.children(node_id) {
         harvest_container_defs(tree, child, containers, kind, rel_path, schema, facts);
     }
+}
+
+/// Whether `node_id` is a `NAME = { … }` field whose key names a container.
+fn is_container_field(tree: &SyntaxTree, node_id: NodeId, containers: &[&str]) -> bool {
+    if tree.node(node_id).kind != NodeKind::Field {
+        return false;
+    }
+    let kids = tree.child_ids(node_id);
+    kids.len() == 2
+        && containers
+            .iter()
+            .any(|name| tree.node_text(kids[0]) == name.as_bytes())
+        && matches!(
+            tree.node(kids[1]).kind,
+            NodeKind::Block | NodeKind::TaggedBlock
+        )
 }
 
 /// Harvests definitions that are the block-valued children of a top-level

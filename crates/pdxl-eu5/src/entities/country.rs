@@ -4,9 +4,14 @@
 //! whose `tag = X` body field declares the tag the formable creates — an
 //! alias, so `c:RUS` resolves to the formable that forms Russia.
 //!
-//! References: `c:TAG` scope literals anywhere (6,384 in vanilla; 13
-//! unresolved across 6 tags — `SMC`, `GWS`, `NPV`, `LIB`, `PRY`, `TRU` —
-//! genuinely dangling, no definition anywhere).
+//! **Start-scenario countries** (`main_menu/setup/start/`, the nested
+//! `countries = { countries = { TAG = { … } } }` containers) are a third
+//! declaration site — some tags (Genoa's `GEN`) exist *only* there. They
+//! are their own kind so the ~2,000 tags declared in both places don't
+//! read as duplicate definitions.
+//!
+//! References: `c:TAG` scope literals anywhere (6,384 in vanilla), with
+//! formables and start countries as the alternate kinds.
 //!
 //! Body cross-references live with their target kinds:
 //! `culture_definition` in [`super::culture`], `religion_definition` in
@@ -24,6 +29,7 @@ use super::Entity;
 
 pub(crate) const COUNTRIES_DIR: &str = "in_game/setup/countries/";
 const FORMABLES_DIR: &str = "in_game/common/formable_countries/";
+const START_DIR: &str = "main_menu/setup/start/";
 
 /// A name-list block (`male_regnal_names = { … }`).
 static NAME_LIST: StructSpec = StructSpec {
@@ -112,9 +118,21 @@ impl Entity for Country {
                 RefRule {
                     pattern: RefPattern::ScopePrefix("c"),
                     gate: None,
-                    alt: &[kinds::FORMABLE_COUNTRY],
+                    alt: &[kinds::FORMABLE_COUNTRY, kinds::START_COUNTRY],
                 },
             ],
+            aliases: &[],
+        },
+        KindSpec {
+            kind: kinds::START_COUNTRY,
+            icon: IconHint::Object,
+            defs: Some(DefSource {
+                dir_prefix: START_DIR,
+                shape: DefShape::ChildrenOf {
+                    containers: &["countries"],
+                },
+            }),
+            refs: &[],
             aliases: &[],
         },
         KindSpec {
