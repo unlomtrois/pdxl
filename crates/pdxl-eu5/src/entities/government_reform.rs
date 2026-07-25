@@ -18,7 +18,7 @@
 use crate::kinds;
 use pdxl_analysis::context::ClauseKind::{self, Effect, Struct, Trigger};
 use pdxl_analysis::context::ScalarKind::Setting;
-use pdxl_analysis::context::{Fallback, FieldSpec, StructSpec, block, scalar};
+use pdxl_analysis::context::{Fallback, FieldSpec, StructSpec, block, block_scoped, scalar};
 use pdxl_analysis::{IconHint, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
@@ -52,16 +52,17 @@ static GOVERNMENT_REFORM: StructSpec = StructSpec {
         ("block_for_rebel", toggle("Cannot be used by rebels.")),
         (
             "locked",
-            block(Trigger)
+            block_scoped(Trigger, "country")
                 .doc("Whether the reform is currently locked (cannot be interacted with)."),
         ),
         (
             "potential",
-            block(Trigger).doc("Whether the reform is possible at all (root = country)."),
+            block_scoped(Trigger, "country")
+                .doc("Whether the reform is possible at all (root = country)."),
         ),
         (
             "allow",
-            block(Trigger).doc("Whether the reform can start (root = country)."),
+            block_scoped(Trigger, "country").doc("Whether the reform can start (root = country)."),
         ),
         (
             "male_regnal_names",
@@ -89,16 +90,18 @@ static GOVERNMENT_REFORM: StructSpec = StructSpec {
         ),
         (
             "on_activate",
-            block(Effect).doc("Fired when the reform is chosen (root = country)."),
+            block_scoped(Effect, "country")
+                .doc("Fired when the reform is chosen (root = country)."),
         ),
         (
             "on_fully_activated",
-            block(Effect)
+            block_scoped(Effect, "country")
                 .doc("Fired at 100% implementation (instant when there is no time delay)."),
         ),
         (
             "on_deactivate",
-            block(Effect).doc("Fired when the reform is removed (root = country)."),
+            block_scoped(Effect, "country")
+                .doc("Fired when the reform is removed (root = country)."),
         ),
         (
             "country_modifier",

@@ -15,7 +15,7 @@
 use crate::kinds;
 use pdxl_analysis::context::ClauseKind::{self, ScriptedModifier, StaticModifier, Struct, Trigger};
 use pdxl_analysis::context::ScalarKind::Setting;
-use pdxl_analysis::context::{Fallback, StructSpec, block, scalar};
+use pdxl_analysis::context::{Fallback, StructSpec, block, block_scoped, scalar};
 use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
@@ -139,14 +139,14 @@ static ADVANCE: StructSpec = StructSpec {
         ),
         (
             "potential",
-            block(Trigger).doc(
+            block_scoped(Trigger, "country").doc(
                 "Whether the advance appears at all (e.g. `has_or_had_tag = TAG` for \
                  national trees).",
             ),
         ),
         (
             "allow",
-            block(Trigger).doc("Whether the advance can be taken once visible."),
+            block_scoped(Trigger, "country").doc("Whether the advance can be taken once visible."),
         ),
         (
             "for",

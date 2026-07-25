@@ -15,7 +15,7 @@ use crate::kinds;
 use pdxl_analysis::context::ClauseKind::{self, Effect, ScriptValue, StaticModifier, Struct};
 use pdxl_analysis::context::ScalarKind::Setting;
 use pdxl_analysis::context::{
-    Fallback, FieldSpec, StructSpec, block, color, scalar, scalar_or_block,
+    Fallback, FieldSpec, StructSpec, block, block_scoped, color, scalar, scalar_or_block,
 };
 use pdxl_analysis::{IconHint, KindSpec, RefPattern, RefRule};
 
@@ -72,9 +72,9 @@ static SUBJECT_TYPE: StructSpec = StructSpec {
         ("join_defensive_wars_can_call", trigger("Allows a call to arms in defensive wars.")),
         ("allow_declaring_wars", trigger("Whether the subject can declare its own wars (attacker/defender scopes).")),
         // Lifecycle effects (root = subject).
-        ("on_enable", block(Effect).doc("Run when the subject relation is created (`future_overlord` scope).")),
-        ("on_disable", block(Effect).doc("Run when the subject relation is broken (`former_overlord` scope).")),
-        ("on_monthly", block(Effect).doc("Run on the subject each month.")),
+        ("on_enable", block_scoped(Effect, "country").doc("Run when the subject relation is created (root = subject; `future_overlord` scope).")),
+        ("on_disable", block_scoped(Effect, "country").doc("Run when the subject relation is broken (root = subject; `former_overlord` scope).")),
+        ("on_monthly", block_scoped(Effect, "country").doc("Run on the subject each month (root = subject).")),
         // Modifiers.
         ("overlord_modifier", block(StaticModifier).doc("Modifiers given to the overlord country.")),
         ("subject_modifier", block(StaticModifier).doc("Modifiers given to the subject country.")),
