@@ -16,10 +16,11 @@
 
 pub mod contexts;
 pub mod coverage;
+pub(crate) mod entities;
 pub mod kinds;
 pub mod tables;
 
-use pdxl_analysis::{CallKinds, DefShape, DefSource, IconHint, KindId, KindSpec, Schema};
+use pdxl_analysis::{CallKinds, KindId, Schema};
 
 /// Relative-scope keywords (`prev`, `this`, …) skipped during resolution.
 const SCOPE_KEYWORDS: &[&str] = &["root", "this", "prev", "from", "fromfrom"];
@@ -33,52 +34,6 @@ const CALL_KINDS: CallKinds = CallKinds {
     value: kinds::SCRIPT_VALUE,
 };
 
-/// One definition-only kind row (references grow with corpus validation).
-const fn def_only(kind: KindId, icon: IconHint, dir: &'static str) -> KindSpec {
-    KindSpec {
-        kind,
-        icon,
-        defs: Some(DefSource {
-            dir_prefix: dir,
-            shape: DefShape::TopLevel,
-        }),
-        refs: &[],
-        aliases: &[],
-    }
-}
-
-/// The EU5 kind rows (starter: universal script kinds, defs + call-by-name).
-const KIND_ROWS: &[KindSpec] = &[
-    def_only(
-        kinds::SCRIPTED_TRIGGER,
-        IconHint::Function,
-        "in_game/common/scripted_triggers/",
-    ),
-    def_only(
-        kinds::SCRIPTED_EFFECT,
-        IconHint::Function,
-        "in_game/common/scripted_effects/",
-    ),
-    KindSpec {
-        kind: kinds::SCRIPT_VALUE,
-        icon: IconHint::Function,
-        defs: Some(DefSource {
-            dir_prefix: "in_game/common/script_values/",
-            shape: DefShape::TopLevelValued,
-        }),
-        refs: &[],
-        aliases: &[],
-    },
-    def_only(kinds::EVENT, IconHint::Event, "in_game/events/"),
-    KindSpec {
-        kind: kinds::NAMESPACE,
-        icon: IconHint::Tag,
-        defs: None,
-        refs: &[],
-        aliases: &[],
-    },
-];
-
 /// The compiled datafunction registry — empty until EU5's `DumpDataTypes`
 /// output is generated into `tables`.
 pub fn datafn_registry() -> &'static pdxl_gui::datafn::DataFnRegistry {
@@ -89,7 +44,7 @@ pub fn datafn_registry() -> &'static pdxl_gui::datafn::DataFnRegistry {
 /// Builds the EU5 schema. Cheap to construct; build once and share.
 pub fn schema() -> Schema {
     Schema::new(
-        KIND_ROWS,
+        &entities::kinds(),
         SCOPE_KEYWORDS,
         &[], // no inline typed-def keywords observed yet
         KEYED_VALUE_DEFS,
