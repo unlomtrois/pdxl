@@ -41,6 +41,10 @@ logs, incl. `data_types/` from the `DumpDataTypes` console command):
 ```sh
 cargo run -p pdxl-gamedocs --bin gen-tables -- \
   --logs "<paradox user dir>/Crusader Kings III/logs" --out crates/pdxl-ck3/src/tables
+# EU5 (Markdown doc dialect; dumps live in the Proton-prefix user dir):
+cargo run -p pdxl-gamedocs --bin gen-tables -- \
+  --logs "<EU5 user dir>/docs" --data-types "<EU5 user dir>/logs/data_types" \
+  --out crates/pdxl-eu5/src/tables
 ```
 
 The schema-coverage worklist ("what to model next"):
@@ -48,6 +52,10 @@ The schema-coverage worklist ("what to model next"):
 ```sh
 cargo run --release -p pdxl-cli --features ck3 --bin schema-gaps -- --game "<game dir>" [--all]
 # (--features eu5 surveys an EU5 install instead)
+
+# Schema x-ray while developing rules — dotted path + context + DEF/REF marks
+# per node, ✓/✗ resolution with --game (game defs only, no mod overlay):
+cargo run --release -p pdxl-cli --features eu5 --bin pdxl-graph -- <file> [--rel <path>] [--game <dir>]
 ```
 
 ## Architecture (short map)
@@ -87,8 +95,18 @@ crates/pdxl-lsp        the language server over pdxl-project
   before shipping it** (target ~0 unresolved; document accepted noise and
   deliberate omissions in the entity's module doc). Shapes needing *logic* get
   bespoke extractors, not new pattern variants — see `docs/SCHEMA-SCALING.md`.
+  When a dir readme and the corpus disagree on a key name, the corpus wins
+  (mark corpus-only fields `*(corpus)*` in the StructSpec docs).
 - Reference rules live in the file of their **target** kind (the loc.rs
   precedent), not where they fire.
+- EU5 scope literals (`c:`, `special_status:`, …) are table-derived: a new
+  kind joins `TARGET_KINDS` in `pdxl-eu5/src/derived.rs` (scope-type → kind)
+  instead of hand `ScopePrefix` rules; skip words also derive from the tables.
+- Scope inlay hints need `block_scoped(Trigger|Effect, "<scope>")` on the
+  field, not plain `block(…)` — plain blocks emit no `: scope (kind)` hint.
+- Keep `editor/vscode/package.json` version in lockstep with the workspace
+  version (`0.<ANALYSIS_VERSION>.0`) — the extension pins its managed server
+  binary to the matching `v*` release tag.
 - Multi-kind references: `RefRule::alt` — diagnosed only when no kind in the
   chain defines the name; navigation follows whichever resolves.
 - `FieldSpec::values(…)` are completion/hover **suggestions, never
@@ -112,10 +130,18 @@ crates/pdxl-lsp        the language server over pdxl-project
 
 ### Corpus paths (this machine)
 
+CK3:
 - Game: `~/.local/share/Steam/steamapps/common/Crusader Kings III/game`
 - Mod:  `~/.local/share/Paradox Interactive/Crusader Kings III/mod/T4N.mod`
   (dir root `…/T4N-CK3/T4N`)
 - Game doc dumps: `~/.local/share/Paradox Interactive/Crusader Kings III/logs`
+
+EU5 (user dir lives in the Proton prefix,
+`~/.local/share/Steam/steamapps/compatdata/3450310/pfx/drive_c/users/steamuser/Documents/Paradox Interactive/Europa Universalis V`):
+- Game: `~/.local/share/Steam/steamapps/common/Europa Universalis V/game`
+  (module roots `in_game/` + `main_menu/`; `common/` is under `in_game/`)
+- Mod:  `<user dir>/mod/eu5-compagna-communis` (new-gen `.metadata/metadata.json` loader)
+- Doc dumps: `<user dir>/docs` (Markdown dialect) + `<user dir>/logs/data_types`
 
 Full-corpus sanity check after schema work:
 
