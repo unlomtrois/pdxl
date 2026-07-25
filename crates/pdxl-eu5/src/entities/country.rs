@@ -65,11 +65,7 @@ const fn tag_in(dir: &'static str, key: &'static str) -> RefRule {
 macro_rules! country_refs {
     ($($dir:literal),* $(,)?) => {
         [
-            RefRule {
-                pattern: RefPattern::ScopePrefix("c"),
-                gate: None,
-                alt: COUNTRY_ALTS,
-            },
+            // The `c:` scope literal is table-derived (see `crate::derived`).
             RefRule {
                 pattern: RefPattern::KeyValue("has_or_had_tag"),
                 gate: None,
@@ -99,7 +95,7 @@ macro_rules! country_refs {
 /// `in_game/common/customizable_localization/` (its 44k comparisons include
 /// ~1,200 grammar-check tags that exist nowhere statically — `tag = MEDICI`)
 /// and `main_menu/gfx/` (the city_data asset DSL's `tag = raw_resource`).
-static COUNTRY_REFS: [RefRule; 36] = country_refs!(
+static COUNTRY_REFS: [RefRule; 35] = country_refs!(
     "in_game/events/",
     "in_game/setup/",
     "main_menu/setup/",

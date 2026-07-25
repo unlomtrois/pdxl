@@ -16,6 +16,7 @@
 
 pub mod contexts;
 pub mod coverage;
+pub mod derived;
 pub(crate) mod entities;
 pub mod kinds;
 pub mod tables;
@@ -56,11 +57,32 @@ pub fn datafn_registry() -> &'static pdxl_gui::datafn::DataFnRegistry {
     REG.get_or_init(|| pdxl_gui::datafn::DataFnRegistry::from_rows(tables::DATA_FNS))
 }
 
-/// Builds the EU5 schema. Cheap to construct; build once and share.
+/// Builds the EU5 schema: the hand-written entity rows plus the
+/// table-derived scope-link rules and skip words (see [`derived`]). Cheap
+/// to construct; build once and share.
 pub fn schema() -> Schema {
+    let mut rows = entities::kinds();
+    rows.extend(derived::derived_link_rules());
+    schema_from_rows_with_skips(&rows, derived::derived_skip_words())
+}
+
+/// The hand-written rows only — the baseline the derivation proof harness
+/// (`tests/derived_proof.rs`) measures against.
+pub fn schema_hand_only() -> Schema {
+    schema_from_rows_with_skips(&entities::kinds(), Vec::new())
+}
+
+/// Builds a schema from explicit rows and extra skip words.
+pub(crate) fn schema_from_rows_with_skips(
+    rows: &[pdxl_analysis::KindSpec],
+    extra_skips: Vec<&'static str>,
+) -> Schema {
+    let mut skips: Vec<&'static str> = SCOPE_KEYWORDS.to_vec();
+    skips.extend(extra_skips);
+    let skips: &'static [&'static str] = Box::leak(skips.into_boxed_slice());
     Schema::new(
-        &entities::kinds(),
-        SCOPE_KEYWORDS,
+        rows,
+        skips,
         &[], // no inline typed-def keywords observed yet
         KEYED_VALUE_DEFS,
         NESTED_VALUE_DEFS,

@@ -14,6 +14,8 @@ pdxl-gamedocs.workspace = true
 
 [dev-dependencies]
 pdxl-parser.workspace = true
+pdxl-fileset.workspace = true
+pdxl-project.workspace = true
 
 [lints.rust]
 unsafe_code = "forbid"

@@ -35,11 +35,7 @@ pub(crate) struct Estate;
 impl Entity for Estate {
     const KINDS: &'static [KindSpec] = &[KindSpec {
         refs: &[
-            RefRule {
-                pattern: RefPattern::ScopePrefix("estate_type"),
-                gate: None,
-                alt: &[],
-            },
+            // The `estate_type:` literal is table-derived (`crate::derived`).
             RefRule {
                 pattern: RefPattern::KeyValue("estate"),
                 gate: None,

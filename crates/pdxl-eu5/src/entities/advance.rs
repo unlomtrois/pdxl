@@ -282,14 +282,8 @@ impl Entity for Advance {
             aliases: &[],
         },
         KindSpec {
-            refs: &[
-                in_advances("age"),
-                RefRule {
-                    pattern: RefPattern::ScopePrefix("age"),
-                    gate: None,
-                    alt: &[],
-                },
-            ],
+            // The `age:` literal is table-derived (`crate::derived`).
+            refs: &[in_advances("age")],
             ..def_only(kinds::AGE, IconHint::Hierarchy, AGE_DIR)
         },
     ];

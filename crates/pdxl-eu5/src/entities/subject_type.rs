@@ -166,11 +166,7 @@ impl Entity for SubjectType {
                 gate: None,
                 alt: &[],
             },
-            RefRule {
-                pattern: RefPattern::ScopePrefix("subject_type"),
-                gate: None,
-                alt: &[],
-            },
+            // The `subject_type:` literal is table-derived (`crate::derived`).
             // Advances unlock subject types (8 refs, 0 unresolved).
             RefRule {
                 pattern: RefPattern::KeyValue("unlock_subject_type"),
