@@ -33,6 +33,7 @@ pub const PRODUCTION_METHOD: KindId = KindId::new("production_method");
 pub const GOVERNMENT_TYPE: KindId = KindId::new("government_type");
 pub const ADVANCE: KindId = KindId::new("advance");
 pub const AGE: KindId = KindId::new("age");
+pub const BIAS: KindId = KindId::new("bias");
 pub const BUILDING: KindId = KindId::new("building");
 pub const UNIT: KindId = KindId::new("unit_type");
 pub const LAW: KindId = KindId::new("law");

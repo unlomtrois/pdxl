@@ -7,6 +7,7 @@ use pdxl_analysis::KindSpec;
 use pdxl_analysis::context::ClauseKind;
 
 mod advance;
+mod bias;
 mod coat_of_arms;
 pub(crate) mod common;
 mod country;
@@ -45,6 +46,7 @@ registry!(
     scripted::Scripted,
     country::Country,
     advance::Advance,
+    bias::Bias,
     unlocks::Unlocks,
     coat_of_arms::CoatOfArms,
     estate::Estate,

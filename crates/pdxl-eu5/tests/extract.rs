@@ -9,6 +9,36 @@ fn extract(src: &str, rel_path: &str) -> FileFacts {
 }
 
 #[test]
+fn bias_defs_refs_and_context() {
+    let f = extract(
+        "opinion_sabotage_reputation = { value = -50 yearly_decay = 5 min = -200 }\n",
+        "in_game/common/biases/03_opinion.txt",
+    );
+    assert_eq!(f.defs.len(), 1);
+    assert_eq!(f.defs[0].name, "opinion_sabotage_reputation");
+    assert_eq!(f.defs[0].kind, pdxl_eu5::kinds::BIAS);
+
+    let refs = extract(
+        "e = { add_opinion = { target = scope:x modifier = opinion_sabotage_reputation } }\n",
+        "in_game/events/x.txt",
+    );
+    let bias_ref = refs
+        .refs
+        .iter()
+        .find(|r| r.name == "opinion_sabotage_reputation")
+        .expect("bias ref");
+    assert_eq!(bias_ref.kind, pdxl_eu5::kinds::BIAS);
+
+    use pdxl_analysis::context::{ClauseKind, context_of_chain};
+    let ctx = context_of_chain(
+        [b"opinion_sabotage_reputation".as_slice()],
+        "in_game/common/biases/03_opinion.txt",
+        pdxl_eu5::contexts::context_schema(),
+    );
+    assert!(matches!(ctx, ClauseKind::Struct(spec) if spec.name == "bias"));
+}
+
+#[test]
 fn country_defs_and_body_refs() {
     let f = extract(
         "AHI = {\n\
