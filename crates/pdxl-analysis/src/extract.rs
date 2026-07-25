@@ -95,6 +95,9 @@ pub fn extract_facts(
     }
 
     harvest_constant_defs(tree, tree.root(), rel_path, &mut facts);
+    if schema.has_nested_value_defs() {
+        harvest_nested_value_defs(tree, tree.root(), rel_path, schema, &mut facts);
+    }
 
     extract_refs(
         tree,
@@ -445,6 +448,42 @@ fn harvest_constant_defs(
     }
     for child in tree.children(node_id) {
         harvest_constant_defs(tree, child, rel_path, facts);
+    }
+}
+
+/// Recursively records nested keyed-value definitions: any-depth
+/// `KEY = value` fields whose `KEY` the schema maps (EU5's
+/// `define_unique_country_tag = SAGEO` inside an event effect creates the
+/// tag). The definition is the *value*, like `namespace = X`.
+fn harvest_nested_value_defs(
+    tree: &SyntaxTree,
+    node_id: NodeId,
+    rel_path: &str,
+    schema: &Schema,
+    facts: &mut FileFacts,
+) {
+    let node = tree.node(node_id);
+    if node.kind == NodeKind::Field {
+        let kids = tree.child_ids(node_id);
+        if kids.len() == 2
+            && tree.node(kids[1]).kind == NodeKind::Scalar
+            && let Ok(key) = std::str::from_utf8(tree.node_text(kids[0]))
+            && let Some(kind) = schema.nested_value_def_kind(key)
+        {
+            let value = tree.node(kids[1]);
+            facts.defs.push(Symbol {
+                name: String::from_utf8_lossy(trim_quotes(tree.node_text(kids[1]))).into_owned(),
+                kind,
+                file: Arc::from(rel_path),
+                offset: value.range.start,
+                end_offset: value.range.end,
+                params: Vec::new(),
+            });
+            return;
+        }
+    }
+    for child in tree.children(node_id) {
+        harvest_nested_value_defs(tree, child, rel_path, schema, facts);
     }
 }
 

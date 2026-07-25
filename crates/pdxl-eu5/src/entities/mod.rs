@@ -7,6 +7,7 @@ use pdxl_analysis::KindSpec;
 use pdxl_analysis::context::ClauseKind;
 
 mod advance;
+mod coat_of_arms;
 mod country;
 mod culture;
 mod named_color;
@@ -40,6 +41,7 @@ registry!(
     country::Country,
     advance::Advance,
     unlocks::Unlocks,
+    coat_of_arms::CoatOfArms,
     culture::Culture,
     religion::Religion,
     named_color::NamedColor,

@@ -246,6 +246,10 @@ pub struct Schema {
     /// defines `value` of that kind (CK3: `namespace = X`). The definition is
     /// the declaration's value, so nothing else in the file is affected.
     keyed_value_defs: HashMap<&'static str, KindId>,
+    /// Like `keyed_value_defs`, but at ANY depth: `KEY = value` anywhere in a
+    /// file defines `value` (EU5: `define_unique_country_tag = SAGEO` inside
+    /// an event effect creates the tag).
+    nested_value_defs: HashMap<&'static str, KindId>,
     /// Every kind in registration order — the stable order for reports and the
     /// doc-ref default lookup (replaces the old `SymbolKind::ALL`).
     kinds: Vec<KindId>,
@@ -273,6 +277,7 @@ impl Schema {
         scope_keywords: &[&'static str],
         typed_defs: &[(&'static str, KindId)],
         keyed_value_defs: &[(&'static str, KindId)],
+        nested_value_defs: &[(&'static str, KindId)],
         doc_ref_aliases: &[(&'static str, KindId)],
         call_kinds: Option<CallKinds>,
         gui_kinds: Option<GuiKinds>,
@@ -282,6 +287,7 @@ impl Schema {
             scope_keywords: scope_keywords.iter().copied().collect(),
             typed_defs: typed_defs.iter().copied().collect(),
             keyed_value_defs: keyed_value_defs.iter().copied().collect(),
+            nested_value_defs: nested_value_defs.iter().copied().collect(),
             by_alias: doc_ref_aliases.iter().copied().collect(),
             call_kinds,
             gui_kinds,
@@ -423,6 +429,18 @@ impl Schema {
     /// the namespace kind), the definition being `value`; `None` otherwise.
     pub fn keyed_value_def_kind(&self, key: &str) -> Option<KindId> {
         self.keyed_value_defs.get(key).copied()
+    }
+
+    /// The kind an any-depth `KEY = value` defines through `KEY`
+    /// (`define_unique_country_tag` → the dynamic-country kind).
+    pub fn nested_value_def_kind(&self, key: &str) -> Option<KindId> {
+        self.nested_value_defs.get(key).copied()
+    }
+
+    /// Whether any nested keyed-value definitions are configured (skips the
+    /// extraction walk entirely when none are).
+    pub fn has_nested_value_defs(&self) -> bool {
+        !self.nested_value_defs.is_empty()
     }
 
     /// Every kind in registration order (stable report / doc-ref ordering).

@@ -23,12 +23,25 @@ pub mod tables;
 use pdxl_analysis::{CallKinds, KindId, Schema};
 
 /// Relative-scope keywords (`prev`, `this`, …) skipped during resolution.
-// `yes`/`no` are toggle values, never symbol names — corpus:
-// `unlock_unit = yes` (a bare enablement, not a unit reference).
-const SCOPE_KEYWORDS: &[&str] = &["root", "this", "prev", "from", "fromfrom", "yes", "no"];
+// Uppercase forms are equally legal in Jomini script (`has_or_had_tag =
+// ROOT` occurs in vanilla). `yes`/`no` are toggle values, never symbol names
+// (`unlock_unit = yes`); `list` is the flag-definition selector keyword
+// (`coa = list X`); `REB` is the engine's hardcoded rebel tag — real at
+// runtime, defined in no file.
+const SCOPE_KEYWORDS: &[&str] = &[
+    "root", "this", "prev", "from", "fromfrom", "ROOT", "THIS", "PREV", "FROM", "yes", "no",
+    "list", "REB",
+];
 
 /// `namespace = X` declares an event namespace (same convention as CK3).
 const KEYED_VALUE_DEFS: &[(&str, KindId)] = &[("namespace", kinds::NAMESPACE)];
+
+/// Any-depth keyed-value definitions: `define_unique_country_tag = SAGEO`
+/// inside an event effect *creates* that tag — the definition site for the
+/// ~31 dynamic countries (San Giorgio, the Sikh Empire, …) that exist in no
+/// setup file.
+const NESTED_VALUE_DEFS: &[(&str, KindId)] =
+    &[("define_unique_country_tag", kinds::DYNAMIC_COUNTRY)];
 
 const CALL_KINDS: CallKinds = CallKinds {
     effect: kinds::SCRIPTED_EFFECT,
@@ -50,6 +63,7 @@ pub fn schema() -> Schema {
         SCOPE_KEYWORDS,
         &[], // no inline typed-def keywords observed yet
         KEYED_VALUE_DEFS,
+        NESTED_VALUE_DEFS,
         &[], // no doc-ref aliases yet
         Some(CALL_KINDS),
         None, // .gui analysis off until the datafn registry exists

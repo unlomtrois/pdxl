@@ -134,6 +134,7 @@ pub fn schema() -> Schema {
         SCOPE_KEYWORDS,
         TYPED_DEFS,
         KEYED_VALUE_DEFS,
+        &[], // no nested keyed-value definitions in CK3
         DOC_REF_ALIASES,
         Some(CALL_KINDS),
         Some(GUI_KINDS),

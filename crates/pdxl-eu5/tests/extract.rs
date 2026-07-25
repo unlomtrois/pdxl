@@ -58,7 +58,8 @@ fn formable_tag_alias_resolves_c_literal() {
         r.alt,
         &[
             pdxl_eu5::kinds::FORMABLE_COUNTRY,
-            pdxl_eu5::kinds::START_COUNTRY
+            pdxl_eu5::kinds::START_COUNTRY,
+            pdxl_eu5::kinds::DYNAMIC_COUNTRY
         ]
     );
 
@@ -176,4 +177,58 @@ fn advance_domain_defs_and_refs() {
     assert_eq!(modifier_tag, ClauseKind::StaticModifier); // Modifier fallback
     let allow = pdxl_analysis::context::resolve_key(ctx, "allow", true);
     assert_eq!(allow, ClauseKind::Trigger);
+}
+
+#[test]
+fn dynamic_tags_and_bare_tag_refs() {
+    use pdxl_analysis::merge_and_resolve;
+    use std::collections::HashMap;
+
+    // `define_unique_country_tag = X` inside an event effect CREATES the tag.
+    let creator = extract(
+        "namespace = flavor_gen\n\
+         flavor_gen.1 = {\n\
+         \timmediate = { define_unique_country_tag = SAGEO }\n\
+         }\n",
+        "in_game/events/DHE/flavor_GEN.txt",
+    );
+    let dynamic = creator
+        .defs
+        .iter()
+        .find(|d| d.name == "SAGEO")
+        .expect("dynamic tag def");
+    assert_eq!(dynamic.kind, pdxl_eu5::kinds::DYNAMIC_COUNTRY);
+
+    // `has_or_had_tag = SAGEO` resolves against it through the alt chain;
+    // `has_or_had_tag = ROOT` is a scope keyword, not a reference.
+    let user = extract(
+        "flavor_gen.2 = { trigger = { has_or_had_tag = SAGEO has_or_had_tag = ROOT } }\n",
+        "in_game/events/DHE/flavor_GEN2.txt",
+    );
+    assert_eq!(
+        user.refs
+            .iter()
+            .filter(|r| r.kind == pdxl_eu5::kinds::COUNTRY)
+            .count(),
+        1
+    );
+    let mut facts = HashMap::new();
+    facts.insert("in_game/events/DHE/flavor_GEN.txt".to_string(), creator);
+    facts.insert("in_game/events/DHE/flavor_GEN2.txt".to_string(), user);
+    let order = [
+        "in_game/events/DHE/flavor_GEN.txt",
+        "in_game/events/DHE/flavor_GEN2.txt",
+    ];
+    let (_, diags) = merge_and_resolve(&order, &facts);
+    assert!(diags.is_empty(), "{diags:?}");
+
+    // Bare `tag = X` refs in events; coa refs in flag definitions.
+    let t = extract("e = { tag = GEN }\n", "in_game/events/x.txt");
+    assert_eq!(t.refs[0].kind, pdxl_eu5::kinds::COUNTRY);
+    let c = extract(
+        "GEN = { flag_definition = { coa = GEN_republic priority = 2 } }\n",
+        "main_menu/common/flag_definitions/00.txt",
+    );
+    assert_eq!(c.refs[0].kind, pdxl_eu5::kinds::COAT_OF_ARMS);
+    assert_eq!(c.refs[0].name, "GEN_republic");
 }

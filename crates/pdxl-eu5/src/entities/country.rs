@@ -10,8 +10,17 @@
 //! are their own kind so the ~2,000 tags declared in both places don't
 //! read as duplicate definitions.
 //!
-//! References: `c:TAG` scope literals anywhere (6,384 in vanilla), with
-//! formables and start countries as the alternate kinds.
+//! References — all with formables and start countries as alternate kinds:
+//! - `c:TAG` scope literals anywhere (6,384 in vanilla);
+//! - `has_or_had_tag = X` anywhere (2,618, 0 unresolved);
+//! - bare `tag = X` in the dirs where it always means a country tag
+//!   (events, setup, formables, on_action, generic_actions — ~15k refs,
+//!   1 unresolved). **Deliberately not** gated into
+//!   `customizable_localization/`: its 44k `tag =` comparisons include ~3%
+//!   dynamic/never-defined tags (`tag = MEDICI` grammar checks), which would
+//!   be phantom noise;
+//! - `first`/`second` diplomacy pairs and `coa` flag references in their
+//!   setup dirs (809 + 809 + 262, 0 unresolved).
 //!
 //! Body cross-references live with their target kinds:
 //! `culture_definition` in [`super::culture`], `religion_definition` in
@@ -30,6 +39,23 @@ use super::Entity;
 pub(crate) const COUNTRIES_DIR: &str = "in_game/setup/countries/";
 const FORMABLES_DIR: &str = "in_game/common/formable_countries/";
 const START_DIR: &str = "main_menu/setup/start/";
+
+/// The alternate kinds every country reference chains through (dynamic
+/// countries are the script-created tags — `define_unique_country_tag`).
+const COUNTRY_ALTS: &[pdxl_analysis::KindId] = &[
+    kinds::FORMABLE_COUNTRY,
+    kinds::START_COUNTRY,
+    kinds::DYNAMIC_COUNTRY,
+];
+
+/// A `key = X` country-tag reference gated to one directory.
+const fn tag_in(dir: &'static str, key: &'static str) -> RefRule {
+    RefRule {
+        pattern: RefPattern::KeyValue(key),
+        gate: Some(dir),
+        alt: COUNTRY_ALTS,
+    }
+}
 
 /// A name-list block (`male_regnal_names = { … }`).
 static NAME_LIST: StructSpec = StructSpec {
@@ -118,8 +144,24 @@ impl Entity for Country {
                 RefRule {
                     pattern: RefPattern::ScopePrefix("c"),
                     gate: None,
-                    alt: &[kinds::FORMABLE_COUNTRY, kinds::START_COUNTRY],
+                    alt: COUNTRY_ALTS,
                 },
+                // The bare-tag trigger works everywhere.
+                RefRule {
+                    pattern: RefPattern::KeyValue("has_or_had_tag"),
+                    gate: None,
+                    alt: COUNTRY_ALTS,
+                },
+                // Bare `tag = X` where it always means a country (see the
+                // module doc for why customizable_localization is left out).
+                tag_in("in_game/events/", "tag"),
+                tag_in("main_menu/setup/", "tag"),
+                tag_in(FORMABLES_DIR, "tag"),
+                tag_in("in_game/common/on_action/", "tag"),
+                tag_in("in_game/common/generic_actions/", "tag"),
+                // Diplomacy pairs (`first`/`second` relation endpoints).
+                tag_in("main_menu/setup/", "first"),
+                tag_in("main_menu/setup/", "second"),
             ],
             aliases: &[],
         },
