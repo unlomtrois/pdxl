@@ -688,7 +688,7 @@ checksum = "2ee67f1008b1ba2321834326597b8e186293b049a023cdef258527550b9935b4"
 
 [[package]]
 name = "pdxl-analysis"
-version = "0.90.0"
+version = "0.90.1"
 dependencies = [
  "pdxl-ast",
  "pdxl-parser",
@@ -697,7 +697,7 @@ dependencies = [
 
 [[package]]
 name = "pdxl-ast"
-version = "0.90.0"
+version = "0.90.1"
 dependencies = [
  "pdxl-lexer",
  "pdxl-src",
@@ -705,7 +705,7 @@ dependencies = [
 
 [[package]]
 name = "pdxl-cache"
-version = "0.90.0"
+version = "0.90.1"
 dependencies = [
  "pdxl-ast",
  "pdxl-parser",
@@ -718,7 +718,7 @@ dependencies = [
 
 [[package]]
 name = "pdxl-ck3"
-version = "0.90.0"
+version = "0.90.1"
 dependencies = [
  "pdxl-analysis",
  "pdxl-ast",
@@ -730,7 +730,7 @@ dependencies = [
 
 [[package]]
 name = "pdxl-cli"
-version = "0.90.0"
+version = "0.90.1"
 dependencies = [
  "clap",
  "pdxl-analysis",
@@ -752,7 +752,7 @@ dependencies = [
 
 [[package]]
 name = "pdxl-eu5"
-version = "0.90.0"
+version = "0.90.1"
 dependencies = [
  "pdxl-analysis",
  "pdxl-fileset",
@@ -764,7 +764,7 @@ dependencies = [
 
 [[package]]
 name = "pdxl-fileset"
-version = "0.90.0"
+version = "0.90.1"
 dependencies = [
  "pdxl-moddesc",
  "pdxl-path",
@@ -773,7 +773,7 @@ dependencies = [
 
 [[package]]
 name = "pdxl-fmt"
-version = "0.90.0"
+version = "0.90.1"
 dependencies = [
  "pdxl-analysis",
  "pdxl-ast",
@@ -784,7 +784,7 @@ dependencies = [
 
 [[package]]
 name = "pdxl-game"
-version = "0.90.0"
+version = "0.90.1"
 dependencies = [
  "pdxl-ck3",
  "pdxl-eu5",
@@ -792,11 +792,11 @@ dependencies = [
 
 [[package]]
 name = "pdxl-gamedocs"
-version = "0.90.0"
+version = "0.90.1"
 
 [[package]]
 name = "pdxl-gui"
-version = "0.90.0"
+version = "0.90.1"
 dependencies = [
  "pdxl-analysis",
  "pdxl-ast",
@@ -805,7 +805,7 @@ dependencies = [
 
 [[package]]
 name = "pdxl-lexer"
-version = "0.90.0"
+version = "0.90.1"
 dependencies = [
  "pdxl-src",
  "pdxl-testutil",
@@ -813,7 +813,7 @@ dependencies = [
 
 [[package]]
 name = "pdxl-lsp"
-version = "0.90.0"
+version = "0.90.1"
 dependencies = [
  "crossbeam-channel",
  "lsp-server",
@@ -835,7 +835,7 @@ dependencies = [
 
 [[package]]
 name = "pdxl-mcp"
-version = "0.90.0"
+version = "0.90.1"
 dependencies = [
  "pdxl-game",
  "rmcp",
@@ -846,7 +846,7 @@ dependencies = [
 
 [[package]]
 name = "pdxl-moddesc"
-version = "0.90.0"
+version = "0.90.1"
 dependencies = [
  "pdxl-parser",
  "pdxl-path",
@@ -856,7 +856,7 @@ dependencies = [
 
 [[package]]
 name = "pdxl-parser"
-version = "0.90.0"
+version = "0.90.1"
 dependencies = [
  "pdxl-ast",
  "pdxl-lexer",
@@ -866,11 +866,11 @@ dependencies = [
 
 [[package]]
 name = "pdxl-path"
-version = "0.90.0"
+version = "0.90.1"
 
 [[package]]
 name = "pdxl-project"
-version = "0.90.0"
+version = "0.90.1"
 dependencies = [
  "pdxl-analysis",
  "pdxl-ast",
@@ -887,15 +887,15 @@ dependencies = [
 
 [[package]]
 name = "pdxl-src"
-version = "0.90.0"
+version = "0.90.1"
 
 [[package]]
 name = "pdxl-testutil"
-version = "0.90.0"
+version = "0.90.1"
 
 [[package]]
 name = "pdxl-yml"
-version = "0.90.0"
+version = "0.90.1"
 
 [[package]]
 name = "percent-encoding"

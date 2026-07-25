@@ -22,7 +22,7 @@ impl PdxlMcp {
     }
 
     #[tool(
-        description = "Search CK3 built-in effects, triggers, modifiers, and scope links by key or documentation text. Use input_scope to return only items legal from a known scope. Results are deterministically ranked and capped."
+        description = "Search the compiled-in game's built-in effects, triggers, modifiers, and scope links by key or documentation text. The game is selected by the ck3 or eu5 build feature. Use input_scope to return only items legal from a known scope. Results are deterministically ranked and capped."
     )]
     fn search_script_items(
         &self,
@@ -36,9 +36,10 @@ impl PdxlMcp {
 impl ServerHandler for PdxlMcp {
     fn get_info(&self) -> ServerInfo {
         ServerInfo {
-            instructions: Some(
-                "Query CK3 script documentation and scope-aware built-in metadata.".into(),
-            ),
+            instructions: Some(format!(
+                "Query {} script documentation and scope-aware built-in metadata. This MCP binary contains only the game selected at build time.",
+                pdxl_game::GAME.to_uppercase()
+            )),
             capabilities: ServerCapabilities::builder().enable_tools().build(),
             ..Default::default()
         }

@@ -1,4 +1,5 @@
-//! Agent-facing semantic queries over generated CK3 documentation.
+//! Agent-facing semantic queries over documentation for the game selected by
+//! the `ck3` or `eu5` Cargo feature through the `pdxl-game` facade.
 
 use std::collections::HashSet;
 
@@ -49,7 +50,8 @@ pub struct SearchScriptItemsResult {
     pub matches: Vec<ScriptItemMatch>,
 }
 
-/// Search the generated CK3 documentation with deterministic lexical ranking.
+/// Search the feature-selected game's generated documentation with
+/// deterministic lexical ranking.
 pub fn search_script_items(params: SearchScriptItemsParams) -> SearchScriptItemsResult {
     let query = params.query.trim().to_lowercase();
     let tokens: Vec<&str> = query
@@ -200,13 +202,14 @@ mod tests {
 
     #[test]
     fn exact_names_rank_first() {
+        let row = EFFECTS.first().expect("compiled game has effects");
         let result = search_script_items(SearchScriptItemsParams {
-            query: "add_gold".into(),
+            query: row.name.into(),
             kinds: vec![ScriptItemKind::Effect],
-            input_scope: Some("character".into()),
+            input_scope: None,
             limit: None,
         });
-        assert_eq!(result.matches[0].name, "add_gold");
+        assert_eq!(result.matches[0].name, row.name);
         assert_eq!(result.matches[0].kind, ScriptItemKind::Effect);
     }
 
@@ -232,19 +235,21 @@ mod tests {
     }
 
     #[test]
-    fn searches_scope_links_from_an_input_scope() {
+    fn searches_compiled_games_scope_links() {
+        let row = SCOPE_LINKS.first().expect("compiled game has scope links");
+        let input_scope = (!row.global_link)
+            .then(|| row.input_scopes.first().copied())
+            .flatten()
+            .map(str::to_string);
         let result = search_script_items(SearchScriptItemsParams {
-            query: "holder".into(),
+            query: row.name.into(),
             kinds: vec![ScriptItemKind::ScopeLink],
-            input_scope: Some("landed_title".into()),
+            input_scope,
             limit: None,
         });
-        assert!(
-            result
-                .matches
-                .iter()
-                .any(|item| { item.name == "holder" && item.output_scopes == ["character"] })
-        );
+        assert!(result.matches.iter().any(|item| {
+            item.name == row.name && item.output_scopes == strings(row.output_scopes)
+        }));
     }
 
     #[test]
