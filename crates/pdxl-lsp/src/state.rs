@@ -2023,8 +2023,13 @@ fn builtin_hover(src: &[u8], off: u32, rel_path: &str) -> Option<lsp_types::Hove
             text,
         ));
     }
-    // In a static-modifier body, a key is a built-in modifier tag.
-    if matches!(ctx, ClauseKind::StaticModifier) {
+    // Classify the key itself: within a struct context, an unknown key may
+    // resolve through its fallback (effects in event options, modifier tags in
+    // advances, etc.). Scalar/block form does not affect those two fallbacks.
+    let key_ctx = pdxl_analysis::context::resolve_key(ctx, name, false);
+    // In a static-modifier body (including a Modifier struct fallback), a key
+    // is a built-in modifier tag.
+    if matches!(ctx, ClauseKind::StaticModifier) || matches!(key_ctx, ClauseKind::StaticModifier) {
         let row = pdxl_game::tables::MODIFIERS
             .iter()
             .find(|row| row.tag == name)?;
@@ -2038,10 +2043,6 @@ fn builtin_hover(src: &[u8], off: u32, rel_path: &str) -> Option<lsp_types::Hove
             text,
         ));
     }
-    // Classify the key itself: within a struct context (e.g. an event
-    // `option`), an unknown key resolves through the struct's fallback — so
-    // `start_scheme` in an option is an effect, not a structural field.
-    let key_ctx = pdxl_analysis::context::resolve_key(ctx, name, true);
     let (label, row) = match key_ctx {
         ClauseKind::Effect => (
             "effect",

@@ -930,6 +930,7 @@ fn create_character_block_completion_and_hover() {
     assert!(hover.contains("Starting age"), "{hover}");
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn modifier_body_completion_and_hover() {
     let t = TempTree::new();
@@ -959,6 +960,19 @@ fn modifier_body_completion_and_hover() {
         names.contains(&"scheme_success_chance"),
         "modifier tags offered"
     );
+}
+
+#[cfg(feature = "eu5")]
+#[test]
+fn advance_modifier_fallback_hover() {
+    let t = TempTree::new();
+    let src = "written_alphabet = {\n\tglobal_max_literacy = 5\n}\n";
+    t.write("in_game/common/advances/00_x.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "in_game/common/advances/00_x.txt");
+
+    let hover = hover_md(&server, &uri, pos_of(src, "global_max_literacy"));
+    assert!(hover.contains("modifier global_max_literacy"), "{hover}");
 }
 
 #[test]
