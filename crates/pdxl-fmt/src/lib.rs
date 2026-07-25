@@ -19,6 +19,7 @@
 //! and comment sequences, or the result is discarded.
 
 mod emit;
+mod fields;
 mod trivia;
 mod verify;
 
@@ -83,6 +84,29 @@ pub fn format(filename: &str, src: &[u8]) -> Result<String, FmtError> {
 /// [`format`]'s output).
 pub fn is_formatted(filename: &str, src: &[u8]) -> Result<bool, FmtError> {
     Ok(format(filename, src)?.as_bytes() == src)
+}
+
+/// Formats layout and experimentally reorders fields in schema-recognized
+/// structural blocks. Repeated fields retain their relative order; unknown
+/// fields move after known fields but remain stable among themselves.
+pub fn format_fields(
+    filename: &str,
+    rel_path: &str,
+    src: &[u8],
+    schema: &pdxl_analysis::context::ContextSchema,
+) -> Result<String, FmtError> {
+    let items = trivia::scan(src).ok_or(FmtError::Unsupported)?;
+    let laid_out = format(filename, src)?;
+    let parsed = pdxl_parser::parse(filename.to_string(), laid_out.as_bytes().to_vec());
+    if !parsed.diagnostics().is_empty() {
+        return Err(FmtError::ParseDiagnostics(parsed.diagnostics().to_vec()));
+    }
+    let (tree, _) = parsed.into_parts();
+    let out = fields::reorder(&laid_out, &tree, rel_path, schema);
+    if let Some(detail) = verify::inventory_divergence(&items, &out) {
+        return Err(FmtError::Verify { detail });
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -224,6 +248,43 @@ mod tests {
         assert_eq!(
             fmt("o = { t = { x = yes } add_gold = 5 }\n"),
             "o = {\n\tt = {\n\t\tx = yes\n\t}\n\tadd_gold = 5\n}\n"
+        );
+    }
+
+    #[test]
+    fn schema_fields_reorder_with_comments_and_stable_repeats() {
+        use pdxl_analysis::context::ClauseKind::{Config, Struct};
+        use pdxl_analysis::context::{ContextSchema, Fallback, FieldSpec, ScalarKind, StructSpec};
+
+        const VALUE: FieldSpec = FieldSpec {
+            scalar: Some(ScalarKind::Setting),
+            block: Some(Config),
+            scope: None,
+            doc: None,
+            values: None,
+        };
+        static SPEC: StructSpec = StructSpec {
+            name: "test",
+            fields: &[("first", VALUE), ("second", VALUE), ("repeat", VALUE)],
+            fallback: Fallback::Ignore,
+        };
+        static SCHEMA: ContextSchema = ContextSchema {
+            roots: &[("common/test/", Struct(&SPEC))],
+            effect_structs: &[],
+        };
+        let src = b"x = { unknown = 0\n # second docs\n # attached\n second = 2 repeat = a first = 1 repeat = b }\n";
+        let out = format_fields("x.txt", "common/test/x.txt", src, &SCHEMA).unwrap();
+        assert_eq!(
+            out,
+            "x = {\n\
+             \tfirst = 1\n\
+             \t# second docs\n\
+             \t# attached\n\
+             \tsecond = 2\n\
+             \trepeat = a\n\
+             \trepeat = b\n\
+             \tunknown = 0\n\
+             }\n"
         );
     }
 

@@ -33,7 +33,7 @@ crates/
   pdxl-cache      two-level parse cache
   pdxl-analysis   fact extraction engine (game-agnostic)
   pdxl-ck3        the CK3 schema: kinds, entities, doc tables, contexts
-  pdxl-loc        Paradox localization .yml parser
+  pdxl-yml        Paradox localization .yml parser
   pdxl-gui        interface-script (.gui) analysis + datafunction typing
   pdxl-project    whole-project analysis + incremental updates
   pdxl-fmt        PDXScript formatter

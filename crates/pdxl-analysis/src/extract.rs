@@ -91,6 +91,9 @@ pub fn extract_facts(
                 crate::schema::DefShape::GroupedBlocks { exclude } => harvest_grouped_defs(
                     tree, node, exclude, rule.kind, rel_path, schema, &mut facts,
                 ),
+                crate::schema::DefShape::QualifiedFields { separator } => {
+                    harvest_qualified_fields(tree, node, separator, rule.kind, rel_path, &mut facts)
+                }
                 // CSV-sourced definitions never reach the script extractor —
                 // the project layer routes those files to its own CSV reader.
                 crate::schema::DefShape::IdCsv => {}
@@ -337,6 +340,51 @@ fn harvest_grouped_defs(
             continue;
         }
         harvest_def(tree, child, kind, rel_path, schema, facts);
+    }
+}
+
+/// Harvests `NAMESPACE = { FIELD = value }` as `NAMESPACE|FIELD`-style
+/// definitions. The symbol range lands on FIELD while its lookup name retains
+/// the namespace required by reference syntax.
+fn harvest_qualified_fields(
+    tree: &SyntaxTree,
+    node_id: NodeId,
+    separator: &str,
+    kind: KindId,
+    rel_path: &str,
+    facts: &mut FileFacts,
+) {
+    if tree.node(node_id).kind != NodeKind::Field {
+        return;
+    }
+    let outer = tree.child_ids(node_id);
+    if outer.len() != 2 || tree.node(outer[1]).kind != NodeKind::Block {
+        return;
+    }
+    let namespace = String::from_utf8_lossy(tree.node_text(outer[0]));
+    if namespace.starts_with('@') {
+        return;
+    }
+    for child in tree.children(outer[1]) {
+        if tree.node(child).kind != NodeKind::Field {
+            continue;
+        }
+        let kids = tree.child_ids(child);
+        if kids.len() != 2 {
+            continue;
+        }
+        let key = tree.node_text(kids[0]);
+        if key.starts_with(b"@") {
+            continue;
+        }
+        facts.defs.push(Symbol {
+            name: format!("{namespace}{separator}{}", String::from_utf8_lossy(key)),
+            kind,
+            file: Arc::from(rel_path),
+            offset: tree.node(kids[0]).range.start,
+            end_offset: tree.node(kids[0]).range.end,
+            params: Vec::new(),
+        });
     }
 }
 

@@ -16,7 +16,9 @@ use crate::kinds;
 use pdxl_analysis::context::ClauseKind::{self, ScriptedModifier, StaticModifier, Struct, Trigger};
 use pdxl_analysis::context::ScalarKind::Setting;
 use pdxl_analysis::context::{Fallback, StructSpec, block, block_scoped, scalar};
-use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
+use pdxl_analysis::{
+    DefShape, DefSource, IconHint, ImplicitLocPattern, KindSpec, RefPattern, RefRule,
+};
 
 use super::Entity;
 use super::scripted::def_only;
@@ -244,6 +246,22 @@ static ADVANCE: StructSpec = StructSpec {
 pub(crate) struct Advance;
 
 impl Entity for Advance {
+    const LOC_DATAFN_ARG_REFS: &'static [(&'static str, pdxl_analysis::KindId)] = &[
+        ("ShowAdvanceName", kinds::ADVANCE),
+        ("ShowAdvanceNameWithNoTooltip", kinds::ADVANCE),
+    ];
+
+    const IMPLICIT_LOC: &'static [ImplicitLocPattern] = &[
+        ImplicitLocPattern {
+            kind: kinds::ADVANCE,
+            suffix: "",
+        },
+        ImplicitLocPattern {
+            kind: kinds::ADVANCE,
+            suffix: "_desc",
+        },
+    ];
+
     const KINDS: &'static [KindSpec] = &[
         KindSpec {
             kind: kinds::ADVANCE,

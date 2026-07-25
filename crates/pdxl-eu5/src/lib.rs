@@ -80,7 +80,7 @@ pub(crate) fn schema_from_rows_with_skips(
     let mut skips: Vec<&'static str> = SCOPE_KEYWORDS.to_vec();
     skips.extend(extra_skips);
     let skips: &'static [&'static str] = Box::leak(skips.into_boxed_slice());
-    Schema::new(
+    let mut schema = Schema::new(
         rows,
         skips,
         &[], // no inline typed-def keywords observed yet
@@ -88,7 +88,10 @@ pub(crate) fn schema_from_rows_with_skips(
         NESTED_VALUE_DEFS,
         &[], // no doc-ref aliases yet
         Some(CALL_KINDS),
-        None, // .gui analysis off until the datafn registry exists
-        None, // no loc-concept convention verified yet
-    )
+        None,                      // .gui analysis off until the datafn registry exists
+        Some(kinds::GAME_CONCEPT), // `[concept|e]` / `[Concept('concept')]`
+    );
+    schema.set_implicit_loc_patterns(&entities::implicit_loc_patterns());
+    schema.set_loc_datafn_arg_refs(&entities::loc_datafn_arg_refs());
+    schema
 }

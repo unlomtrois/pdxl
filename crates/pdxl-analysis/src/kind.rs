@@ -28,7 +28,7 @@ impl KindId {
 }
 
 /// Localization keys — the one kind the engine owns, since localization is
-/// universal to every Paradox game and is extracted by `pdxl-loc`, not the
+/// universal to every Paradox game and is extracted by `pdxl-yml`, not the
 /// per-game schema. Games reference this rather than redeclaring it.
 pub const LOC_KEY: KindId = KindId::new("loc_key");
 

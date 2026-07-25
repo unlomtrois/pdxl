@@ -12,7 +12,7 @@ use std::io::{self, Write};
 use std::path::Path;
 use std::process::ExitCode;
 
-pub fn run(files: &[String], write: bool, check: bool) -> io::Result<ExitCode> {
+pub fn run(files: &[String], write: bool, check: bool, fields: bool) -> io::Result<ExitCode> {
     let stdout = io::stdout();
     let mut out = io::BufWriter::new(stdout.lock());
     let mut failed = false;
@@ -27,7 +27,13 @@ pub fn run(files: &[String], write: bool, check: bool) -> io::Result<ExitCode> {
                 continue;
             }
         };
-        let formatted = match pdxl_fmt::format(file, &src) {
+        let formatted_result = if fields {
+            let rel = schema_rel_path(file);
+            pdxl_fmt::format_fields(file, &rel, &src, pdxl_game::contexts::context_schema())
+        } else {
+            pdxl_fmt::format(file, &src)
+        };
+        let formatted = match formatted_result {
             Ok(s) => s,
             Err(pdxl_fmt::FmtError::ParseDiagnostics(diags)) => {
                 for d in &diags {
@@ -67,6 +73,18 @@ pub fn run(files: &[String], write: bool, check: bool) -> io::Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
+/// Best-effort game-relative path for schema context lookup. Absolute game and
+/// mod paths contain one of the module roots; relative paths already work.
+fn schema_rel_path(file: &str) -> String {
+    let normalized = file.replace('\\', "/");
+    for marker in ["in_game/", "main_menu/"] {
+        if let Some(at) = normalized.find(marker) {
+            return normalized[at..].to_string();
+        }
+    }
+    normalized.trim_start_matches("./").to_string()
+}
+
 /// Writes via a temp file in the same directory + rename, so an interrupted
 /// run never leaves a truncated script behind.
 fn write_atomically(path: &Path, bytes: &[u8]) -> io::Result<()> {
@@ -78,6 +96,10 @@ fn write_atomically(path: &Path, bytes: &[u8]) -> io::Result<()> {
     tmp.push_str(&format!(".{}", std::process::id()));
     let tmp_path = dir.join(tmp);
     std::fs::write(&tmp_path, bytes)?;
+    // Atomic replacement must not silently change executable/readonly bits.
+    if let Ok(metadata) = std::fs::metadata(path) {
+        std::fs::set_permissions(&tmp_path, metadata.permissions())?;
+    }
     match std::fs::rename(&tmp_path, path) {
         Ok(()) => Ok(()),
         Err(e) => {

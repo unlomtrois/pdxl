@@ -48,3 +48,26 @@ pub(crate) fn divergence(input: &[Item<'_>], output: &str) -> Option<String> {
     }
     None
 }
+
+/// Safety check for schema ordering: layout plus field permutation may change
+/// sequence, but must preserve the exact multiset of tokens and comments.
+pub(crate) fn inventory_divergence(input: &[Item<'_>], output: &str) -> Option<String> {
+    let Some(out_items) = scan(output.as_bytes()) else {
+        return Some("field-ordered output failed to lex".to_string());
+    };
+    let key = |item: &Item<'_>| match item.kind {
+        crate::trivia::ItemKind::Comment => (u16::MAX, item.text.to_vec()),
+        crate::trivia::ItemKind::Token(kind) => (kind as u16, item.text.to_vec()),
+    };
+    let mut before: Vec<_> = input.iter().map(key).collect();
+    let mut after: Vec<_> = out_items.iter().map(key).collect();
+    before.sort_unstable();
+    after.sort_unstable();
+    (before != after).then(|| {
+        format!(
+            "field ordering changed token/comment inventory ({} items before, {} after)",
+            before.len(),
+            after.len()
+        )
+    })
+}

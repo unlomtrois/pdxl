@@ -16,7 +16,7 @@ members = [
     "crates/pdxl-analysis", # per-file fact extraction (game-agnostic engine)
     "crates/pdxl-ck3",      # CK3 schema rows + generated doc tables + structural contexts
     "crates/pdxl-gui",      # interface-script (.gui) dialect parsing + template/type symbols
-    "crates/pdxl-loc",      # Paradox localization .yml parser
+    "crates/pdxl-yml",      # Paradox localization .yml parser
     "crates/pdxl-project",  # whole-project analysis + incremental updates
     # user-facing
     "crates/pdxl-fmt",      # PDXScript formatter (token+trivia based, comment-preserving)
@@ -38,7 +38,7 @@ debug = "line-tables-only"
 
 [workspace.package]
 # Bumped on each new feature; tracks ANALYSIS_VERSION (0.<N>.0).
-version = "0.79.0"
+version = "0.89.0"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/unlomtrois/pdxl"
@@ -55,7 +55,7 @@ pdxl-moddesc = { path = "crates/pdxl-moddesc" }
 pdxl-cache = { path = "crates/pdxl-cache" }
 pdxl-analysis = { path = "crates/pdxl-analysis" }
 pdxl-fmt = { path = "crates/pdxl-fmt" }
-pdxl-loc = { path = "crates/pdxl-loc" }
+pdxl-yml = { path = "crates/pdxl-yml" }
 pdxl-ck3 = { path = "crates/pdxl-ck3" }
 pdxl-gui = { path = "crates/pdxl-gui" }
 pdxl-gamedocs = { path = "crates/pdxl-gamedocs" }

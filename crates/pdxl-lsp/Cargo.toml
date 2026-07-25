@@ -22,6 +22,7 @@ pdxl-parser.workspace = true
 pdxl-path.workspace = true
 pdxl-project.workspace = true
 pdxl-gui.workspace = true
+pdxl-yml.workspace = true
 lsp-server.workspace = true
 lsp-types.workspace = true
 serde_json.workspace = true

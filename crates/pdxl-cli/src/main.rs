@@ -53,6 +53,9 @@ enum Command {
         /// list unformatted files and exit non-zero (CI mode)
         #[arg(long)]
         check: bool,
+        /// experimentally reorder recognized structural fields by schema order
+        #[arg(long)]
+        fields: bool,
     },
     /// Run the language server over stdio (diagnostics + go-to-definition)
     Lsp {
@@ -96,7 +99,8 @@ fn main() -> ExitCode {
             files,
             write,
             check,
-        } => fmt::run(&files, write, check),
+            fields,
+        } => fmt::run(&files, write, check, fields),
         Command::Check {
             file,
             game,

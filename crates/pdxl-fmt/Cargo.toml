@@ -10,6 +10,8 @@ description = "PDXScript formatter: expand-every-block style over the raw token 
 [dependencies]
 pdxl-lexer.workspace = true
 pdxl-parser.workspace = true
+pdxl-ast.workspace = true
+pdxl-analysis.workspace = true
 pdxl-src.workspace = true
 
 [lints.rust]

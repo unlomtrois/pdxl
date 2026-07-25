@@ -17,7 +17,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use crossbeam_channel::Sender;
-use lsp_server::{Message, Notification};
+use lsp_server::{Message, Notification, Request as ServerRequest, RequestId};
 use lsp_types::notification::{Notification as _, PublishDiagnostics};
 use lsp_types::{
     Diagnostic, DiagnosticSeverity, InlayHint, InlayHintKind, InlayHintTooltip, Location, Position,
@@ -106,6 +106,15 @@ impl ServerState {
             self.docs.len()
         );
         self.publish_project_diagnostics();
+
+        // Editors commonly request semantic tokens while the project is still
+        // building. Those first-pass tokens cannot color resolved references;
+        // explicitly invalidate them now that the symbol table is available.
+        let _ = self.out.send(Message::Request(ServerRequest::new(
+            RequestId::from("pdxl-semantic-refresh".to_string()),
+            "workspace/semanticTokens/refresh".to_string(),
+            (),
+        )));
     }
 
     /// `textDocument/didOpen`: store the buffer and analyze immediately.
@@ -432,6 +441,39 @@ impl ServerState {
         // Walk order preserved (slot order = matched order).
         let mut locations: Vec<Location> = slots.into_iter().flatten().collect();
 
+        // An entity whose key exactly matches a localization key implicitly
+        // consumes that key as its display name. Model the reverse edge here
+        // so the loc definition's CodeLens/references include those entities,
+        // even though no explicit reference token exists in script.
+        if kind == LOC_KEY {
+            for pattern in project.schema().all_implicit_loc_patterns() {
+                let Some(entity_name) = name.strip_suffix(pattern.suffix) else {
+                    continue;
+                };
+                // Empty suffix always strips successfully; reject an empty
+                // entity name for suffix-only localization keys.
+                if entity_name.is_empty() {
+                    continue;
+                }
+                let Some(symbol) = project.table().lookup(pattern.kind, entity_name) else {
+                    continue;
+                };
+                let Some(full) = project.rel_to_full(&symbol.file) else {
+                    continue;
+                };
+                let Ok(def_src) = self.read_file(full) else {
+                    continue;
+                };
+                locations.push(Location {
+                    uri: path_to_uri(full),
+                    range: Range {
+                        start: offset_to_position(&def_src, symbol.offset),
+                        end: offset_to_position(&def_src, symbol.end_offset),
+                    },
+                });
+            }
+        }
+
         if include_declaration
             && let Some(symbol) = project.table().lookup(kind, &name)
             && let Some(def_full) = project.rel_to_full(&symbol.file)
@@ -589,6 +631,37 @@ impl ServerState {
     pub fn semantic_tokens(&self, uri: &Url) -> Option<lsp_types::SemanticTokens> {
         let path = uri_to_path(uri);
         let src = self.read_file(&path).ok()?;
+        if path.extension().is_some_and(|e| e == "yml") {
+            let resolved = self
+                .project
+                .as_ref()
+                .and_then(|project| {
+                    project.facts_at(&path).map(|facts| {
+                        let mut spans = facts
+                            .refs
+                            .iter()
+                            // These facts exist only because the schema says
+                            // the datafunction argument is an entity key. Its
+                            // semantic class must not depend on whether the
+                            // target happened to be loaded when tokens were
+                            // requested; resolution still controls navigation
+                            // and diagnostics independently.
+                            .filter(|reference| reference.kind != LOC_KEY)
+                            .map(|reference| (reference.start, reference.end))
+                            .collect::<Vec<_>>();
+                        // Loc scanners append one reference family at a time
+                        // (concepts, then datafunction args), not source order.
+                        // `apply_overrides` requires sorted spans.
+                        spans.sort_unstable();
+                        spans
+                    })
+                })
+                .unwrap_or_default();
+            return Some(lsp_types::SemanticTokens {
+                result_id: None,
+                data: crate::semantic::tokens_yml(&src, &resolved),
+            });
+        }
         // Value ranges the analyzer resolved to a defined symbol → colored as
         // references. Unresolved refs are left as plain values (they already
         // carry a diagnostic). Empty when the project isn't built yet.
@@ -909,17 +982,39 @@ impl ServerState {
                 .unwrap_or(kind0);
             let mut text = format!("```pdxscript\n{} {}\n```", kind.name(), name);
             if let Some(symbol) = project.table().lookup(kind, name) {
+                let mut implicit_loc = Vec::new();
                 // Loc keys carry their user-visible text — show it.
                 if kind == LOC_KEY
                     && let Some(loc_text) = self.loc_text(project, symbol)
                 {
                     text.push_str(&format!("\n\n> {loc_text}"));
+                } else if kind != LOC_KEY {
+                    for pattern in project.schema().implicit_loc_patterns(kind) {
+                        let loc_name = format!("{name}{}", pattern.suffix);
+                        let Some(loc_symbol) = project.table().lookup(LOC_KEY, &loc_name) else {
+                            continue;
+                        };
+                        let Some(full) = project.rel_to_full(&loc_symbol.file) else {
+                            continue;
+                        };
+                        let Ok(loc_src) = self.read_file(full) else {
+                            continue;
+                        };
+                        let line = offset_to_position(&loc_src, loc_symbol.offset).line + 1;
+                        implicit_loc.push(format!("[{loc_name}]({}#L{line})", path_to_uri(full)));
+                    }
                 }
                 // A `#!` doc block above the definition (resolved even when
                 // hovering a reference, so a call site shows the target's doc).
                 if let Some(doc) = self.doc_comment_for(project, symbol) {
                     text.push_str("\n\n");
                     text.push_str(&self.render_doc(&doc, project));
+                }
+                // Keep the implicit display-name link after authored smart
+                // documentation but before the source-location footer.
+                if !implicit_loc.is_empty() {
+                    text.push_str("\n\n**Localization:** ");
+                    text.push_str(&implicit_loc.join(", "));
                 }
                 text.push_str(&format!("\n\nDefined in `{}`", symbol.file));
                 if !symbol.params.is_empty() {

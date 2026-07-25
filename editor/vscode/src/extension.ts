@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process";
 import * as vscode from "vscode";
 import {
   LanguageClient,
@@ -18,6 +19,7 @@ import {
 let client: LanguageClient | undefined;
 let output: vscode.OutputChannel | undefined;
 let statusBar: vscode.StatusBarItem | undefined;
+let runningCommand: string | undefined;
 let installPromptShown = false;
 const unresolvedDocDecoration = vscode.window.createTextEditorDecorationType({
   opacity: "0.45",
@@ -123,6 +125,7 @@ async function startClient(
   const gamePath = resolved?.path ?? "";
   const logLevel = config.get<string>("logLevel", "info");
 
+  runningCommand = command;
   log(`server command: ${command}`);
   log(
     `gamePath (${game}): ${gamePath || "(not found)"}` +
@@ -342,11 +345,76 @@ async function promptInstall(
   }
 }
 
+/** Runs the schema-aware CLI formatter and applies its stdout as one undoable
+ * editor edit. Saving first ensures the CLI sees the active buffer contents. */
+async function formatFields(): Promise<void> {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor || editor.document.uri.scheme !== "file") {
+    void vscode.window.showWarningMessage("pdxl: open a saved script file first.");
+    return;
+  }
+  const command = runningCommand;
+  if (!command) {
+    void vscode.window.showErrorMessage("pdxl: language-server binary is not available.");
+    return;
+  }
+  if (!(await editor.document.save())) return;
+
+  let formatted: string;
+  try {
+    formatted = await new Promise<string>((resolve, reject) => {
+      execFile(
+        command,
+        ["fmt", "--fields", editor.document.uri.fsPath],
+        { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 },
+        (error, stdout, stderr) => {
+          if (error) reject(new Error(stderr.trim() || error.message));
+          else resolve(stdout);
+        },
+      );
+    });
+  } catch (err) {
+    log(`format fields failed: ${err}`);
+    void vscode.window.showErrorMessage(`pdxl: Format Fields failed: ${err}`);
+    return;
+  }
+
+  const document = editor.document;
+  const last = document.lineAt(document.lineCount - 1);
+  const fullRange = new vscode.Range(0, 0, last.lineNumber, last.text.length);
+  if (document.getText() !== formatted) {
+    await editor.edit((builder) => builder.replace(fullRange, formatted));
+  }
+}
+
+function isPdxYml(document: vscode.TextDocument): boolean {
+  return (
+    document.uri.scheme === "file" &&
+    document.uri.path.endsWith(".yml") &&
+    document.uri.path.split("/").includes("localization")
+  );
+}
+
+function selectPdxYmlLanguage(document: vscode.TextDocument): void {
+  if (isPdxYml(document) && document.languageId !== "pdx-yml") {
+    // Paradox localization is not YAML. Assigning its own language mode keeps
+    // YAML/TextMate grammars from painting over pdxl semantic token ranges.
+    void vscode.languages.setTextDocumentLanguage(document, "pdx-yml");
+  }
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   output = vscode.window.createOutputChannel("pdxl (client)", { log: true });
   context.subscriptions.push(output, unresolvedDocDecoration);
 
   log("pdxl extension activating...");
+
+  for (const document of vscode.workspace.textDocuments) {
+    selectPdxYmlLanguage(document);
+  }
+  context.subscriptions.push(
+    vscode.workspace.onDidOpenTextDocument(selectPdxYmlLanguage),
+  );
 
   // Status-bar button: shows server health at a glance and reveals the
   // "pdxl (server)" log channel on click (or offers install when missing).
@@ -372,6 +440,7 @@ export function activate(context: vscode.ExtensionContext): void {
       const path = await pickServerPath();
       if (path) await restartClient(context, path, "setting");
     }),
+    vscode.commands.registerCommand("pdxl.formatFields", formatFields),
   );
 
   // Bridge for the reference-count CodeLens. The server emits a

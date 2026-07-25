@@ -111,7 +111,7 @@ fn gather_facts(
             let full = entry.full_path.to_string_lossy().into_owned();
             let f = if entry.rel_path.ends_with(".yml") {
                 let src = std::fs::read(&entry.full_path)?;
-                loc_facts(&src, &entry.rel_path, schema.loc_concept_kind())
+                loc_facts(&src, &entry.rel_path, schema)
             } else if entry.rel_path.ends_with(".gui") {
                 gui_defs_for(&entry.full_path, &entry.rel_path, schema)?
             } else if entry.rel_path.ends_with(".csv") {
@@ -318,7 +318,7 @@ fn gather_facts_parallel(
             let full = entry.full_path.to_string_lossy().into_owned();
             let f = if entry.rel_path.ends_with(".yml") {
                 let src = std::fs::read(&entry.full_path)?;
-                loc_facts(&src, &entry.rel_path, schema.loc_concept_kind())
+                loc_facts(&src, &entry.rel_path, schema)
             } else if entry.rel_path.ends_with(".gui") {
                 gui_defs_for(&entry.full_path, &entry.rel_path, schema)?
             } else if entry.rel_path.ends_with(".csv") {
@@ -386,18 +386,20 @@ fn csv_facts(src: &[u8], rel_path: &str, schema: &Schema) -> FileFacts {
 /// extension: those entries only exist when the FileSet was opted in via
 /// `set_localization_language`). Files without an `l_<lang>:` header yield
 /// empty facts.
-fn loc_facts(src: &[u8], rel_path: &str, concept_kind: Option<KindId>) -> FileFacts {
+fn loc_facts(src: &[u8], rel_path: &str, schema: &Schema) -> FileFacts {
     let mut facts = FileFacts::default();
-    let Some(loc) = pdxl_loc::parse(src) else {
+    let Some(loc) = pdxl_yml::parse(src) else {
         return facts;
     };
     // One shared allocation for all of this file's keys — a localization file
     // holds tens of thousands, and this is 73% of the corpus's symbols.
     let file: std::sync::Arc<str> = std::sync::Arc::from(rel_path);
     for e in loc.entries {
-        if let Some(kind) = concept_kind {
+        if let Some(kind) = schema.loc_concept_kind() {
             scan_concept_refs(&e.text, e.text_start, kind, &file, &mut facts.refs);
         }
+        scan_loc_datafn_arg_refs(&e.text, e.text_start, schema, &file, &mut facts.refs);
+        scan_loc_key_refs(&e.text, e.text_start, &file, &mut facts.refs);
         facts.defs.push(pdxl_analysis::Symbol {
             name: e.key,
             kind: LOC_KEY,
@@ -410,11 +412,114 @@ fn loc_facts(src: &[u8], rel_path: &str, concept_kind: Option<KindId>) -> FileFa
     facts
 }
 
+/// Scans schema-declared localization datafunctions whose first quoted
+/// argument names an entity.
+fn scan_loc_datafn_arg_refs(
+    text: &str,
+    text_start: u32,
+    schema: &Schema,
+    file: &std::sync::Arc<str>,
+    out: &mut Vec<pdxl_analysis::Ref>,
+) {
+    let bytes = text.as_bytes();
+    let ident = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] != b'[' {
+            i += 1;
+            continue;
+        }
+        let function_start = i + 1;
+        let mut function_end = function_start;
+        while function_end < bytes.len() && ident(bytes[function_end]) {
+            function_end += 1;
+        }
+        let Ok(function) = std::str::from_utf8(&bytes[function_start..function_end]) else {
+            i += 1;
+            continue;
+        };
+        let Some(kind) = schema.loc_datafn_arg_kind(function) else {
+            i = function_end;
+            continue;
+        };
+        let mut cursor = function_end;
+        while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() {
+            cursor += 1;
+        }
+        if bytes.get(cursor) != Some(&b'(') {
+            i = function_end;
+            continue;
+        }
+        cursor += 1;
+        while cursor < bytes.len() && bytes[cursor].is_ascii_whitespace() {
+            cursor += 1;
+        }
+        let Some(&quote @ (b'\'' | b'"')) = bytes.get(cursor) else {
+            i = function_end;
+            continue;
+        };
+        let start = cursor + 1;
+        let Some(relative_end) = bytes[start..].iter().position(|&b| b == quote) else {
+            break;
+        };
+        let end = start + relative_end;
+        if start < end {
+            out.push(pdxl_analysis::Ref {
+                kind,
+                alt: &[],
+                name: text[start..end].to_string(),
+                file: file.clone(),
+                start: text_start + start as u32,
+                end: text_start + end as u32,
+            });
+        }
+        i = end + 1;
+    }
+}
+
+/// Scans `$key$` substitutions as localization-key references. Formatting
+/// suffixes (`$key|U$`) are excluded from the referenced name.
+fn scan_loc_key_refs(
+    text: &str,
+    text_start: u32,
+    file: &std::sync::Arc<str>,
+    out: &mut Vec<pdxl_analysis::Ref>,
+) {
+    let bytes = text.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] != b'$' {
+            i += 1;
+            continue;
+        }
+        let start = i + 1;
+        let Some(relative_end) = bytes[start..].iter().position(|&b| b == b'$') else {
+            break;
+        };
+        let close = start + relative_end;
+        let end = bytes[start..close]
+            .iter()
+            .position(|&b| b == b'|')
+            .map_or(close, |n| start + n);
+        if start < end {
+            out.push(pdxl_analysis::Ref {
+                kind: LOC_KEY,
+                alt: &[],
+                name: text[start..end].to_string(),
+                file: file.clone(),
+                start: text_start + start as u32,
+                end: text_start + end as u32,
+            });
+        }
+        i = close + 1;
+    }
+}
+
 /// Scans one localization value for game-concept encyclopedia links and pushes
 /// a [`pdxl_analysis::Ref`] for each. Two forms occur in the corpus:
 ///
-/// - `[concept|E]` — a bare concept key (or alias) formatted as a link (the
-///   dominant form, ~47k in vanilla). The `|E` command is unambiguous: the
+/// - `[concept|E]` / `[concept|e]` — a bare concept key (or alias) formatted
+///   as a link. The encyclopedia-link command is unambiguous: the
 ///   value must be a concept, so an unresolved one is a broken link.
 /// - `[Concept('key', …)…]` — the explicit datafunction; its first quoted
 ///   argument is the concept key.
@@ -460,12 +565,13 @@ fn scan_concept_refs(
             i = ke;
             continue;
         }
-        // `[concept|E]` — a bare identifier terminated by the `|E]` command.
+        // `[concept|E]` / `[concept|e]` — a bare identifier terminated by
+        // the encyclopedia-link command.
         let mut j = inner;
         while j < b.len() && is_ident(b[j]) {
             j += 1;
         }
-        if j > inner && b[j..].starts_with(b"|E]") {
+        if j > inner && (b[j..].starts_with(b"|E]") || b[j..].starts_with(b"|e]")) {
             push(inner, j, out);
             i = j + 3;
         } else {
@@ -595,7 +701,7 @@ impl Project {
 
     fn replace_facts(&mut self, key: &FileKey, src: Vec<u8>) {
         let facts = if key.rel.ends_with(".yml") {
-            loc_facts(&src, &key.rel, self.schema.loc_concept_kind())
+            loc_facts(&src, &key.rel, &self.schema)
         } else if key.rel.ends_with(".csv") {
             csv_facts(&src, &key.rel, &self.schema)
         } else if key.rel.ends_with(".gui") {

@@ -545,6 +545,38 @@ fn namespace_hover_shows_file_doc() {
     assert!(md.contains("Drill events for the battalion."), "{md}");
 }
 
+#[cfg(feature = "eu5")]
+#[test]
+fn entity_hover_and_backlinks_follow_schema_loc_patterns() {
+    let t = TempTree::new();
+    let src = "#! Entity docs.\nmaona_advance = { age = age_1_traditions }\n";
+    let script = "in_game/common/advances/x.txt";
+    let loc = "in_game/localization/test/x_l_english.yml";
+    let loc_src = "\u{feff}l_english:\n maona_advance: \"Maona\"\n maona_advance_desc: \"A chartered company.\"\n";
+    t.write(script, src);
+    t.write(loc, loc_src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, script);
+    let hover = hover_md(&server, &uri, pos_of(src, "maona_advance"));
+    assert!(
+        hover.contains("**Localization:** [maona_advance](file:")
+            && hover.contains(", [maona_advance_desc](file:"),
+        "{hover}"
+    );
+    let docs = hover.find("Entity docs.").unwrap();
+    let loc_label = hover.find("**Localization:**").unwrap();
+    let defined = hover.find("Defined in").unwrap();
+    assert!(docs < loc_label && loc_label < defined, "{hover}");
+
+    // Both suffix conventions backlink from localization to the advance.
+    let loc_uri = uri_for(&t, loc);
+    for key in ["maona_advance:", "maona_advance_desc:"] {
+        let refs = server.references(&loc_uri, pos_of(loc_src, key), false);
+        assert_eq!(refs.len(), 1, "{key}: {refs:?}");
+        assert!(refs[0].uri.path().ends_with(script), "{:?}", refs[0]);
+    }
+}
+
 #[test]
 fn doc_block_shown_on_definition_and_call_site() {
     let t = TempTree::new();
@@ -1080,6 +1112,90 @@ fn semantic_tokens_color_keys_values_and_literals() {
     // The comment sits on its own line (delta_line advances).
     let comment = tokens.data.iter().find(|t| t.token_type == 5).unwrap();
     assert!(comment.delta_line >= 1);
+}
+
+#[cfg(feature = "eu5")]
+#[test]
+fn pdx_yml_game_concept_links_resolve() {
+    let t = TempTree::new();
+    let concept = "subject = { alias = { subjects } texture = x }\n";
+    let loc = "l_english:\n test: \"A [subject|e], [Concept('subjects')], and [ShowAdvanceName('maona_advance')]\"\n";
+    let concept_path = "main_menu/common/game_concepts/00.txt";
+    let loc_path = "main_menu/localization/english/x_l_english.yml";
+    let advance_path = "in_game/common/advances/x.txt";
+    t.write(concept_path, concept);
+    t.write(advance_path, "maona_advance = { age = age_1_traditions }\n");
+    t.write(loc_path, loc);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, loc_path);
+    for needle in ["subject|e", "subjects')"] {
+        let target = server
+            .definition(&uri, pos_of(loc, needle))
+            .unwrap_or_else(|| panic!("missing concept definition for {needle}"));
+        assert!(target.uri.path().ends_with(concept_path), "{target:?}");
+    }
+    let advance = server
+        .definition(&uri, pos_of(loc, "maona_advance')"))
+        .expect("ShowAdvanceName argument resolves");
+    assert!(advance.uri.path().ends_with(advance_path), "{advance:?}");
+}
+
+#[test]
+fn pdx_yml_semantic_tokens_highlight_inline_dialect() {
+    let t = TempTree::new();
+    let src = "l_english:\n key: \"#bold $other$ [subject|e] [GetPlayer.GetName] [ShowAdvanceName('maona_advance')] [advance|e] @gold!#!\"\n other: \"Linked text\"\n";
+    let path = if cfg!(feature = "eu5") {
+        "main_menu/localization/english/x_l_english.yml"
+    } else {
+        "localization/english/x_l_english.yml"
+    };
+    t.write(path, src);
+    if cfg!(feature = "eu5") {
+        t.write(
+            "in_game/common/advances/x.txt",
+            "maona_advance = { age = age_1_traditions }\n",
+        );
+    }
+    let (server, rx) = server_over(&t);
+    assert!(
+        rx.try_iter().any(|message| matches!(
+            message,
+            lsp_server::Message::Request(request)
+                if request.method == "workspace/semanticTokens/refresh"
+        )),
+        "project readiness must invalidate first-pass semantic tokens"
+    );
+    let tokens = server
+        .semantic_tokens(&uri_for(&t, path))
+        .expect("pdx-yml semantic tokens");
+    let types: Vec<_> = tokens.data.iter().map(|token| token.token_type).collect();
+    assert!(types.contains(&0), "localization key: {types:?}");
+    assert!(types.contains(&8), "dumped datafunction: {types:?}");
+    assert!(types.contains(&9), "$key$ reference: {types:?}");
+    if cfg!(feature = "eu5") {
+        let wanted_col = src.lines().nth(1).unwrap().find("maona_advance").unwrap() as u32;
+        let (mut line, mut col) = (0, 0);
+        let mut entity_type = None;
+        for token in &tokens.data {
+            line += token.delta_line;
+            col = if token.delta_line == 0 {
+                col + token.delta_start
+            } else {
+                token.delta_start
+            };
+            if line == 1 && col == wanted_col {
+                entity_type = Some(token.token_type);
+            }
+        }
+        assert_eq!(entity_type, Some(11), "maona_advance token: {types:?}");
+    }
+    assert!(types.contains(&6), "icon markup: {types:?}");
+
+    let uri = uri_for(&t, path);
+    let target = server
+        .definition(&uri, pos_of(src, "other$"))
+        .expect("$key$ resolves to another localization entry");
+    assert_eq!(target.range.start.line, 2);
 }
 
 #[test]

@@ -17,7 +17,7 @@ use pdxl_analysis::context::ScalarKind::Setting;
 use pdxl_analysis::context::{
     Fallback, FieldSpec, StructSpec, block, block_scoped, color, scalar, scalar_or_block,
 };
-use pdxl_analysis::{IconHint, KindSpec, RefPattern, RefRule};
+use pdxl_analysis::{IconHint, ImplicitLocPattern, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
 use super::scripted::def_only;
@@ -159,6 +159,22 @@ static SUBJECT_TYPE: StructSpec = StructSpec {
 pub(crate) struct SubjectType;
 
 impl Entity for SubjectType {
+    const LOC_DATAFN_ARG_REFS: &'static [(&'static str, pdxl_analysis::KindId)] = &[
+        ("ShowSubjectTypeName", kinds::SUBJECT_TYPE),
+        ("ShowSubjectTypeNameWithNoTooltip", kinds::SUBJECT_TYPE),
+    ];
+
+    const IMPLICIT_LOC: &'static [ImplicitLocPattern] = &[
+        ImplicitLocPattern {
+            kind: kinds::SUBJECT_TYPE,
+            suffix: "",
+        },
+        ImplicitLocPattern {
+            kind: kinds::SUBJECT_TYPE,
+            suffix: "_desc",
+        },
+    ];
+
     const KINDS: &'static [KindSpec] = &[KindSpec {
         refs: &[
             RefRule {

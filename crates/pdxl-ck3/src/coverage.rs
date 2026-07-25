@@ -3,5 +3,5 @@
 //! it with these roots through the `pdxl-game` facade.
 
 /// The definition roots worth surveying (gui is modeled by `pdxl-gui`,
-/// localization by `pdxl-loc`).
+/// localization by `pdxl-yml`).
 pub const SURVEY_ROOTS: &[&str] = &["common", "events", "history"];

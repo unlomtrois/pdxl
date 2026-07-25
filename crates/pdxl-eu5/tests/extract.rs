@@ -9,6 +9,129 @@ fn extract(src: &str, rel_path: &str) -> FileFacts {
 }
 
 #[test]
+fn game_concepts_define_aliases_and_family_refs() {
+    let facts = extract(
+        "goods = { alias = { good } texture = x }\ngoods_demand = { family = good }\n",
+        "main_menu/common/game_concepts/00_game_concepts.txt",
+    );
+    assert!(
+        facts
+            .defs
+            .iter()
+            .any(|d| d.kind == pdxl_eu5::kinds::GAME_CONCEPT && d.name == "goods")
+    );
+    assert!(
+        facts
+            .aliases
+            .iter()
+            .any(|d| d.kind == pdxl_eu5::kinds::GAME_CONCEPT && d.name == "good")
+    );
+    assert!(
+        facts
+            .refs
+            .iter()
+            .any(|r| r.kind == pdxl_eu5::kinds::GAME_CONCEPT && r.name == "good")
+    );
+}
+
+#[test]
+fn entity_localization_patterns_are_schema_owned() {
+    let schema = pdxl_eu5::schema();
+    let suffixes = |kind| {
+        schema
+            .implicit_loc_patterns(kind)
+            .iter()
+            .map(|pattern| pattern.suffix)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(suffixes(pdxl_eu5::kinds::ADVANCE), ["", "_desc"]);
+    assert_eq!(suffixes(pdxl_eu5::kinds::SUBJECT_TYPE), ["", "_desc"]);
+}
+
+#[test]
+fn qualified_define_defs_and_pipe_refs() {
+    let defs = extract(
+        "@helper = 2\nNMapColors = { LEADER_COLOR = { 1 2 3 } WIDTH = 4 }\n",
+        "loading_screen/common/defines/graphic/colors.txt",
+    );
+    let names: Vec<_> = defs.defs.iter().map(|d| d.name.as_str()).collect();
+    assert_eq!(names, ["NMapColors|LEADER_COLOR", "NMapColors|WIDTH"]);
+    assert!(defs.defs.iter().all(|d| d.kind == pdxl_eu5::kinds::DEFINE));
+    assert!(defs.defs.iter().all(|d| d.name != "@helper"));
+
+    let usage = extract(
+        "x = { map_color = define:NMapColors|LEADER_COLOR }\n",
+        "in_game/common/international_organization_special_statuses/x.txt",
+    );
+    let reference = usage
+        .refs
+        .iter()
+        .find(|r| r.name == "NMapColors|LEADER_COLOR")
+        .expect("qualified define ref");
+    assert_eq!(reference.kind, pdxl_eu5::kinds::DEFINE);
+}
+
+#[test]
+fn international_organization_gold_treasury_field() {
+    use pdxl_analysis::context::{ClauseKind, context_of_chain};
+    let body = context_of_chain(
+        [b"catholic_church".as_slice()],
+        "in_game/common/international_organizations/catholic_church.txt",
+        pdxl_eu5::contexts::context_schema(),
+    );
+    let ClauseKind::Struct(spec) = body else {
+        panic!("IO body should be structural")
+    };
+    let gold = spec.field("gold").expect("gold treasury field");
+    assert_eq!(
+        gold.scalar,
+        Some(pdxl_analysis::context::ScalarKind::Setting)
+    );
+    assert_eq!(gold.values, Some(&["yes", "no"][..]));
+}
+
+#[test]
+fn customizable_localization_defs_refs_and_body() {
+    let f = extract(
+        "base_name = { type = country text = { localization_key = base_name trigger = { always = yes } } }\n\
+         derived_name = { parent = base_name suffix = \"_ADJ\" log_loc_errors = no if_invalid_loc = return_empty }\n",
+        "in_game/common/customizable_localization/names.txt",
+    );
+    assert_eq!(f.defs.len(), 2);
+    assert!(f.defs.iter().all(|d| d.kind == pdxl_eu5::kinds::CUSTOM_LOC));
+    assert!(
+        f.refs
+            .iter()
+            .any(|r| r.name == "base_name" && r.kind == pdxl_eu5::kinds::CUSTOM_LOC)
+    );
+    // localization_key is intentionally not validated against one language.
+    assert!(f.refs.iter().all(|r| r.name != "base_name_ADJ"));
+
+    let io = extract(
+        "x = { custom_name = base_name }\n",
+        "in_game/common/international_organizations/x.txt",
+    );
+    assert!(
+        io.refs
+            .iter()
+            .any(|r| r.name == "base_name" && r.kind == pdxl_eu5::kinds::CUSTOM_LOC)
+    );
+
+    use pdxl_analysis::context::{ClauseKind, context_of_chain};
+    let schema = pdxl_eu5::contexts::context_schema();
+    let body = context_of_chain(
+        [b"base_name".as_slice()],
+        "in_game/common/customizable_localization/names.txt",
+        schema,
+    );
+    assert!(matches!(body, ClauseKind::Struct(spec) if spec.name == "customizable localization"));
+    assert!(matches!(
+        pdxl_analysis::context::resolve_key(body, "text", true),
+        ClauseKind::Struct(spec) if spec.name == "customizable localization text"
+    ));
+}
+
+#[test]
 fn parliament_type_defs_refs_and_body() {
     let f = extract(
         "assembly = {\n\

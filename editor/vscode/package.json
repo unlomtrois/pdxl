@@ -2,7 +2,7 @@
   "name": "pdxl",
   "displayName": "pdxl",
   "description": "Live diagnostics for Paradox script (CK3, ...) via the pdxl language server.",
-  "version": "0.79.0",
+  "version": "0.89.0",
   "publisher": "unlomtrois",
   "license": "MIT",
   "repository": {
@@ -41,6 +41,11 @@
       {
         "command": "pdxl.pickServerPath",
         "title": "pdxl: Pick Server Binary Path",
+        "category": "pdxl"
+      },
+      {
+        "command": "pdxl.formatFields",
+        "title": "Format Fields",
         "category": "pdxl"
       }
     ],
@@ -92,6 +97,14 @@
     },
     "languages": [
       {
+        "id": "pdx-yml",
+        "aliases": [
+          "Paradox Localization",
+          "PDX-YML"
+        ],
+        "configuration": "./language-configuration-yml.json"
+      },
+      {
         "id": "pdxl-gui",
         "aliases": [
           "Paradox GUI",
@@ -104,6 +117,10 @@
       }
     ],
     "configurationDefaults": {
+      "[pdx-yml]": {
+        "editor.wordBasedSuggestions": "off",
+        "editor.semanticHighlighting.enabled": true
+      },
       "[pdxl-gui]": {
         "editor.quickSuggestions": {
           "other": "on",

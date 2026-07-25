@@ -14,9 +14,9 @@
 //! - the `declare_war_on_target_casus_belli` and `laws = { <law> = <policy> }`
 //!   rules live with their target kinds in [`super::unlocks`].
 //!
-//! `custom_name = X` names a customizable-localization key (that domain is
-//! deliberately unmodeled, as elsewhere); `leadership_election_resolution`
-//! names a parliament resolution (unmodeled, 3 refs); the readme's
+//! `custom_name = X` references live with the customizable-localization target
+//! kind; `leadership_election_resolution` names a parliament resolution
+//! (unmodeled, 3 refs); the readme's
 //! `<currency type> = yes` treasury toggles are dynamic — the IO body keeps
 //! [`Fallback::Ignore`] for them.
 
@@ -147,6 +147,7 @@ static INTERNATIONAL_ORGANIZATION: StructSpec = StructSpec {
         ("can_vote_in_parliament", country_trigger("Can a member vote in the parliament. *(corpus)*")),
         ("laws", block(Struct(&REF_LIST)).doc("Laws (and their initial policies) enacted when the IO is set up. *(corpus)*")),
         ("special_statuses_implemented", block(Struct(&REF_LIST)).doc("Special statuses available initially (from `international_organization_special_statuses/`).")),
+        ("gold", toggle("Give the organization a treasury which can hold gold (the only currency enabled by a vanilla IO).")),
         ("payments_implemented", block(Struct(&REF_LIST)).doc("Payments implemented initially (from `international_organization_payments/`).")),
         // Land & buildings.
         ("land_ownership_rule", scalar(Setting).doc("Optional land-ownership rules (from `international_organization_land_ownership_rules/`).")),
@@ -218,7 +219,8 @@ static INTERNATIONAL_ORGANIZATION: StructSpec = StructSpec {
         ("ai_desire_to_attack_other_members", value("AI desire to attack other members (root = attacker, defender = attacked, recipient = IO).")),
         ("ai_issue_voting_bias", value("Extra reasoning in resolutions (with the ai_issue_voting_bias trigger).")),
     ],
-    // `<currency type> = yes` treasury toggles (`gold = yes`, …) are dynamic.
+    // Other `<currency type> = yes` treasury toggles remain dynamically valid;
+    // `gold` is explicit because it is the only currency used by the corpus.
     fallback: Fallback::Ignore,
 };
 
@@ -227,20 +229,24 @@ static INTERNATIONAL_ORGANIZATION: StructSpec = StructSpec {
 static SPECIAL_STATUS: StructSpec = StructSpec {
     name: "special status",
     fields: &[
-        ("priority", scalar(Setting).doc("GUI-list importance; higher is better (default 1; 0 = equal to regular membership).")),
-        ("can_bestow_trigger", country_trigger("Can a country have this status (root = country, scope:recipient = organization, scope:source = status).")),
-        ("auto_bestowal_trigger", country_trigger("Should a country automatically gain this status.")),
-        ("auto_rescind_trigger", country_trigger("Should a country automatically lose this status.")),
+        // Limits and presentation priority come first in most vanilla rows.
         ("max_countries", value("Maximum number of countries with this status (root = IO, scope:source = status).")),
-        ("on_bestowed_effect", block_scoped(Effect, "country").doc("Fired when the status is set on a country.")),
-        ("on_rescinded_effect", block_scoped(Effect, "country").doc("Fired when the status is removed from a country.")),
-        ("modifier", block(StaticModifier).doc("Modifier applied to countries with this status.")),
-        ("leader_modifier", block(StaticModifier).doc("Modifier applied to the leader, multiplied by the number of countries with this status.")),
-        ("map_color", value("Scripted color on the map (root = country, scope:recipient = organization).")),
-        ("special_status_power", value("Political power of this status group, for IO parliament issues.")),
+        ("priority", scalar(Setting).doc("GUI-list importance; higher is better (default 1; 0 = equal to regular membership).")),
+        // Identity/role flags belong with the header, before behavior blocks.
         ("leader", toggle("This status marks the organization's leader. *(corpus)*")),
         ("elector", toggle("HRE: this status votes in imperial elections. *(corpus)*")),
         ("can_be_invited", toggle("Countries can be invited into this status. *(corpus)*")),
+        // Passive behavior before conditional acquisition/loss logic.
+        ("modifier", block(StaticModifier).doc("Modifier applied to countries with this status.")),
+        ("leader_modifier", block(StaticModifier).doc("Modifier applied to the leader, multiplied by the number of countries with this status.")),
+        ("can_bestow_trigger", country_trigger("Can a country have this status (root = country, scope:recipient = organization, scope:source = status).")),
+        ("auto_bestowal_trigger", country_trigger("Should a country automatically gain this status.")),
+        ("auto_rescind_trigger", country_trigger("Should a country automatically lose this status.")),
+        ("on_bestowed_effect", block_scoped(Effect, "country").doc("Fired when the status is set on a country.")),
+        ("on_rescinded_effect", block_scoped(Effect, "country").doc("Fired when the status is removed from a country.")),
+        // Political weight, then map presentation.
+        ("special_status_power", value("Political power of this status group, for IO parliament issues.")),
+        ("map_color", value("Scripted color on the map (root = country, scope:recipient = organization).")),
     ],
     fallback: Fallback::Deny,
 };

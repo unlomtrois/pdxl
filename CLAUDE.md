@@ -16,8 +16,8 @@ Game schemas are **feature-gated** (one game per binary): every build/test of
 selects the rules crate through the `pdxl-game` facade.
 
 ```sh
-cargo test --workspace --features pdxl-cli/ck3,pdxl-mcp/ck3   # all tests incl. goldens
-cargo clippy --workspace --all-targets --features pdxl-cli/ck3,pdxl-mcp/ck3 -- -D warnings
+cargo test --release --workspace --features pdxl-cli/ck3,pdxl-mcp/ck3   # all tests incl. goldens
+cargo clippy --release --workspace --all-targets --features pdxl-cli/ck3,pdxl-mcp/ck3 -- -D warnings
 cargo fmt --all --check
 cargo build --release -p pdxl-cli --features ck3         # → target/release/pdxl (CK3)
 cargo build --release -p pdxl-cli --features eu5         # → target/release/pdxl (EU5)
@@ -27,22 +27,22 @@ Golden regression suites (regenerate deliberately, review the diff like code):
 
 ```sh
 # Each golden suite lives in the crate it tests (dump serializer inlined there):
-UPDATE_GOLDENS=1 cargo test -p pdxl-lexer --test golden      # token dump
-UPDATE_GOLDENS=1 cargo test -p pdxl-parser --test golden     # tree dump
-UPDATE_GOLDENS=1 cargo test -p pdxl-fileset --test golden    # scan/descriptor dump
-UPDATE_GOLDENS=1 cargo test -p pdxl-ck3 --test facts         # facts dump (schema-coupled)
-UPDATE_GOLDENS=1 cargo test -p pdxl-project --test golden    # whole-project dump
-UPDATE_GOLDENS=1 cargo test -p pdxl-cli --test cli
+UPDATE_GOLDENS=1 cargo test --release -p pdxl-lexer --test golden      # token dump
+UPDATE_GOLDENS=1 cargo test --release -p pdxl-parser --test golden     # tree dump
+UPDATE_GOLDENS=1 cargo test --release -p pdxl-fileset --test golden    # scan/descriptor dump
+UPDATE_GOLDENS=1 cargo test --release -p pdxl-ck3 --test facts         # facts dump (schema-coupled)
+UPDATE_GOLDENS=1 cargo test --release -p pdxl-project --test golden    # whole-project dump
+UPDATE_GOLDENS=1 cargo test --release -p pdxl-cli --test cli
 ```
 
 Regenerate the game-doc tables after a game patch (needs the game's dumped
 logs, incl. `data_types/` from the `DumpDataTypes` console command):
 
 ```sh
-cargo run -p pdxl-gamedocs --bin gen-tables -- \
+cargo run --release -p pdxl-gamedocs --bin gen-tables -- \
   --logs "<paradox user dir>/Crusader Kings III/logs" --out crates/pdxl-ck3/src/tables
 # EU5 (Markdown doc dialect; dumps live in the Proton-prefix user dir):
-cargo run -p pdxl-gamedocs --bin gen-tables -- \
+cargo run --release -p pdxl-gamedocs --bin gen-tables -- \
   --logs "<EU5 user dir>/docs" --data-types "<EU5 user dir>/logs/data_types" \
   --out crates/pdxl-eu5/src/tables
 ```
@@ -82,6 +82,7 @@ crates/pdxl-lsp        the language server over pdxl-project
 
 ### Key invariants & gotchas
 
+- Always use Cargo's release profile (`--release`) for builds, tests, Clippy, and runs. We do not debug dev-profile artifacts, and avoiding them saves substantial disk space.
 - Bump `pdxl_analysis::ANALYSIS_VERSION` whenever schema/extraction semantics
   change; `pdxl_ast::SYNTAX_VERSION` for lexer/parser/tree changes (cache
   keys). Bump the workspace crate version (`[workspace.package] version` in

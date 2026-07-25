@@ -39,9 +39,10 @@ const OPERATOR: u32 = 7;
 const FUNCTION: u32 = 8;
 const TYPE: u32 = 9;
 const NAMESPACE: u32 = 10;
+const ENUM_MEMBER: u32 = 11;
 
 /// Legend, in wire-index order (see the constants above).
-pub const TOKEN_TYPES: [SemanticTokenType; 11] = [
+pub const TOKEN_TYPES: [SemanticTokenType; 12] = [
     SemanticTokenType::PROPERTY,
     SemanticTokenType::VARIABLE,
     SemanticTokenType::NUMBER,
@@ -53,6 +54,7 @@ pub const TOKEN_TYPES: [SemanticTokenType; 11] = [
     SemanticTokenType::FUNCTION,
     SemanticTokenType::TYPE,
     SemanticTokenType::NAMESPACE,
+    SemanticTokenType::ENUM_MEMBER,
 ];
 
 /// `defaultLibrary` marks documented builtins; `unresolved` lets clients render
@@ -206,6 +208,49 @@ pub fn tokens(src: &[u8], resolved: &[(u32, u32)], schema: Option<&Schema>) -> V
 /// a gui layer — dialect keywords (`types`/`type`/`template`/`block`/…),
 /// template/type definition names and bases, and datafunction chain segments
 /// resolved against the `DumpDataTypes` registry.
+/// Semantic highlighting for Paradox localization `.yml` files.
+pub fn tokens_yml(src: &[u8], resolved: &[(u32, u32)]) -> Vec<SemanticToken> {
+    use pdxl_yml::TokenKind as Y;
+    let functions: HashSet<&str> = pdxl_game::tables::DATA_FNS
+        .iter()
+        .map(|row| row.name)
+        .collect();
+    let emit: Vec<(u32, u32, u32, u32)> = pdxl_yml::tokens(src)
+        .into_iter()
+        .map(|token| {
+            let (ty, mods) = match token.kind {
+                Y::Header => (NAMESPACE, 0),
+                Y::Key => (PROPERTY, 0),
+                Y::Comment => (COMMENT, 0),
+                Y::Text => (STRING, 0),
+                Y::LocReference => (TYPE, 0),
+                Y::Format => (KEYWORD, 0),
+                Y::Icon => (MACRO, 0),
+                Y::FunctionCandidate => {
+                    let name = std::str::from_utf8(&src[token.start as usize..token.end as usize])
+                        .unwrap_or("");
+                    if functions.contains(name) {
+                        (FUNCTION, MOD_DEFAULT_LIBRARY)
+                    } else {
+                        (VARIABLE, 0)
+                    }
+                }
+            };
+            (token.start, token.end, ty, mods)
+        })
+        .collect();
+    // Entity keys are closed, schema-selected names rather than variables.
+    // `enumMember` also gives themes a distinct class from both surrounding
+    // prose and the datafunction itself. `$loc_key$` remains `type`.
+    let overrides = resolved
+        .iter()
+        .map(|&(start, end)| (start, end, ENUM_MEMBER, 0))
+        .collect();
+    let mut emit = apply_overrides(emit, overrides);
+    emit.sort_by_key(|&(start, ..)| start);
+    encode(src, &emit)
+}
+
 pub fn tokens_gui(src: &[u8], resolved: &[(u32, u32)]) -> Vec<SemanticToken> {
     tokens_impl(src, resolved, None, true)
 }
@@ -427,6 +472,36 @@ fn tokens_impl(
             length,
             token_type: ty,
             token_modifiers_bitset: mods,
+        });
+        prev_line = start.line;
+        prev_start = start.character;
+    }
+    data
+}
+
+fn encode(src: &[u8], emit: &[(u32, u32, u32, u32)]) -> Vec<SemanticToken> {
+    let offsets: Vec<u32> = emit.iter().flat_map(|&(s, e, ..)| [s, e]).collect();
+    let positions = offsets_to_positions(src, &offsets);
+    let mut data = Vec::with_capacity(emit.len());
+    let (mut prev_line, mut prev_start) = (0, 0);
+    for (i, &(_, _, token_type, token_modifiers_bitset)) in emit.iter().enumerate() {
+        let start = positions[2 * i];
+        let end = positions[2 * i + 1];
+        if start.line != end.line || start == end {
+            continue;
+        }
+        let delta_line = start.line - prev_line;
+        let delta_start = if delta_line == 0 {
+            start.character - prev_start
+        } else {
+            start.character
+        };
+        data.push(SemanticToken {
+            delta_line,
+            delta_start,
+            length: end.character - start.character,
+            token_type,
+            token_modifiers_bitset,
         });
         prev_line = start.line;
         prev_start = start.character;

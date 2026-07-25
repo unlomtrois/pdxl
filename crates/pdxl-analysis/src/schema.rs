@@ -75,6 +75,11 @@ pub enum DefShape {
     /// `default`, `flag`, `@vars` — are excluded for free by the block
     /// check.)
     GroupedBlocks { exclude: &'static [&'static str] },
+    /// Definitions are fields directly inside top-level namespace blocks and
+    /// resolve as `NAMESPACE<separator>FIELD` (EU5 defines:
+    /// `NMapColors = { COLOR = … }` → `NMapColors|COLOR`). Values may be
+    /// scalar or block; top-level `@` constants are ignored.
+    QualifiedFields { separator: &'static str },
     /// Definitions come from a semicolon-separated CSV file whose **first
     /// column is a numeric id** (CK3 `map_data/definition.csv`). Not a script
     /// shape: the project layer routes matching files to a CSV reader instead
@@ -148,9 +153,18 @@ pub struct RefRule {
     pub alt: &'static [KindId],
 }
 
+/// An implicit localization convention owned by an entity kind. For an entity
+/// `foo`, suffix `"_desc"` links localization key `foo_desc`; empty suffix
+/// links `foo` itself. These are optional project relationships, not strict
+/// extraction references.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ImplicitLocPattern {
+    pub kind: KindId,
+    pub suffix: &'static str,
+}
+
 /// ALL knowledge about one game concept, co-located: adding a kind to a game
-/// is one row here (one KindId const in the game crate, referenced
-/// here).
+/// is one row here (one KindId const in the game crate, referenced here).
 #[derive(Clone, Debug)]
 pub struct KindSpec {
     pub kind: KindId,
@@ -238,6 +252,10 @@ pub struct Schema {
     alias_keys: HashMap<KindId, &'static [&'static str]>,
     /// kind → its presentation hint.
     icons: HashMap<KindId, IconHint>,
+    /// Entity-owned implicit localization suffix conventions.
+    implicit_loc: HashMap<KindId, Vec<ImplicitLocPattern>>,
+    /// Localization datafunction name → kind referenced by its first argument.
+    loc_datafn_arg_refs: HashMap<&'static str, KindId>,
     /// Relative-scope keywords a reference value may be at runtime
     /// (`has_trait = prev`); unresolvable without scope tracking, so skipped.
     scope_keywords: HashSet<&'static str>,
@@ -350,6 +368,38 @@ impl Schema {
             }
         }
         schema
+    }
+
+    /// Registers entity-owned implicit localization conventions.
+    pub fn set_implicit_loc_patterns(&mut self, patterns: &[ImplicitLocPattern]) {
+        for &pattern in patterns {
+            self.implicit_loc
+                .entry(pattern.kind)
+                .or_default()
+                .push(pattern);
+        }
+    }
+
+    /// Implicit localization conventions for an entity kind.
+    pub fn implicit_loc_patterns(&self, kind: KindId) -> &[ImplicitLocPattern] {
+        self.implicit_loc.get(&kind).map_or(&[], Vec::as_slice)
+    }
+
+    /// All implicit localization conventions, in registration order by kind.
+    pub fn all_implicit_loc_patterns(&self) -> impl Iterator<Item = ImplicitLocPattern> + '_ {
+        self.kinds
+            .iter()
+            .flat_map(|kind| self.implicit_loc_patterns(*kind).iter().copied())
+    }
+
+    /// Registers localization datafunctions whose first quoted argument names
+    /// an entity (for example `ShowAdvanceName('renaissance_advance')`).
+    pub fn set_loc_datafn_arg_refs(&mut self, refs: &[(&'static str, KindId)]) {
+        self.loc_datafn_arg_refs.extend(refs.iter().copied());
+    }
+
+    pub fn loc_datafn_arg_kind(&self, function: &str) -> Option<KindId> {
+        self.loc_datafn_arg_refs.get(function).copied()
     }
 
     /// The def rule whose prefix matches `rel_path`, if any (Go's `ruleFor`).

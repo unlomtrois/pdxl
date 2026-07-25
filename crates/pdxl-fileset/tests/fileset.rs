@@ -372,6 +372,15 @@ fn localization_yml_opt_in() {
     t.write("localization/english/a_l_english.yml", "l_english:\n");
     t.write("localization/russian/a_l_russian.yml", "l_russian:\n");
     t.write("localization/english/notes.txt", ""); // .txt always scans
+    t.write(
+        "in_game/localization/events/a_l_english.yml",
+        "l_english:\n",
+    );
+    t.write(
+        "in_game/localization/events/a_l_russian.yml",
+        "l_russian:\n",
+    );
+    t.write("main_menu/localization/ui_l_english.yml", "l_english:\n");
     t.write("common/traits/x.txt", "");
 
     // Default: .txt only — yml never enters the overlay (Go parity).
@@ -391,5 +400,17 @@ fn localization_yml_opt_in() {
         .expect("yml scanned");
     assert_eq!(e.kind, FileKind::Mod, "mod loc shadows vanilla loc");
     assert!(s.resolve("localization/russian/a_l_russian.yml").is_none());
+    assert!(
+        s.resolve("in_game/localization/events/a_l_english.yml")
+            .is_some()
+    );
+    assert!(
+        s.resolve("main_menu/localization/ui_l_english.yml")
+            .is_some()
+    );
+    assert!(
+        s.resolve("in_game/localization/events/a_l_russian.yml")
+            .is_none()
+    );
     validate_fileset(&s).unwrap();
 }

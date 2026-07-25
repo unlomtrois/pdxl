@@ -1,5 +1,5 @@
 //! Localization keys, defined outside PDXScript in
-//! `localization/<lang>/**/*.yml` (extracted by `pdxl-loc`, so no
+//! `localization/<lang>/**/*.yml` (extracted by `pdxl-yml`, so no
 //! `DefSource`), referenced by the text-bearing fields of events and
 //! decisions.
 

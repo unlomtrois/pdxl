@@ -222,11 +222,20 @@ impl FileSet {
             return false;
         };
         let key = normalize_key(rel);
-        key.ends_with(".yml")
-            && key
-                .strip_prefix("localization/")
-                .and_then(|r| r.strip_prefix(lang.as_str()))
-                .is_some_and(|r| r.starts_with('/'))
+        if !key.ends_with(".yml") {
+            return false;
+        }
+        // CK3: localization/<language>/**/*.yml.
+        let directory_dialect = key
+            .strip_prefix("localization/")
+            .and_then(|r| r.strip_prefix(lang.as_str()))
+            .is_some_and(|r| r.starts_with('/'));
+        // EU5 module roots keep all languages beside each other and encode the
+        // language in the filename: in_game/localization/**/*_l_english.yml.
+        let module_dialect = (key.starts_with("in_game/localization/")
+            || key.starts_with("main_menu/localization/"))
+            && key.ends_with(&format!("_l_{lang}.yml"));
+        directory_dialect || module_dialect
     }
 
     /// Whether `rel` is the opted-in province-definition CSV.
