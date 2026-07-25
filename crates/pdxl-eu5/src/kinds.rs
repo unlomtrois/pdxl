@@ -41,3 +41,6 @@ pub const IO_SPECIAL_STATUS: KindId = KindId::new("special_status");
 pub const IO_PAYMENT: KindId = KindId::new("io_payment");
 pub const IO_LAND_OWNERSHIP_RULE: KindId = KindId::new("land_ownership_rule");
 pub const PARLIAMENT_TYPE: KindId = KindId::new("parliament_type");
+pub const CULTURE_GROUP: KindId = KindId::new("culture_group");
+pub const LANGUAGE: KindId = KindId::new("language");
+pub const LANGUAGE_FAMILY: KindId = KindId::new("language_family");

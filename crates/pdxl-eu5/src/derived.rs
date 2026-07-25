@@ -69,6 +69,8 @@ const TARGET_KINDS: &[(&str, KindId, &[KindId])] = &[
         &[],
     ),
     ("special_status", kinds::IO_SPECIAL_STATUS, &[]),
+    ("culture_group", kinds::CULTURE_GROUP, &[]),
+    ("language", kinds::LANGUAGE, &[]),
     ("parliament_type", kinds::PARLIAMENT_TYPE, &[]),
 ];
 
