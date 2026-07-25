@@ -38,7 +38,10 @@ pub fn extract_facts(
     // keyword decides the kind (`scripted_effect` → ScriptedEffect) regardless
     // of directory, so these are harvested before — and instead of — the
     // directory rule, which would otherwise mis-kind them (e.g. as events).
-    let rule = schema.rule_for(rel_path);
+    // A file can match several def rules (EU5 building files host both the
+    // building defs and nested production-method containers); every matching
+    // rule's shape is applied per top-level node.
+    let rules: Vec<&crate::schema::DefRule> = schema.rules_for(rel_path).collect();
     let mut pending_typed: Option<KindId> = None;
     for node in tree.children(tree.root()) {
         let kind = tree.node(node).kind;
@@ -71,26 +74,27 @@ pub fn extract_facts(
         {
             continue;
         }
-        let Some(rule) = rule else { continue };
-        match rule.shape {
-            crate::schema::DefShape::TopLevel => {
-                harvest_def(tree, node, rule.kind, rel_path, schema, &mut facts)
+        for rule in &rules {
+            match rule.shape {
+                crate::schema::DefShape::TopLevel => {
+                    harvest_def(tree, node, rule.kind, rel_path, schema, &mut facts)
+                }
+                crate::schema::DefShape::TopLevelValued => {
+                    harvest_valued_def(tree, node, rule.kind, rel_path, &mut facts)
+                }
+                crate::schema::DefShape::Tree { key_prefixes } => {
+                    harvest_nested_defs(tree, node, key_prefixes, rule.kind, rel_path, &mut facts)
+                }
+                crate::schema::DefShape::ChildrenOf { containers } => harvest_container_defs(
+                    tree, node, containers, rule.kind, rel_path, schema, &mut facts,
+                ),
+                crate::schema::DefShape::GroupedBlocks { exclude } => harvest_grouped_defs(
+                    tree, node, exclude, rule.kind, rel_path, schema, &mut facts,
+                ),
+                // CSV-sourced definitions never reach the script extractor —
+                // the project layer routes those files to its own CSV reader.
+                crate::schema::DefShape::IdCsv => {}
             }
-            crate::schema::DefShape::TopLevelValued => {
-                harvest_valued_def(tree, node, rule.kind, rel_path, &mut facts)
-            }
-            crate::schema::DefShape::Tree { key_prefixes } => {
-                harvest_nested_defs(tree, node, key_prefixes, rule.kind, rel_path, &mut facts)
-            }
-            crate::schema::DefShape::ChildrenOf { containers } => harvest_container_defs(
-                tree, node, containers, rule.kind, rel_path, schema, &mut facts,
-            ),
-            crate::schema::DefShape::GroupedBlocks { exclude } => {
-                harvest_grouped_defs(tree, node, exclude, rule.kind, rel_path, schema, &mut facts)
-            }
-            // CSV-sourced definitions never reach the script extractor — the
-            // project layer routes those files to its own CSV reader.
-            crate::schema::DefShape::IdCsv => {}
         }
     }
 

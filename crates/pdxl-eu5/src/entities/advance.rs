@@ -15,7 +15,7 @@
 use crate::kinds;
 use pdxl_analysis::context::ClauseKind::{self, ScriptedModifier, StaticModifier, Struct, Trigger};
 use pdxl_analysis::context::ScalarKind::Setting;
-use pdxl_analysis::context::{Fallback, StructSpec, block, scalar};
+use pdxl_analysis::context::{Fallback, StructSpec, block, scalar, scalar_or_block};
 use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
@@ -116,7 +116,26 @@ const fn in_advances(key: &'static str) -> RefRule {
     }
 }
 
-/// The body of one advance (inline doc header + corpus).
+/// `modifier_while_progressing = { … }` — a triggered, scaled modifier
+/// applied while the advance is being researched (readme).
+static MODIFIER_WHILE_PROGRESSING: StructSpec = StructSpec {
+    name: "modifier while progressing",
+    fields: &[
+        (
+            "potential_trigger",
+            block(Trigger).doc("Conditions for the modifier to apply while researching."),
+        ),
+        (
+            "scale",
+            scalar_or_block(Setting, ClauseKind::ScriptValue)
+                .doc("Scale factor for the modifiers (a maths/script value)."),
+        ),
+    ],
+    // Everything else in the block is the modifier tags themselves.
+    fallback: Fallback::Modifier,
+};
+
+/// The body of one advance (`readme.txt` + corpus).
 static ADVANCE: StructSpec = StructSpec {
     name: "advance",
     fields: &[
@@ -172,6 +191,65 @@ static ADVANCE: StructSpec = StructSpec {
         (
             "unlock_law",
             scalar(Setting).doc("Unlocks a law (`in_game/common/laws/`)."),
+        ),
+        (
+            "unlock_subject_type",
+            scalar(Setting).doc("Unlocks a subject type (`in_game/common/subject_types/`)."),
+        ),
+        (
+            "unlock_ability",
+            scalar(Setting).doc("Unlocks a unit ability (`in_game/common/unit_abilities/`)."),
+        ),
+        (
+            "unlock_interaction",
+            scalar(Setting)
+                .doc("Unlocks a character interaction (`in_game/common/character_interactions/`)."),
+        ),
+        (
+            "unlock_country_interaction",
+            scalar(Setting)
+                .doc("Unlocks a country interaction (`in_game/common/country_interactions/`)."),
+        ),
+        (
+            "unlock_relation_type",
+            scalar(Setting).doc("Unlocks a relation type (`in_game/common/scripted_relations/`)."),
+        ),
+        (
+            "unlock_levy",
+            scalar(Setting).doc("Unlocks a levy (`in_game/common/levies/`)."),
+        ),
+        (
+            "unlock_government_reform",
+            scalar(Setting)
+                .doc("Unlocks a government reform (`in_game/common/government_reforms/`)."),
+        ),
+        (
+            "unlock_casus_belli",
+            scalar(Setting).doc("Unlocks a casus belli (`in_game/common/casus_belli/`)."),
+        ),
+        (
+            "unlock_production_method",
+            scalar(Setting)
+                .doc("Unlocks a production method (own dir, or inline in a building body)."),
+        ),
+        (
+            "country_type",
+            scalar(Setting)
+                .doc("Only available to this country type.")
+                .values(&["location", "pop", "building", "army"]),
+        ),
+        (
+            "allow_children",
+            scalar(Setting)
+                .doc("Force the advance to be a child node (error log if violated).")
+                .values(&["yes", "no"]),
+        ),
+        (
+            "modifier_while_progressing",
+            block(Struct(&MODIFIER_WHILE_PROGRESSING)).doc(
+                "Triggered, scaled modifier applied to the country while this advance is \
+                 being researched.",
+            ),
         ),
         (
             "ai_weight",

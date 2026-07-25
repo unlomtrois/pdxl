@@ -321,6 +321,18 @@ fn subject_type_defs_refs_and_body() {
         .collect();
     assert_eq!(names, vec!["maona", "tributary"]);
 
+    // Advances unlock subject types.
+    let a = extract(
+        "x = { age = age_3_discovery unlock_subject_type = colonial_nation }\n",
+        "in_game/common/advances/0.txt",
+    );
+    let u = a
+        .refs
+        .iter()
+        .find(|r| r.name == "colonial_nation")
+        .expect("unlock ref");
+    assert_eq!(u.kind, pdxl_eu5::kinds::SUBJECT_TYPE);
+
     // Body contexts: availability triggers are Trigger clauses; lifecycle
     // effects are Effect clauses.
     use pdxl_analysis::context::{ClauseKind, context_of_chain};
@@ -339,4 +351,84 @@ fn subject_type_defs_refs_and_body() {
         pdxl_eu5::contexts::context_schema(),
     );
     assert_eq!(on_enable, ClauseKind::Effect);
+}
+
+#[test]
+fn readme_unlock_targets_and_dual_site_production_methods() {
+    use pdxl_analysis::merge_and_resolve;
+    use std::collections::HashMap;
+
+    // Production methods define in BOTH sites: their own dir and inline
+    // unique_production_methods containers inside building bodies — the
+    // first dual-rule directory (buildings still harvest as buildings).
+    let building = extract(
+        "brewery = {\n\
+         \taudio_tier = 1\n\
+         \tunique_production_methods = {\n\
+         \t\tbavarian_brewery_maintenance = {\n\t\t\twheat = 1.3\n\t\t\tproduced = beer\n\t\t}\n\
+         \t}\n\
+         }\n",
+        "in_game/common/building_types/production_beer.txt",
+    );
+    let kinds_of: Vec<(&str, &str)> = building
+        .defs
+        .iter()
+        .map(|d| (d.name.as_str(), d.kind.name()))
+        .collect();
+    assert!(kinds_of.contains(&("brewery", "building")), "{kinds_of:?}");
+    assert!(
+        kinds_of.contains(&("bavarian_brewery_maintenance", "production_method")),
+        "{kinds_of:?}"
+    );
+
+    // The advance's unlock resolves against the inline definition.
+    let advance = extract(
+        "beer_advance = {\n\
+         \tage = age_2_renaissance\n\
+         \tunlock_production_method = bavarian_brewery_maintenance\n\
+         \tallow_children = yes\n\
+         \tmodifier_while_progressing = {\n\
+         \t\tpotential_trigger = { is_at_war = no }\n\
+         \t\tscale = 0.5\n\
+         \t\tglobal_tax_modifier = 0.1\n\
+         \t}\n\
+         }\n",
+        "in_game/common/advances/1_building_unlocks.txt",
+    );
+    let mut facts = HashMap::new();
+    facts.insert(
+        "in_game/common/building_types/production_beer.txt".to_string(),
+        building,
+    );
+    facts.insert(
+        "in_game/common/advances/1_building_unlocks.txt".to_string(),
+        advance,
+    );
+    let order = [
+        "in_game/common/building_types/production_beer.txt",
+        "in_game/common/advances/1_building_unlocks.txt",
+    ];
+    let (_, diags) = merge_and_resolve(&order, &facts);
+    // age_2_renaissance is genuinely undefined in this two-file fixture.
+    assert_eq!(diags.len(), 1, "{diags:?}");
+    assert!(diags[0].msg.contains("unknown age"));
+
+    // modifier_while_progressing contexts: trigger inside, modifier fallback.
+    use pdxl_analysis::context::{ClauseKind, context_of_chain};
+    let ctx = context_of_chain(
+        [
+            b"beer_advance".as_slice(),
+            b"modifier_while_progressing".as_slice(),
+        ],
+        "in_game/common/advances/0.txt",
+        pdxl_eu5::contexts::context_schema(),
+    );
+    assert_eq!(
+        pdxl_analysis::context::resolve_key(ctx, "potential_trigger", true),
+        ClauseKind::Trigger
+    );
+    assert_eq!(
+        pdxl_analysis::context::resolve_key(ctx, "global_tax_modifier", false),
+        ClauseKind::StaticModifier
+    );
 }

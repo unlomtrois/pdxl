@@ -171,6 +171,12 @@ impl Entity for SubjectType {
                 gate: None,
                 alt: &[],
             },
+            // Advances unlock subject types (8 refs, 0 unresolved).
+            RefRule {
+                pattern: RefPattern::KeyValue("unlock_subject_type"),
+                gate: None,
+                alt: &[],
+            },
         ],
         ..def_only(kinds::SUBJECT_TYPE, IconHint::Hierarchy, SUBJECT_TYPES_DIR)
     }];

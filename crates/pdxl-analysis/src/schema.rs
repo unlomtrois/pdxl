@@ -221,8 +221,11 @@ pub(crate) struct TopKeyRule {
 /// compiled from [`KindSpec`] rows into lookup indices.
 #[derive(Clone, Debug, Default)]
 pub struct Schema {
-    /// Directories whose files define symbols. Scanned linearly; prefixes
-    /// must be mutually exclusive (Go parity).
+    /// Directories whose files define symbols. Scanned linearly. Prefixes
+    /// MAY overlap since EU5's dual-site production methods (a directory's
+    /// files can host a second kind's `ChildrenOf` containers next to the
+    /// primary kind's top-level defs); [`Schema::rule_for`] keeps first-match
+    /// semantics for single-rule consumers.
     def_rules: Vec<DefRule>,
     /// key → the reference rules that key can trigger (all key-based
     /// [`RefPattern`]s share this one index).
@@ -350,10 +353,20 @@ impl Schema {
     }
 
     /// The def rule whose prefix matches `rel_path`, if any (Go's `ruleFor`).
+    /// First match in registration order — single-rule consumers (coverage,
+    /// the CSV router) key off the directory's primary kind.
     pub fn rule_for(&self, rel_path: &str) -> Option<&DefRule> {
         self.def_rules
             .iter()
             .find(|r| rel_path.starts_with(r.prefix))
+    }
+
+    /// Every def rule matching `rel_path`, in registration order — extraction
+    /// applies each (a file can host several kinds' definition shapes).
+    pub fn rules_for<'a>(&'a self, rel_path: &'a str) -> impl Iterator<Item = &'a DefRule> {
+        self.def_rules
+            .iter()
+            .filter(move |r| rel_path.starts_with(r.prefix))
     }
 
     /// The presentation hint for a kind ([`IconHint::Object`] when the kind
