@@ -57,6 +57,82 @@ const fn tag_in(dir: &'static str, key: &'static str) -> RefRule {
     }
 }
 
+/// The COUNTRY reference rules: the `c:` literal and `has_or_had_tag`
+/// anywhere, the `first`/`second` diplomacy pairs, plus one gated `tag = X`
+/// rule per directory where the key always means a country tag (surveyed
+/// via `pdxl-graph` + full corpus scan; every listed dir is 0-unresolved
+/// once dynamic tags count).
+macro_rules! country_refs {
+    ($($dir:literal),* $(,)?) => {
+        [
+            RefRule {
+                pattern: RefPattern::ScopePrefix("c"),
+                gate: None,
+                alt: COUNTRY_ALTS,
+            },
+            RefRule {
+                pattern: RefPattern::KeyValue("has_or_had_tag"),
+                gate: None,
+                alt: COUNTRY_ALTS,
+            },
+            tag_in("main_menu/setup/", "first"),
+            tag_in("main_menu/setup/", "second"),
+            // historical_scores' `tag` doubles as a display flag: a country
+            // tag OR a coat-of-arms key (`tag = FRA_revolutionary_republic`
+            // is Napoleon's tricolore) — the CoA joins the alt chain.
+            RefRule {
+                pattern: RefPattern::KeyValue("tag"),
+                gate: Some("in_game/common/historical_scores/"),
+                alt: &[
+                    kinds::FORMABLE_COUNTRY,
+                    kinds::START_COUNTRY,
+                    kinds::DYNAMIC_COUNTRY,
+                    kinds::COAT_OF_ARMS,
+                ],
+            },
+            $(tag_in($dir, "tag"),)*
+        ]
+    };
+}
+
+/// The `tag = X` gates. **Deliberately excluded**:
+/// `in_game/common/customizable_localization/` (its 44k comparisons include
+/// ~1,200 grammar-check tags that exist nowhere statically — `tag = MEDICI`)
+/// and `main_menu/gfx/` (the city_data asset DSL's `tag = raw_resource`).
+static COUNTRY_REFS: [RefRule; 36] = country_refs!(
+    "in_game/events/",
+    "in_game/setup/",
+    "main_menu/setup/",
+    "main_menu/common/achievements/",
+    "in_game/common/ai_scripted_expansion_score/",
+    "in_game/common/building_types/",
+    "in_game/common/cabinet_actions/",
+    "in_game/common/casus_belli/",
+    "in_game/common/country_interactions/",
+    "in_game/common/disasters/",
+    "in_game/common/estate_privileges/",
+    "in_game/common/formable_countries/",
+    "in_game/common/generic_action_ai_lists/",
+    "in_game/common/generic_actions/",
+    "in_game/common/government_reforms/",
+    "in_game/common/heir_selections/",
+    "in_game/common/insults/",
+    "in_game/common/international_organization_special_statuses/",
+    "in_game/common/international_organizations/",
+    "in_game/common/join_war_rules/",
+    "in_game/common/laws/",
+    "in_game/common/on_action/",
+    "in_game/common/peace_treaties/",
+    "in_game/common/resolutions/",
+    "in_game/common/rival_criteria/",
+    "in_game/common/scriptable_hints/",
+    "in_game/common/scripted_country_names/",
+    "in_game/common/scripted_relations/",
+    "in_game/common/scripted_triggers/",
+    "in_game/common/situations/",
+    "in_game/common/subject_types/",
+);
+
 /// A name-list block (`male_regnal_names = { … }`).
 static NAME_LIST: StructSpec = StructSpec {
     name: "regnal names",
@@ -138,31 +214,7 @@ impl Entity for Country {
                 dir_prefix: COUNTRIES_DIR,
                 shape: DefShape::TopLevel,
             }),
-            refs: &[
-                // `c:TAG` anywhere; formables chain as the alternate kind
-                // (their `tag = X` aliases carry the formed tags).
-                RefRule {
-                    pattern: RefPattern::ScopePrefix("c"),
-                    gate: None,
-                    alt: COUNTRY_ALTS,
-                },
-                // The bare-tag trigger works everywhere.
-                RefRule {
-                    pattern: RefPattern::KeyValue("has_or_had_tag"),
-                    gate: None,
-                    alt: COUNTRY_ALTS,
-                },
-                // Bare `tag = X` where it always means a country (see the
-                // module doc for why customizable_localization is left out).
-                tag_in("in_game/events/", "tag"),
-                tag_in("main_menu/setup/", "tag"),
-                tag_in(FORMABLES_DIR, "tag"),
-                tag_in("in_game/common/on_action/", "tag"),
-                tag_in("in_game/common/generic_actions/", "tag"),
-                // Diplomacy pairs (`first`/`second` relation endpoints).
-                tag_in("main_menu/setup/", "first"),
-                tag_in("main_menu/setup/", "second"),
-            ],
+            refs: &COUNTRY_REFS,
             aliases: &[],
         },
         KindSpec {
