@@ -383,3 +383,37 @@ export function detectGame(workspaceRoot: string | undefined): Game {
   }
   return "ck3";
 }
+
+/** The vanilla game directory for `game`: an explicit per-game setting wins;
+ *  the legacy `pdxl.gamePath` counts only for CK3 (it predates multi-game and
+ *  points at CK3 for existing users); otherwise the default Steam install
+ *  locations are probed. */
+export function resolveGamePath(
+  game: Game,
+  perGameSetting: string,
+  legacySetting: string,
+): { path: string; source: "setting" | "legacy" | "steam" } | undefined {
+  if (perGameSetting.trim()) {
+    return { path: perGameSetting.trim(), source: "setting" };
+  }
+  if (game === "ck3" && legacySetting.trim()) {
+    return { path: legacySetting.trim(), source: "legacy" };
+  }
+  const name = game === "ck3" ? "Crusader Kings III" : "Europa Universalis V";
+  const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
+  const candidates = [
+    path.join(home, ".local/share/Steam/steamapps/common", name, "game"),
+    path.join(home, "Library/Application Support/Steam/steamapps/common", name, "game"),
+    path.join("C:\\Program Files (x86)\\Steam\\steamapps\\common", name, "game"),
+  ];
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate)) {
+        return { path: candidate, source: "steam" };
+      }
+    } catch {
+      // Unreadable candidate: keep probing.
+    }
+  }
+  return undefined;
+}

@@ -8,6 +8,7 @@ import {
 import {
   Game,
   detectGame,
+  resolveGamePath,
   installServer,
   isNewerVersion,
   latestReleaseVersion,
@@ -80,11 +81,27 @@ async function startClient(
   source: "setting" | "managed" | "path" = "managed",
 ): Promise<void> {
   const config = vscode.workspace.getConfiguration("pdxl");
-  const gamePath = config.get<string>("gamePath", "");
+  // Per-game vanilla dir: explicit setting → legacy pdxl.gamePath (CK3 only,
+  // it predates multi-game) → Steam auto-discovery.
+  const resolved = resolveGamePath(
+    game,
+    config.get<string>(game === "ck3" ? "gamePathCk3" : "gamePathEu5", ""),
+    config.get<string>("gamePath", ""),
+  );
+  const gamePath = resolved?.path ?? "";
   const logLevel = config.get<string>("logLevel", "info");
 
   log(`server command: ${command}`);
-  log(`gamePath: ${gamePath || "(not set)"}`);
+  log(
+    `gamePath (${game}): ${gamePath || "(not found)"}` +
+      (resolved ? ` [${resolved.source}]` : ""),
+  );
+  if (!gamePath) {
+    void vscode.window.showWarningMessage(
+      `pdxl: no ${game} game directory configured or found — only mod files ` +
+        `will be analyzed. Set pdxl.gamePath${game === "ck3" ? "Ck3" : "Eu5"}.`,
+    );
+  }
   log(`logLevel: ${logLevel}`);
 
   const serverArgs = ["lsp", "--log-level", logLevel];

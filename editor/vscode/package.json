@@ -49,7 +49,7 @@
         "pdxl.gamePath": {
           "type": "string",
           "default": "",
-          "description": "Path to the vanilla game directory (e.g. .../Crusader Kings III/game). Used to resolve references against base-game definitions."
+          "description": "Legacy: the CK3 vanilla game directory (predates multi-game; only used for CK3 workspaces). Prefer pdxl.gamePathCk3 / pdxl.gamePathEu5."
         },
         "pdxl.logLevel": {
           "type": "string",
@@ -71,6 +71,16 @@
           ],
           "default": "auto",
           "description": "Which game this workspace targets (selects the server binary; the schema is compiled in). \"auto\" detects the EU5-era mod layout (.metadata/metadata.json or in_game/main_menu roots) and falls back to CK3."
+        },
+        "pdxl.gamePathCk3": {
+          "type": "string",
+          "default": "",
+          "description": "CK3 vanilla game directory (…/Crusader Kings III/game). Empty = legacy pdxl.gamePath, then the default Steam locations."
+        },
+        "pdxl.gamePathEu5": {
+          "type": "string",
+          "default": "",
+          "description": "EU5 vanilla game directory (…/Europa Universalis V/game). Empty = probed from the default Steam locations."
         }
       }
     },
