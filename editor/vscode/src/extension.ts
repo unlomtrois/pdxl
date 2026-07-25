@@ -19,6 +19,38 @@ let client: LanguageClient | undefined;
 let output: vscode.OutputChannel | undefined;
 let statusBar: vscode.StatusBarItem | undefined;
 let installPromptShown = false;
+const unresolvedDocDecoration = vscode.window.createTextEditorDecorationType({
+  opacity: "0.45",
+});
+/** Applies presentation to ranges the server marked with semantic modifier
+ * bit 1 (`unresolved`). Resolution remains entirely server-owned. */
+function decorateUnresolvedSemanticTokens(
+  document: vscode.TextDocument,
+  tokens: vscode.SemanticTokens,
+): void {
+  const ranges: vscode.Range[] = [];
+  let line = 0;
+  let character = 0;
+  const data = tokens.data;
+  for (let i = 0; i + 4 < data.length; i += 5) {
+    const deltaLine = data[i];
+    line += deltaLine;
+    character = deltaLine === 0 ? character + data[i + 1] : data[i + 1];
+    const length = data[i + 2];
+    const modifiers = data[i + 4];
+    if ((modifiers & (1 << 1)) !== 0) {
+      ranges.push(
+        new vscode.Range(line, character, line, character + length),
+      );
+    }
+  }
+  for (const editor of vscode.window.visibleTextEditors) {
+    if (editor.document.uri.toString() === document.uri.toString()) {
+      editor.setDecorations(unresolvedDocDecoration, ranges);
+    }
+  }
+}
+
 /** The game this workspace targets (detected once at activation). */
 let game: Game = "ck3";
 
@@ -120,6 +152,13 @@ async function startClient(
       { scheme: "file", pattern: "**/*.gui" },
     ],
     initializationOptions: { gamePath },
+    middleware: {
+      provideDocumentSemanticTokens: async (document, token, next) => {
+        const result = await next(document, token);
+        if (result) decorateUnresolvedSemanticTokens(document, result);
+        return result;
+      },
+    },
     // Surface server stderr (slog) in the "pdxl (server)" output channel.
     outputChannelName: "pdxl (server)",
   };
@@ -305,7 +344,7 @@ async function promptInstall(
 
 export function activate(context: vscode.ExtensionContext): void {
   output = vscode.window.createOutputChannel("pdxl (client)", { log: true });
-  context.subscriptions.push(output);
+  context.subscriptions.push(output, unresolvedDocDecoration);
 
   log("pdxl extension activating...");
 

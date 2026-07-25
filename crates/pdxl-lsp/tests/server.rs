@@ -679,10 +679,19 @@ fn doc_ref_semantic_color_reflects_resolution() {
     let uri = uri_for(&t, "events/e.txt");
     let tokens = server.semantic_tokens(&uri).expect("tokens").data;
     // Legend (semantic.rs TOKEN_TYPES): comment=5, type=9.
+    let doc_refs: Vec<_> = tokens.iter().filter(|t| t.token_type == 9).collect();
     assert_eq!(
-        tokens.iter().filter(|t| t.token_type == 9).count(),
-        1,
-        "only the resolved doc ref should be TYPE: {tokens:?}"
+        doc_refs.len(),
+        2,
+        "both doc refs should be TYPE: {tokens:?}"
+    );
+    assert!(
+        doc_refs.iter().any(|t| t.token_modifiers_bitset == 0),
+        "resolved ref has no modifier"
+    );
+    assert!(
+        doc_refs.iter().any(|t| t.token_modifiers_bitset == 1 << 1),
+        "unresolved ref carries the unresolved modifier"
     );
     assert!(tokens.iter().any(|t| t.token_type == 5), "comment segments");
 }

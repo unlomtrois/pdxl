@@ -55,9 +55,14 @@ pub const TOKEN_TYPES: [SemanticTokenType; 11] = [
     SemanticTokenType::NAMESPACE,
 ];
 
-/// Only modifier so far: `defaultLibrary` marks documented builtins (bit 0).
-pub const TOKEN_MODIFIERS: [SemanticTokenModifier; 1] = [SemanticTokenModifier::DEFAULT_LIBRARY];
+/// `defaultLibrary` marks documented builtins; `unresolved` lets clients render
+/// broken smart-doc references as a faded variant of their normal key color.
+pub const TOKEN_MODIFIERS: [SemanticTokenModifier; 2] = [
+    SemanticTokenModifier::DEFAULT_LIBRARY,
+    SemanticTokenModifier::new("unresolved"),
+];
 const MOD_DEFAULT_LIBRARY: u32 = 1 << 0;
+const MOD_UNRESOLVED: u32 = 1 << 1;
 
 /// The legend advertised in `ServerCapabilities`.
 pub fn legend() -> SemanticTokensLegend {
@@ -150,8 +155,8 @@ fn in_resolved(resolved: &[(u32, u32)], off: u32) -> bool {
 /// value byte-ranges the analyzer resolved to a defined symbol (empty when no
 /// project is available yet — builtins and scope prefixes still work).
 /// Emits semantic tokens for a single `#!` doc comment run `[start, end)`:
-/// each resolved `![Name]` is colored as a reference ([`TYPE`]); unresolved
-/// names and everything else stay [`COMMENT`].
+/// each `![Name]` is colored as a reference ([`TYPE`]); unresolved names carry
+/// [`MOD_UNRESOLVED`] so clients can fade them. Everything else stays comment.
 fn emit_doc_comment(
     src: &[u8],
     start: usize,
@@ -173,14 +178,15 @@ fn emit_doc_comment(
                 });
                 let name_start = bracket + off;
                 emit.push((seg as u32, name_start as u32, COMMENT, 0));
-                if content_end > name_start && in_resolved(resolved, name_start as u32) {
-                    emit.push((name_start as u32, content_end as u32, TYPE, 0));
-                    seg = content_end; // the `]` and beyond resume as comment
-                } else {
-                    // Keep the unresolved name and closing bracket in the
-                    // pending comment segment, preserving the muted styling.
-                    seg = name_start;
+                if content_end > name_start {
+                    let modifiers = if in_resolved(resolved, name_start as u32) {
+                        0
+                    } else {
+                        MOD_UNRESOLVED
+                    };
+                    emit.push((name_start as u32, content_end as u32, TYPE, modifiers));
                 }
+                seg = content_end; // the `]` and beyond resume as comment
                 k = content_end;
                 continue;
             }
