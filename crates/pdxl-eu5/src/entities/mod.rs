@@ -13,6 +13,7 @@ mod country;
 mod culture;
 mod estate;
 mod government_reform;
+mod international_organization;
 mod named_color;
 mod religion;
 mod scripted;
@@ -49,6 +50,7 @@ registry!(
     estate::Estate,
     subject_type::SubjectType,
     government_reform::GovernmentReform,
+    international_organization::InternationalOrganization,
     culture::Culture,
     religion::Religion,
     named_color::NamedColor,

@@ -41,7 +41,16 @@ impl Entity for Unlocks {
             ..def_only(kinds::UNIT, IconHint::Object, "in_game/common/unit_types/")
         },
         KindSpec {
-            refs: &[unlock("unlock_law")],
+            refs: &[
+                unlock("unlock_law"),
+                // IO defs enact laws at setup: `laws = { <law> = <policy> }`
+                // (the keys are laws; the policy values stay unmodeled).
+                RefRule {
+                    pattern: RefPattern::KeyBlockKeys("laws"),
+                    gate: Some(super::international_organization::IO_DIR),
+                    alt: &[],
+                },
+            ],
             ..def_only(kinds::LAW, IconHint::Action, "in_game/common/laws/")
         },
         KindSpec {
@@ -82,7 +91,15 @@ impl Entity for Unlocks {
         },
         // Government reforms moved to their own entity (full body model).
         KindSpec {
-            refs: &[unlock("unlock_casus_belli")],
+            refs: &[
+                unlock("unlock_casus_belli"),
+                // The CB an IO uses to declare war on its target.
+                RefRule {
+                    pattern: RefPattern::KeyValue("declare_war_on_target_casus_belli"),
+                    gate: Some(super::international_organization::IO_DIR),
+                    alt: &[],
+                },
+            ],
             ..def_only(
                 kinds::CASUS_BELLI,
                 IconHint::Action,

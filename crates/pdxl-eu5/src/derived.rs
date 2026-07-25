@@ -56,6 +56,20 @@ const TARGET_KINDS: &[(&str, KindId, &[KindId])] = &[
     ("character_interaction", kinds::CHARACTER_INTERACTION, &[]),
     ("country_interaction", kinds::COUNTRY_INTERACTION, &[]),
     ("formable_country", kinds::FORMABLE_COUNTRY, &[]),
+    // Both the IO type-tag link (`international_organization:hre`) and the
+    // type-comparison link resolve to the type defs.
+    (
+        "international_organization",
+        kinds::INTERNATIONAL_ORGANIZATION,
+        &[],
+    ),
+    (
+        "international_organization_type",
+        kinds::INTERNATIONAL_ORGANIZATION,
+        &[],
+    ),
+    ("special_status", kinds::IO_SPECIAL_STATUS, &[]),
+    ("parliament_type", kinds::PARLIAMENT_TYPE, &[]),
 ];
 
 /// `ScopePrefix` rules derived from the scope-link table: one per
