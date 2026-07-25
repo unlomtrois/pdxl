@@ -20,6 +20,7 @@ pdxl-path.workspace = true
 pdxl-fileset.workspace = true
 pdxl-moddesc.workspace = true
 pdxl-analysis.workspace = true
+pdxl-ast.workspace = true
 pdxl-game.workspace = true
 pdxl-gui.workspace = true
 pdxl-project.workspace = true
