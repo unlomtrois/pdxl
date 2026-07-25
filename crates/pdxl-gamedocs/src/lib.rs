@@ -139,6 +139,156 @@ pub fn parse_doc_log(text: &str) -> Vec<DocEntry> {
     out
 }
 
+/// Parses the EU5-era **Markdown** doc dialect of `effects.log` /
+/// `triggers.log`: `## name` headers, free description lines, and bold
+/// `**Supported Scopes**:` / `**Supported Targets**:` fields (with markdown's
+/// trailing double-space line breaks).
+pub fn parse_doc_log_md(text: &str) -> Vec<DocEntry> {
+    let mut out = Vec::new();
+    for section in md_sections(text, "## ") {
+        let mut lines = section.lines();
+        let Some(name) = lines.next().map(str::trim) else {
+            continue;
+        };
+        if !is_script_name(name) {
+            continue;
+        }
+        let mut entry = DocEntry {
+            name: name.to_string(),
+            description: String::new(),
+            scopes: Vec::new(),
+            targets: Vec::new(),
+        };
+        for line in lines {
+            let line = line.trim_end();
+            if let Some(v) = md_field(line, "Supported Scopes") {
+                entry.scopes = split_values(v);
+            } else if let Some(v) = md_field(line, "Supported Targets") {
+                entry.targets = split_values(v);
+            } else if !line.trim().is_empty() {
+                if !entry.description.is_empty() {
+                    entry.description.push('\n');
+                }
+                entry.description.push_str(line);
+            }
+        }
+        if !entry.scopes.is_empty() || !entry.targets.is_empty() {
+            out.push(entry);
+        }
+    }
+    out
+}
+
+/// Parses the EU5-era Markdown `event_targets.log`: `### name` headers with
+/// the same plain `Input Scopes:` / `Output Scopes:` / `Requires Data:` /
+/// `Global Link:` / `Wild Card:` fields as CK3, plus the same trailing
+/// `Event Targets Saved from Code:` name list.
+pub fn parse_event_targets_md(text: &str) -> (Vec<TargetLink>, Vec<String>) {
+    const CODE_SAVED_HEADER: &str = "Event Targets Saved from Code:";
+    let (stanza_part, code_part) = match text.split_once(CODE_SAVED_HEADER) {
+        Some((a, b)) => (a, b),
+        None => (text, ""),
+    };
+
+    let mut links = Vec::new();
+    for section in md_sections(stanza_part, "### ") {
+        let mut lines = section.lines();
+        let Some(name) = lines.next().map(str::trim) else {
+            continue;
+        };
+        if !is_script_name(name) {
+            continue;
+        }
+        let mut link = TargetLink {
+            name: name.to_string(),
+            requires_data: false,
+            global_link: false,
+            wildcard: false,
+            input_scopes: Vec::new(),
+            output_scopes: Vec::new(),
+        };
+        for line in lines.map(str::trim) {
+            if let Some(v) = field_value(line, "Requires Data:") {
+                link.requires_data = v == "yes";
+            } else if let Some(v) = field_value(line, "Global Link:") {
+                link.global_link = v == "yes";
+            } else if let Some(v) = field_value(line, "Wild Card:") {
+                link.wildcard = v == "yes";
+            } else if let Some(v) = field_value(line, "Input Scopes:") {
+                link.input_scopes = split_values(v);
+            } else if let Some(v) = field_value(line, "Output Scopes:") {
+                link.output_scopes = split_values(v);
+            }
+        }
+        if !link.output_scopes.is_empty() {
+            links.push(link);
+        }
+    }
+
+    let code_saved = code_part
+        .lines()
+        .map(str::trim)
+        .filter(|l| is_script_name(l) && !l.is_empty())
+        .map(str::to_string)
+        .collect();
+    (links, code_saved)
+}
+
+/// Parses the EU5-era `modifiers.log`: one line per modifier,
+/// `Tag: <tag>, Categories: <a>, <b>, …` (empty category slots occur).
+pub fn parse_modifiers_eu5(text: &str) -> Vec<ModifierDef> {
+    let mut out = Vec::new();
+    for line in text.lines().map(str::trim) {
+        let Some(rest) = field_value(line, "Tag:") else {
+            continue;
+        };
+        let (tag, categories) = match rest.split_once(", Categories:") {
+            Some((tag, cats)) => (tag.trim(), split_values(cats)),
+            None => (rest, Vec::new()),
+        };
+        out.push(ModifierDef {
+            tag: tag.to_string(),
+            use_areas: categories,
+        });
+    }
+    out
+}
+
+/// Whether a doc dump is the EU5-era Markdown dialect (`# Title` first line).
+pub fn is_markdown_doc(text: &str) -> bool {
+    text.trim_start_matches('\u{feff}').starts_with("# ")
+}
+
+/// Splits Markdown text into sections opened by `header` (e.g. `"## "`),
+/// yielding each section's text starting at its name line.
+fn md_sections<'a>(text: &'a str, header: &'a str) -> impl Iterator<Item = &'a str> {
+    let mut sections = Vec::new();
+    let mut start: Option<usize> = None;
+    for (off, line) in text
+        .lines()
+        .map(|l| (l.as_ptr() as usize - text.as_ptr() as usize, l))
+    {
+        if line.starts_with(header) {
+            if let Some(s) = start {
+                sections.push(&text[s..off]);
+            }
+            start = Some(off + header.len());
+        }
+    }
+    if let Some(s) = start {
+        sections.push(&text[s..]);
+    }
+    sections.into_iter()
+}
+
+/// The value of a bold Markdown field line (`**Label**: value`).
+fn md_field<'a>(line: &'a str, label: &str) -> Option<&'a str> {
+    line.strip_prefix("**")?
+        .strip_prefix(label)?
+        .strip_prefix("**:")
+        .map(str::trim)
+}
+
 /// Parses `event_targets.log`: the scope-link stanzas plus the trailing
 /// `Event Targets Saved from Code:` name list (scope names the engine saves
 /// itself — `scope:actor`, `scope:recipient`, …).

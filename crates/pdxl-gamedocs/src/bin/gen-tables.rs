@@ -14,13 +14,15 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use pdxl_gamedocs::{
-    DataFnKind, parse_data_types, parse_doc_log, parse_event_scopes, parse_event_targets,
-    parse_modifiers,
+    DataFnKind, is_markdown_doc, parse_data_types, parse_doc_log, parse_doc_log_md,
+    parse_event_scopes, parse_event_targets, parse_event_targets_md, parse_modifiers,
+    parse_modifiers_eu5,
 };
 
 fn main() -> ExitCode {
     let mut logs: Option<PathBuf> = None;
     let mut out: Option<PathBuf> = None;
+    let mut data_types: Option<PathBuf> = None;
     let mut args = std::env::args().skip(1);
     while let Some(flag) = args.next() {
         let Some(value) = args.next() else {
@@ -30,6 +32,10 @@ fn main() -> ExitCode {
         match flag.as_str() {
             "--logs" => logs = Some(PathBuf::from(value)),
             "--out" => out = Some(PathBuf::from(value)),
+            // EU5 splits the dumps: doc logs live in Documents/…/docs while
+            // DumpDataTypes writes to logs/data_types. Defaults to
+            // <logs>/data_types (the CK3 layout).
+            "--data-types" => data_types = Some(PathBuf::from(value)),
             other => {
                 eprintln!("unknown flag: {other}");
                 return ExitCode::from(2);
@@ -37,11 +43,14 @@ fn main() -> ExitCode {
         }
     }
     let (Some(logs), Some(out)) = (logs, out) else {
-        eprintln!("usage: gen-tables --logs <game logs dir> --out <tables dir>");
+        eprintln!(
+            "usage: gen-tables --logs <doc logs dir> --out <tables dir> [--data-types <dir>]"
+        );
         return ExitCode::from(2);
     };
+    let data_types = data_types.unwrap_or_else(|| logs.join("data_types"));
 
-    match generate(&logs, &out) {
+    match generate(&logs, &data_types, &out) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("gen-tables: {e}");
@@ -50,7 +59,7 @@ fn main() -> ExitCode {
     }
 }
 
-fn generate(logs: &Path, out: &Path) -> std::io::Result<()> {
+fn generate(logs: &Path, data_types_dir: &Path, out: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(out)?;
 
     // The dumps are almost pure ASCII, but descriptions occasionally carry a
@@ -61,17 +70,42 @@ fn generate(logs: &Path, out: &Path) -> std::io::Result<()> {
         Ok(String::from_utf8_lossy(&bytes).into_owned())
     };
 
-    let mut effects = parse_doc_log(&read("effects.log")?);
-    let mut triggers = parse_doc_log(&read("triggers.log")?);
-    let (mut links, mut code_saved) = parse_event_targets(&read("event_targets.log")?);
-    let scope_types = parse_event_scopes(&read("event_scopes.log")?);
-    let mut modifiers = parse_modifiers(&read("modifiers.log")?);
+    // Dialect is detected per file: CK3-era plaintext stanzas vs EU5-era
+    // Markdown (`# Title` header). Same for modifiers (`Use areas:` lines vs
+    // one-line `Tag: X, Categories: …`).
+    let doc = |text: &str| {
+        if is_markdown_doc(text) {
+            parse_doc_log_md(text)
+        } else {
+            parse_doc_log(text)
+        }
+    };
+    let mut effects = doc(&read("effects.log")?);
+    let mut triggers = doc(&read("triggers.log")?);
+    let targets_text = read("event_targets.log")?;
+    let (mut links, mut code_saved) = if is_markdown_doc(&targets_text) {
+        parse_event_targets_md(&targets_text)
+    } else {
+        parse_event_targets(&targets_text)
+    };
+    // EU5 has no event_scopes.log; the scope-type table stays empty there.
+    let scope_types = match read("event_scopes.log") {
+        Ok(text) => parse_event_scopes(&text),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(e) => return Err(e),
+    };
+    let modifiers_text = read("modifiers.log")?;
+    let mut modifiers = if modifiers_text.lines().any(|l| l.contains(", Categories:")) {
+        parse_modifiers_eu5(&modifiers_text)
+    } else {
+        parse_modifiers(&modifiers_text)
+    };
 
     // The `DumpDataTypes` console dump writes several files into a
     // `data_types/` subdirectory; merge them all. Optional — older dumps may
     // not have run the command.
     let mut data_fns = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(logs.join("data_types")) {
+    if let Ok(entries) = std::fs::read_dir(data_types_dir) {
         let mut names: Vec<PathBuf> = entries.flatten().map(|e| e.path()).collect();
         names.sort();
         for path in names {
