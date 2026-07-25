@@ -1,9 +1,10 @@
-//! Ranks the game directories the CK3 schema does not model yet — the
-//! "what to model next" worklist.
+//! Ranks the game directories the compiled-in schema does not model yet —
+//! the "what to model next" worklist. Game-agnostic: the schema, survey
+//! roots, and context roots come through the `pdxl-game` facade, so the
+//! build feature picks the game:
 //!
-//! Usage:
-//!   cargo run -p pdxl-ck3 --bin schema-gaps -- \
-//!     --game "<steam dir>/Crusader Kings III/game" [--all] [--min-defs N]
+//!   cargo run --release -p pdxl-cli --features ck3 --bin schema-gaps -- \
+//!     --game "<game dir>" [--all] [--min-defs N]
 //!
 //! Uncovered directories are ranked by definition count, with a boost for
 //! directories that carry a `_*.info` doc (the source each schema entity is
@@ -12,7 +13,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use pdxl_ck3::coverage::{Coverage, survey};
+use pdxl_project::coverage::{Coverage, survey};
 
 fn main() -> ExitCode {
     let mut game: Option<PathBuf> = None;
@@ -47,8 +48,18 @@ fn main() -> ExitCode {
         return ExitCode::from(2);
     };
 
-    let schema = pdxl_ck3::schema();
-    let mut reports = match survey(&game, &schema) {
+    let schema = pdxl_game::schema();
+    let context_roots: Vec<&str> = pdxl_game::contexts::context_schema()
+        .roots
+        .iter()
+        .map(|(prefix, _)| *prefix)
+        .collect();
+    let mut reports = match survey(
+        &game,
+        &schema,
+        pdxl_game::coverage::SURVEY_ROOTS,
+        &context_roots,
+    ) {
         Ok(r) => r,
         Err(e) => {
             eprintln!("schema-gaps: {e}");
@@ -58,49 +69,37 @@ fn main() -> ExitCode {
 
     let covered = reports
         .iter()
-        .filter(|r| r.coverage == Coverage::Defs)
-        .count();
-    let context_only = reports
-        .iter()
-        .filter(|r| r.coverage == Coverage::ContextOnly)
+        .filter(|r| r.coverage != Coverage::None)
         .count();
     let total = reports.len();
-    println!(
-        "coverage: {covered}/{total} directories harvested ({context_only} more context-only)\n"
+    eprintln!(
+        "[{}] {covered}/{total} directories covered (defs or documented bodies)",
+        pdxl_game::GAME
     );
 
     reports.sort_by_key(|r| std::cmp::Reverse(r.score()));
-
-    println!(
-        "{:<52} {:>6} {:>7}  info docs",
-        "next targets (uncovered)", "files", "defs"
-    );
-    for r in reports.iter().filter(|r| r.coverage == Coverage::None) {
-        if r.defs < min_defs && r.info_files.is_empty() {
+    for r in &reports {
+        let show = match r.coverage {
+            Coverage::None => r.defs >= min_defs,
+            _ => show_all,
+        };
+        if !show {
             continue;
         }
+        let mark = match r.coverage {
+            Coverage::Defs => "[defs]",
+            Coverage::ContextOnly => "[body]",
+            Coverage::None => "      ",
+        };
+        let info = if r.info_files.is_empty() {
+            String::new()
+        } else {
+            format!("  ({})", r.info_files.join(", "))
+        };
         println!(
-            "{:<52} {:>6} {:>7}  {}",
-            r.rel_dir,
-            r.files,
-            r.defs,
-            r.info_files.join(", ")
+            "{mark} {:>6} defs {:>4} files  {}{info}",
+            r.defs, r.files, r.rel_dir
         );
-    }
-
-    if show_all {
-        println!(
-            "\n{:<52} {:>6} {:>7}  coverage",
-            "all directories", "files", "defs"
-        );
-        for r in &reports {
-            let cov = match r.coverage {
-                Coverage::Defs => "defs",
-                Coverage::ContextOnly => "context",
-                Coverage::None => "-",
-            };
-            println!("{:<52} {:>6} {:>7}  {}", r.rel_dir, r.files, r.defs, cov);
-        }
     }
     ExitCode::SUCCESS
 }

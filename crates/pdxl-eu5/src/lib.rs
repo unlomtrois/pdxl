@@ -15,6 +15,7 @@
 //! kind is a planned refinement, not a rule bug.
 
 pub mod contexts;
+pub mod coverage;
 pub mod kinds;
 pub mod tables;
 

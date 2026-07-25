@@ -1,6 +1,6 @@
 //! Schema-coverage survey over a synthetic game tree.
 
-use pdxl_ck3::coverage::{Coverage, survey};
+use pdxl_project::coverage::{Coverage, survey};
 use pdxl_testutil::TempTree;
 
 #[test]
@@ -18,7 +18,18 @@ fn survey_classifies_covered_and_uncovered_dirs() {
     t.write("common/whatever/00.txt", "# just a comment\n");
 
     let schema = pdxl_ck3::schema();
-    let reports = survey(&t.path, &schema).unwrap();
+    let context_roots: Vec<&str> = pdxl_ck3::contexts::context_schema()
+        .roots
+        .iter()
+        .map(|(prefix, _)| *prefix)
+        .collect();
+    let reports = survey(
+        &t.path,
+        &schema,
+        pdxl_ck3::coverage::SURVEY_ROOTS,
+        &context_roots,
+    )
+    .unwrap();
     let by_dir = |d: &str| {
         reports
             .iter()

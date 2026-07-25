@@ -29,6 +29,8 @@
 //!   with different access patterns.
 //! - The schema is an explicit parameter (Go links the CK3 registry directly).
 
+pub mod coverage;
+
 use std::collections::HashMap;
 use std::io;
 use std::path::{Path, PathBuf};

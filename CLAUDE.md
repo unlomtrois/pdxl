@@ -46,7 +46,8 @@ cargo run -p pdxl-gamedocs --bin gen-tables -- \
 The schema-coverage worklist ("what to model next"):
 
 ```sh
-cargo run --release -p pdxl-ck3 --bin schema-gaps -- --game "<game dir>" [--all]
+cargo run --release -p pdxl-cli --features ck3 --bin schema-gaps -- --game "<game dir>" [--all]
+# (--features eu5 surveys an EU5 install instead)
 ```
 
 ## Architecture (short map)

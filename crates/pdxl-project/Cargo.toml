@@ -12,6 +12,7 @@ pdxl-analysis.workspace = true
 pdxl-gui.workspace = true
 pdxl-fileset.workspace = true
 pdxl-loc.workspace = true
+pdxl-ast.workspace = true
 pdxl-parser.workspace = true
 pdxl-path.workspace = true
 pdxl-cache.workspace = true
