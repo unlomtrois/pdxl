@@ -25,6 +25,7 @@ mod gui_completion;
 mod position;
 mod semantic;
 mod state;
+mod yml_completion;
 
 pub use position::{offset_to_position, position_to_offset};
 pub use state::{DEBOUNCE_MS, Event, ServerState};
@@ -97,6 +98,7 @@ pub fn run_stdio(opts: Options) -> Result<(), Box<dyn std::error::Error + Sync +
                 ":".to_string(),
                 ".".to_string(),
                 "[".to_string(),
+                "$".to_string(),
             ]),
             ..lsp_types::CompletionOptions::default()
         }),

@@ -1274,6 +1274,9 @@ impl ServerState {
             return Vec::new();
         };
         let off = position_to_offset(&src, pos);
+        if path.extension().is_some_and(|e| e == "yml") {
+            return crate::yml_completion::items(project, &src, off);
+        }
         // Interface scripts use their own contexts (widget properties, mined
         // values, datafunction chains) — nothing below applies to them.
         if path.extension().is_some_and(|e| e == "gui") {

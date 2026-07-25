@@ -42,7 +42,8 @@ pub use table::{Duplicate, SymbolTable};
 /// facts cache must embed this in its keys (alongside content hash and
 /// rel_path) and treat mismatches as misses; bump it whenever extraction rules
 /// or the [`FileFacts`] model change meaning.
-pub const ANALYSIS_VERSION: u32 = 89; // 89: source-ordered pdx-yml semantic overrides for consistent entity argument coloring
+pub const ANALYSIS_VERSION: u32 = 90; // 90: pdx-yml datafunction and localization-key completion
+// 89: source-ordered pdx-yml semantic overrides for consistent entity argument coloring
 // 88: dedicated pdx-yml editor mode and enumMember entity-argument tokens
 // 87: schema-owned localization datafunction argument references
 // 86: EU5 game concepts + pdx-yml [concept|e] resolution

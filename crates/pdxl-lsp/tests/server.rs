@@ -1116,6 +1116,31 @@ fn semantic_tokens_color_keys_values_and_literals() {
 
 #[cfg(feature = "eu5")]
 #[test]
+fn pdx_yml_completes_datafunctions_and_loc_keys() {
+    let t = TempTree::new();
+    let path = "main_menu/localization/english/x_l_english.yml";
+    let src = "l_english:\n maona: \"Maona\"\n function: \"[ShowAdv\"\n reference: \"$mao\"\n";
+    t.write(path, src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, path);
+
+    let functions = server.completion(&uri, pos_after(src, "ShowAdv"));
+    assert!(
+        functions.iter().any(|item| item.label == "ShowAdvanceName"),
+        "{functions:?}"
+    );
+
+    let keys = server.completion(&uri, pos_after(src, "$mao"));
+    let maona = keys.iter().find(|item| item.label == "maona").unwrap();
+    assert_eq!(maona.kind, Some(lsp_types::CompletionItemKind::REFERENCE));
+    let Some(lsp_types::CompletionTextEdit::Edit(edit)) = &maona.text_edit else {
+        panic!("expected key-prefix text edit: {maona:?}");
+    };
+    assert_eq!(edit.new_text, "maona");
+}
+
+#[cfg(feature = "eu5")]
+#[test]
 fn pdx_yml_game_concept_links_resolve() {
     let t = TempTree::new();
     let concept = "subject = { alias = { subjects } texture = x }\n";

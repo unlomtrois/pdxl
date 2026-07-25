@@ -120,16 +120,23 @@ fn snippet(label: &str, detail: &str, insert: String, kind: CompletionItemKind) 
     }
 }
 
+/// Completion inside a datafunction expression, shared by `.gui` and
+/// localization files.
+pub fn datafn_completion(src: &[u8], off: u32) -> Vec<CompletionItem> {
+    let Some(prefix) = datafn_prefix(src, off as usize) else {
+        return Vec::new();
+    };
+    datafn_items(prefix, src, off as usize, pdxl_game::datafn_registry())
+}
+
 /// Completion items for a `.gui` file at byte offset `off`.
 pub fn items(project: &Project, src: &[u8], off: u32) -> Vec<CompletionItem> {
     let Some(kinds) = project.schema().gui_kinds() else {
         return Vec::new();
     };
-    let registry = pdxl_game::datafn_registry();
-
     // 1. Datafunction chains.
-    if let Some(prefix) = datafn_prefix(src, off as usize) {
-        return datafn_items(prefix, src, off as usize, registry);
+    if datafn_prefix(src, off as usize).is_some() {
+        return datafn_completion(src, off);
     }
 
     // 2. Value position.
