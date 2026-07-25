@@ -16,6 +16,7 @@ mod estate;
 mod government_reform;
 mod international_organization;
 mod named_color;
+mod parliament_type;
 mod religion;
 mod scripted;
 mod subject_type;
@@ -53,6 +54,7 @@ registry!(
     subject_type::SubjectType,
     government_reform::GovernmentReform,
     international_organization::InternationalOrganization,
+    parliament_type::ParliamentType,
     culture::Culture,
     religion::Religion,
     named_color::NamedColor,

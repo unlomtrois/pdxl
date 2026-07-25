@@ -1,19 +1,16 @@
 //! International organizations (`in_game/common/international_organizations/`,
 //! fully documented by the directory readme) — 33 top-level defs (HRE,
-//! catholic church, unions, leagues, …) plus their four companion
-//! directories: special statuses, payments, land-ownership rules, and
-//! parliament types.
+//! catholic church, unions, leagues, …) plus their three companion
+//! directories: special statuses, payments, and land-ownership rules.
 //!
 //! References (corpus-validated, 0 unresolved):
 //! - `international_organization:X` / `international_organization_type:X` /
-//!   `special_status:X` / `parliament_type:X` literals are table-derived
-//!   (`crate::derived` — the IO type-tag link alone carries 3,600+ refs);
+//!   `special_status:X` literals are table-derived (`crate::derived` — the IO
+//!   type-tag link alone carries 3,600+ refs);
 //! - `international_organization_type = X` (bare type comparisons) and
 //!   `is_member_of_international_organization_of_type = X`, script-wide;
 //! - `special_statuses_implemented` / `payments_implemented` list items and
 //!   `land_ownership_rule = X`, gated to the IO directory;
-//! - `parliament_type = X`, ungated (the `parliament_type:` chain forms and
-//!   `= scope:…` skip for free);
 //! - the `declare_war_on_target_casus_belli` and `laws = { <law> = <policy> }`
 //!   rules live with their target kinds in [`super::unlocks`].
 //!
@@ -41,7 +38,6 @@ pub(crate) const IO_DIR: &str = "in_game/common/international_organizations/";
 const STATUSES_DIR: &str = "in_game/common/international_organization_special_statuses/";
 const PAYMENTS_DIR: &str = "in_game/common/international_organization_payments/";
 const LAND_RULES_DIR: &str = "in_game/common/international_organization_land_ownership_rules/";
-const PARLIAMENT_TYPES_DIR: &str = "in_game/common/parliament_types/";
 
 /// A trigger whose root is a country (member / joiner / enemy / leader …).
 const fn country_trigger(doc: &'static str) -> FieldSpec {
@@ -372,39 +368,6 @@ static LAND_OWNERSHIP_RULE: StructSpec = StructSpec {
     fallback: Fallback::Deny,
 };
 
-/// The body of one parliament type (readme-complete).
-static PARLIAMENT_TYPE: StructSpec = StructSpec {
-    name: "parliament type",
-    fields: &[
-        (
-            "type",
-            scalar(Setting)
-                .doc("Whose parliament this is (decides the trigger root).")
-                .values(&["country", "international_organization"]),
-        ),
-        (
-            "potential",
-            block(Trigger)
-                .doc("Is this parliament type visible at all (root = country or IO, per `type`)."),
-        ),
-        (
-            "allow",
-            block(Trigger)
-                .doc("Can this parliament type be used (root = country or IO, per `type`)."),
-        ),
-        (
-            "locked",
-            block(Trigger)
-                .doc("Is this parliament type locked (root = country or IO, per `type`)."),
-        ),
-        (
-            "modifier",
-            block(StaticModifier).doc("Country modifiers applied by this parliament type."),
-        ),
-    ],
-    fallback: Fallback::Deny,
-};
-
 /// A `key = X` reference gated to the IO directory.
 const fn in_io(key: &'static str) -> RefRule {
     RefRule {
@@ -466,20 +429,6 @@ impl Entity for InternationalOrganization {
                 LAND_RULES_DIR,
             )
         },
-        KindSpec {
-            // The `parliament_type:` literal is table-derived; bare values
-            // appear in the IO defs and mods (`parliament_type = X`).
-            refs: &[RefRule {
-                pattern: RefPattern::KeyValue("parliament_type"),
-                gate: None,
-                alt: &[],
-            }],
-            ..def_only(
-                kinds::PARLIAMENT_TYPE,
-                IconHint::Hierarchy,
-                PARLIAMENT_TYPES_DIR,
-            )
-        },
     ];
 
     const ROOTS: &'static [(&'static str, ClauseKind)] = &[
@@ -487,6 +436,5 @@ impl Entity for InternationalOrganization {
         (STATUSES_DIR, ClauseKind::Struct(&SPECIAL_STATUS)),
         (PAYMENTS_DIR, ClauseKind::Struct(&IO_PAYMENT)),
         (LAND_RULES_DIR, ClauseKind::Struct(&LAND_OWNERSHIP_RULE)),
-        (PARLIAMENT_TYPES_DIR, ClauseKind::Struct(&PARLIAMENT_TYPE)),
     ];
 }

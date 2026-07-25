@@ -9,6 +9,50 @@ fn extract(src: &str, rel_path: &str) -> FileFacts {
 }
 
 #[test]
+fn parliament_type_defs_refs_and_body() {
+    let f = extract(
+        "assembly = {\n\
+         \ttype = country\n\
+         \tpotential = { always = yes }\n\
+         \tallow = { always = yes }\n\
+         \tlocked = { always = no }\n\
+         \tmodifier = { has_a_parliamentary_system = yes }\n\
+         }\n",
+        "in_game/common/parliament_types/00_default.txt",
+    );
+    assert_eq!(f.defs.len(), 1);
+    assert_eq!(f.defs[0].name, "assembly");
+    assert_eq!(f.defs[0].kind, pdxl_eu5::kinds::PARLIAMENT_TYPE);
+
+    let refs = extract(
+        "e = { set_parliament_type = parliament_type:assembly }\n",
+        "in_game/events/x.txt",
+    );
+    assert!(
+        refs.refs
+            .iter()
+            .any(|r| r.name == "assembly" && r.kind == pdxl_eu5::kinds::PARLIAMENT_TYPE)
+    );
+
+    use pdxl_analysis::context::{ClauseKind, context_of_chain};
+    let schema = pdxl_eu5::contexts::context_schema();
+    let body = context_of_chain(
+        [b"assembly".as_slice()],
+        "in_game/common/parliament_types/00_default.txt",
+        schema,
+    );
+    assert!(matches!(body, ClauseKind::Struct(spec) if spec.name == "parliament type"));
+    assert_eq!(
+        pdxl_analysis::context::resolve_key(body, "potential", true),
+        ClauseKind::Trigger
+    );
+    assert_eq!(
+        pdxl_analysis::context::resolve_key(body, "modifier", true),
+        ClauseKind::StaticModifier
+    );
+}
+
+#[test]
 fn bias_defs_refs_and_context() {
     let f = extract(
         "opinion_sabotage_reputation = { value = -50 yearly_decay = 5 min = -200 }\n",
