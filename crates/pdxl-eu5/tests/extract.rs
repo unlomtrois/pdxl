@@ -232,3 +232,54 @@ fn dynamic_tags_and_bare_tag_refs() {
     assert_eq!(c.refs[0].kind, pdxl_eu5::kinds::COAT_OF_ARMS);
     assert_eq!(c.refs[0].name, "GEN_republic");
 }
+
+#[test]
+fn age_body_and_estate_refs() {
+    let f = extract(
+        "age_5_absolutism = {\n\
+         \tyear = 1637\n\
+         \thegemons_allowed = yes\n\
+         \tunique = { revoke_privilege_cost_modifier = -0.33 }\n\
+         \tmax_ai_privilege_per_estate = {\n\
+         \t\tnobles_estate = 4\n\
+         \t\tclergy_estate = 4\n\
+         \t}\n\
+         }\n",
+        "in_game/common/age/00_default.txt",
+    );
+    assert_eq!(f.defs[0].kind, pdxl_eu5::kinds::AGE);
+    let estates: Vec<&str> = f
+        .refs
+        .iter()
+        .filter(|r| r.kind == pdxl_eu5::kinds::ESTATE)
+        .map(|r| r.name.as_str())
+        .collect();
+    assert_eq!(estates, vec!["nobles_estate", "clergy_estate"]);
+
+    // estate_type: literals and bare estate = X resolve anywhere; chain
+    // forms are skipped.
+    let e = extract(
+        "e = {\n\
+         \tx = estate_type:burghers_estate\n\
+         \testate = tribes_estate\n\
+         \testate = scope:target_estate\n\
+         }\n",
+        "in_game/common/scripted_effects/x.txt",
+    );
+    let names: Vec<&str> = e
+        .refs
+        .iter()
+        .filter(|r| r.kind == pdxl_eu5::kinds::ESTATE)
+        .map(|r| r.name.as_str())
+        .collect();
+    assert_eq!(names, vec!["burghers_estate", "tribes_estate"]);
+
+    // Age body context: unique = { … } is a static-modifier clause.
+    use pdxl_analysis::context::{ClauseKind, context_of_chain};
+    let ctx = context_of_chain(
+        [b"age_5_absolutism".as_slice(), b"unique".as_slice()],
+        "in_game/common/age/00_default.txt",
+        pdxl_eu5::contexts::context_schema(),
+    );
+    assert_eq!(ctx, ClauseKind::StaticModifier);
+}

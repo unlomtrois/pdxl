@@ -13,7 +13,7 @@
 //! (`global_life_expectancy = 4`) — [`Fallback::Modifier`].
 
 use crate::kinds;
-use pdxl_analysis::context::ClauseKind::{self, ScriptedModifier, Trigger};
+use pdxl_analysis::context::ClauseKind::{self, ScriptedModifier, StaticModifier, Struct, Trigger};
 use pdxl_analysis::context::ScalarKind::Setting;
 use pdxl_analysis::context::{Fallback, StructSpec, block, scalar};
 use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
@@ -22,7 +22,90 @@ use super::Entity;
 use super::scripted::def_only;
 
 pub(crate) const ADVANCES_DIR: &str = "in_game/common/advances/";
-const AGE_DIR: &str = "in_game/common/age/";
+pub(crate) const AGE_DIR: &str = "in_game/common/age/";
+
+/// `max/min_ai_privilege_per_estate = { <estate> = N … }` — the keys are
+/// estate references (rules in [`super::estate`]); values are AI caps.
+static PRIVILEGE_CAPS: StructSpec = StructSpec {
+    name: "ai privilege caps",
+    fields: &[],
+    fallback: Fallback::Ignore,
+};
+
+/// The body of one age (`00_default.txt`; six defs drive the whole game
+/// pacing, so the corpus is the documentation).
+static AGE: StructSpec = StructSpec {
+    name: "age",
+    fields: &[
+        (
+            "year",
+            scalar(Setting).doc("The year the age begins (age 1 starts at game start)."),
+        ),
+        (
+            "price_stability",
+            scalar(Setting).doc("Market price stability during this age."),
+        ),
+        ("max_price", scalar(Setting).doc("Market price cap.")),
+        (
+            "known_goods_demand_threshold",
+            scalar(Setting).doc("Awareness threshold before goods generate demand."),
+        ),
+        (
+            "burgher_max_trade_range",
+            scalar(Setting).doc("Burgher trade range during this age."),
+        ),
+        (
+            "months_for_exploration_spread",
+            scalar(Setting).doc("How fast map knowledge spreads (months)."),
+        ),
+        (
+            "hegemons_allowed",
+            scalar(Setting)
+                .doc("Whether hegemonies can exist in this age.")
+                .values(&["yes", "no"]),
+        ),
+        (
+            "efficiency",
+            scalar(Setting).doc("Age efficiency factor (declines over the ages)."),
+        ),
+        (
+            "victory_card",
+            scalar(Setting).doc("The victory-card slot unlocked by this age."),
+        ),
+        (
+            "mercenaries",
+            scalar(Setting).doc("Mercenary availability modifier."),
+        ),
+        (
+            "war_score_from_battles",
+            scalar(Setting).doc("War-score-from-battles modifier."),
+        ),
+        (
+            "unique",
+            block(StaticModifier).doc("Modifiers applied only while this age is active."),
+        ),
+        (
+            "modifier",
+            block(StaticModifier).doc("Modifiers applied from this age onward (they accumulate)."),
+        ),
+        (
+            "goods_demand",
+            block(StaticModifier)
+                .doc("Per-good pop-demand modifiers (`global_<good>_pop_demand`)."),
+        ),
+        (
+            "max_ai_privilege_per_estate",
+            block(Struct(&PRIVILEGE_CAPS))
+                .doc("AI cap on granted privileges per estate (`<estate> = N`)."),
+        ),
+        (
+            "min_ai_privilege_per_estate",
+            block(Struct(&PRIVILEGE_CAPS))
+                .doc("AI floor on granted privileges per estate (`<estate> = N`)."),
+        ),
+    ],
+    fallback: Fallback::Deny,
+};
 
 /// A `key = X` reference gated to the advances directory.
 const fn in_advances(key: &'static str) -> RefRule {
@@ -133,6 +216,8 @@ impl Entity for Advance {
         },
     ];
 
-    const ROOTS: &'static [(&'static str, ClauseKind)] =
-        &[(ADVANCES_DIR, ClauseKind::Struct(&ADVANCE))];
+    const ROOTS: &'static [(&'static str, ClauseKind)] = &[
+        (ADVANCES_DIR, ClauseKind::Struct(&ADVANCE)),
+        (AGE_DIR, ClauseKind::Struct(&AGE)),
+    ];
 }

@@ -10,6 +10,7 @@ mod advance;
 mod coat_of_arms;
 mod country;
 mod culture;
+mod estate;
 mod named_color;
 mod religion;
 mod scripted;
@@ -42,6 +43,7 @@ registry!(
     advance::Advance,
     unlocks::Unlocks,
     coat_of_arms::CoatOfArms,
+    estate::Estate,
     culture::Culture,
     religion::Religion,
     named_color::NamedColor,

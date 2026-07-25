@@ -20,6 +20,7 @@ pub const COUNTRY_DESCRIPTION_CATEGORY: KindId = KindId::new("country_descriptio
 pub const START_COUNTRY: KindId = KindId::new("start_country");
 pub const DYNAMIC_COUNTRY: KindId = KindId::new("dynamic_country");
 pub const COAT_OF_ARMS: KindId = KindId::new("coat_of_arms");
+pub const ESTATE: KindId = KindId::new("estate");
 pub const ADVANCE: KindId = KindId::new("advance");
 pub const AGE: KindId = KindId::new("age");
 pub const BUILDING: KindId = KindId::new("building");

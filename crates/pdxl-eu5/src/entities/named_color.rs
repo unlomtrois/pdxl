@@ -55,6 +55,7 @@ impl Entity for NamedColor {
                 color_in(COUNTRIES_DIR, "unit_color2"),
                 color_in(CULTURES_DIR, "color"),
                 color_in(RELIGIONS_DIR, "color"),
+                color_in(super::estate::ESTATES_DIR, "color"),
             ],
             aliases: &[],
         },
