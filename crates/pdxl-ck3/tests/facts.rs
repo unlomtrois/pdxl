@@ -15,7 +15,8 @@ use std::path::{Path, PathBuf};
 use pdxl_analysis::{FileFacts, Symbol, extract_facts};
 
 /// Facts dump schema version. Bump on any format change.
-const FACTS_DUMP_VERSION: u32 = 2; // 2: file-local script constants (+constants/+constant_refs)
+const FACTS_DUMP_VERSION: u32 = 3; // 3: soft/doc-reference channel (+calls)
+// 2: file-local script constants (+constants/+constant_refs)
 
 /// Canonical dump of one extraction run: defs, aliases, and refs as JSON, one
 /// per line, so a line diff pinpoints the first divergence.
@@ -35,6 +36,10 @@ fn dump_facts(facts: &FileFacts, rel_path: &str) -> String {
     push_symbols(&mut out, &facts.constants);
     out.push_str("],\n\"constant_refs\":[");
     push_refs(&mut out, &facts.constant_refs);
+    // The soft channel: smart-doc references (and, in the project layer, gui
+    // and call-by-name refs). Navigable and counted, never diagnosed.
+    out.push_str("],\n\"calls\":[");
+    push_refs(&mut out, &facts.calls);
     out.push_str("]\n}\n");
     out
 }

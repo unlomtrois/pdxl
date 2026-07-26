@@ -368,3 +368,43 @@ fn province_csv_ignored_without_opt_in() {
     let (table, _) = analyze(&fileset(&d), &pdxl_ck3::schema()).expect("analyze");
     assert_eq!(table.count(pdxl_ck3::kinds::PROVINCE), 0);
 }
+
+#[test]
+fn smart_doc_references_are_findable_and_undiagnosed() {
+    let d = TempTree::new();
+    d.write("common/traits/00_traits.txt", "brave = { }\n");
+    d.write(
+        "common/scripted_effects/00_e.txt",
+        "#! Grants ![brave], see also ![trait:brave] and ![never_defined].\n\
+         give_it = {\n\tadd_trait = brave\n}\n",
+    );
+
+    // Documentation links never diagnose — not even the dangling one.
+    let diags = resolve_dir(&d);
+    assert!(diags.is_empty(), "{diags:?}");
+
+    // ...but they are findable: the script `add_trait = brave` plus both doc
+    // refs, the bare one matching by name through the DOC_REF sentinel.
+    let p = project(&d);
+    let refs = p.references(pdxl_ck3::kinds::TRAIT, "brave");
+    assert_eq!(refs.len(), 3, "{refs:?}");
+    assert_eq!(
+        refs.iter()
+            .filter(|r| r.kind == pdxl_analysis::DOC_REF)
+            .count(),
+        1
+    );
+    assert_eq!(
+        refs.iter()
+            .filter(|r| r.kind == pdxl_ck3::kinds::TRAIT)
+            .count(),
+        2
+    );
+
+    // A doc ref to something undefined resolves to nothing, but is still
+    // recorded — that is what lets the editor fade it rather than drop it.
+    assert_eq!(
+        p.references(pdxl_ck3::kinds::TRAIT, "never_defined").len(),
+        1
+    );
+}

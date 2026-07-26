@@ -134,7 +134,46 @@ pub fn extract_facts(
         facts.calls = extract_calls(tree, full_path, targets);
     }
     facts.calls.extend(soft_refs);
+    extract_doc_refs(tree, full_path, schema, &mut facts.calls);
     facts
+}
+
+/// Harvests `![Name]` / `![kind:Name]` out of the tree's `#!` side-channel.
+///
+/// These go to `calls`, never `refs`: documentation may legitimately point at
+/// a symbol that does not exist yet, so a doc ref navigates and counts but is
+/// never diagnosed. A qualified ref carries the kind its prefix names; a bare
+/// one carries [`DOC_REF`], resolved by name across kinds at query time.
+fn extract_doc_refs(tree: &SyntaxTree, full_path: &str, schema: &Schema, out: &mut Vec<Ref>) {
+    let docs = tree.doc_comments();
+    if docs.is_empty() {
+        return;
+    }
+    let src = tree.source();
+    let file: Arc<str> = Arc::from(full_path);
+    let mut spans = Vec::new();
+    for range in docs {
+        spans.clear();
+        crate::doc::doc_ref_spans(src, range.start, range.end, &mut spans);
+        for &(start, end) in &spans {
+            let content = &src[start as usize..end as usize];
+            let (kind, offset) = crate::doc::parse_doc_ref(content, schema);
+            // The recorded range covers the name only, so navigation and
+            // highlighting land past any `kind:` qualifier.
+            let name_start = start + offset as u32;
+            let Ok(name) = std::str::from_utf8(&src[name_start as usize..end as usize]) else {
+                continue;
+            };
+            out.push(Ref {
+                kind: kind.unwrap_or(crate::doc::DOC_REF),
+                alt: &[],
+                name: name.to_string(),
+                file: Arc::clone(&file),
+                start: name_start,
+                end,
+            });
+        }
+    }
 }
 
 /// Collects every call-by-name reference in a parsed file: nested `KEY = value`

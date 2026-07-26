@@ -21,6 +21,7 @@
 //! benchmark decides whether a facts cache ever earns its complexity.
 
 pub mod context;
+pub mod doc;
 mod extract;
 mod kind;
 mod model;
@@ -28,6 +29,7 @@ mod resolve;
 mod schema;
 mod table;
 
+pub use doc::{DOC_REF, doc_ref_spans, parse_doc_ref};
 pub use extract::{extract_calls, extract_facts};
 pub use kind::{CallKinds, GuiKinds, KindId, LOC_KEY, SCRIPT_CONSTANT};
 pub use model::{CallTargets, FileFacts, Ref, Symbol};
@@ -42,7 +44,8 @@ pub use table::{Duplicate, SymbolTable};
 /// facts cache must embed this in its keys (alongside content hash and
 /// rel_path) and treat mismatches as misses; bump it whenever extraction rules
 /// or the [`FileFacts`] model change meaning.
-pub const ANALYSIS_VERSION: u32 = 111; // 111: prefixed implicit-localization patterns and EU5 game-concept links
+pub const ANALYSIS_VERSION: u32 = 112; // 112: `#!` smart-doc references extracted into FileFacts.calls
+// 111: prefixed implicit-localization patterns and EU5 game-concept links
 // 110: benchmark large color documents and raise VS Code's decorator cap for map palettes
 // 109: EU5 situation legend colors reference named-color entities
 // 108: EU5 situations with scoped lifecycle fields, map legends, refs, and localization

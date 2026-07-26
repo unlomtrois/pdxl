@@ -1,5 +1,5 @@
 #! Smart-documentation fixture: pins how `#!` lexes against plain `#`.
-#! A doc ref looks like ![brave] or, kind-qualified, ![scripted_effect:my_fx].
+#! A doc ref looks like ![brave] or, kind-qualified, ![effect:my_fx].
 
 # An ordinary comment. Everything on this line is prose, including a ![ref]
 # that must NOT be treated as documentation.

@@ -2142,3 +2142,50 @@ fn game_rule_settings_defs_and_refs() {
     let e = extract("e = { x = ai:whatever }\n", "common/scripted_effects/e.txt");
     assert!(e.refs.iter().all(|r| r.kind != pdxl_ck3::kinds::MODIFIER));
 }
+
+#[test]
+fn smart_doc_references_land_in_calls() {
+    let f = extract(
+        "#! Applies ![trait:brave] via ![my_effect].\n\
+         #! Unqualified ![loose] and a bogus prefix ![nope:thing].\n\
+         # Plain comments hold no refs: ![ignored]\n\
+         a = { b = 1 }\n",
+        "common/scripted_effects/x.txt",
+    );
+    // Doc refs are documentation links, never diagnosable references.
+    assert!(f.refs.iter().all(|r| r.name != "brave"));
+
+    let by_name = |n: &str| f.calls.iter().find(|r| r.name == n);
+    // A `kind:` prefix pins the kind and the range starts past the qualifier.
+    let brave = by_name("brave").expect("brave");
+    assert_eq!(brave.kind, pdxl_ck3::kinds::TRAIT);
+    // Unqualified refs carry the sentinel — extraction cannot know the kind.
+    for n in ["my_effect", "loose"] {
+        assert_eq!(by_name(n).expect(n).kind, pdxl_analysis::DOC_REF, "{n}");
+    }
+    // An unknown prefix is not a qualifier: the whole text is the name.
+    assert!(by_name("thing").is_none());
+    assert_eq!(
+        by_name("nope:thing").expect("nope:thing").kind,
+        pdxl_analysis::DOC_REF
+    );
+    // A `![…]` inside a plain `#` comment is prose, not a reference.
+    assert!(by_name("ignored").is_none());
+}
+
+#[test]
+fn smart_doc_reference_range_covers_only_the_name() {
+    let src = "#! See ![trait:brave].\na = { b = 1 }\n";
+    let f = extract(src, "common/scripted_effects/x.txt");
+    let r = f.calls.iter().find(|r| r.name == "brave").expect("brave");
+    assert_eq!(&src.as_bytes()[r.start as usize..r.end as usize], b"brave");
+}
+
+#[test]
+fn files_without_doc_comments_gain_no_calls() {
+    let f = extract(
+        "# ordinary comment ![x]\na = { b = 1 }\n",
+        "common/scripted_effects/x.txt",
+    );
+    assert!(f.calls.is_empty());
+}

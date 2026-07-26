@@ -1467,19 +1467,12 @@ fn extract_doc_block(src: &[u8], def_offset: u32) -> Option<String> {
     Some(docs.join("\n"))
 }
 
-/// Splits a `![…]` ref's inner text into an optional explicit kind (resolved
-/// against the schema's aliases) and the byte offset where the referenced name
-/// begins. `scheme:Name` → `(Some(scheme kind), 7)`; a bare or unknown-prefix
-/// text → `(None, 0)`.
-pub(crate) fn parse_doc_ref(content: &[u8], schema: &Schema) -> (Option<KindId>, usize) {
-    if let Some(colon) = content.iter().position(|&b| b == b':')
-        && let Ok(prefix) = std::str::from_utf8(&content[..colon])
-        && let Some(kind) = schema.kind_by_alias(prefix)
-    {
-        return (Some(kind), colon + 1);
-    }
-    (None, 0)
-}
+/// Splits a `![…]` ref's inner text into an optional explicit kind and the byte
+/// offset where the referenced name begins.
+///
+/// Owned by `pdxl-analysis` since extraction records doc refs itself; re-exported
+/// here for the LSP's own hover/link paths, which rung 5 folds into facts.
+pub(crate) use pdxl_analysis::parse_doc_ref;
 
 /// Kinds to try for an unqualified `![Name]`: every kind before `LOC_KEY`, since
 /// a loc string almost always just shadows the object it names.

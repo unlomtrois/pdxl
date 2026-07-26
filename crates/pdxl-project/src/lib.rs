@@ -789,7 +789,14 @@ impl Project {
                 // Call-by-name references (scripted effect/trigger invocations)
                 // live outside `refs`; surface them too. They only exist for the
                 // scripted kinds, so the kind filter naturally scopes this.
-                out.extend(f.calls.iter().filter(matches));
+                //
+                // Bare `![Name]` doc refs carry the DOC_REF sentinel because
+                // extraction cannot know their kind (see `analysis::doc`), so
+                // they match on name alone — the same all-kinds resolution the
+                // editor performs when following one.
+                out.extend(f.calls.iter().filter(|r| {
+                    matches(r) || (r.kind == pdxl_analysis::DOC_REF && r.name == name)
+                }));
             }
         }
         out
