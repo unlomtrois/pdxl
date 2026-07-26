@@ -69,3 +69,5 @@ pub const RELIGION_FAMILY: KindId = KindId::new("religion_family");
 pub const GAME_RULE_SETTING: KindId = KindId::new("game_rule_setting");
 pub const GOVERNMENT: KindId = KindId::new("government");
 pub const HOLDING: KindId = KindId::new("holding");
+pub const SUBJECT_CONTRACT: KindId = KindId::new("subject_contract");
+pub const SUBJECT_CONTRACT_GROUP: KindId = KindId::new("subject_contract_group");

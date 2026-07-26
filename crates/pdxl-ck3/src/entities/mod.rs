@@ -66,6 +66,7 @@ mod scripted;
 mod scripted_gui;
 mod secret_type;
 mod situation;
+mod subject_contract;
 mod terrain;
 mod title;
 mod traits;
@@ -147,5 +148,6 @@ registry!(
     game_rule::GameRule,
     government::Government,
     holding::Holding,
+    subject_contract::SubjectContract,
     loc::Loc,
 );

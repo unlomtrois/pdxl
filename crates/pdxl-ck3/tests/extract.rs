@@ -2412,3 +2412,117 @@ fn holding_reference_keys_resolve_and_skip_the_none_sentinel() {
             .all(|r| r.kind != pdxl_ck3::kinds::HOLDING)
     );
 }
+
+#[test]
+fn subject_contracts_and_groups_define_and_reference() {
+    let c = extract(
+        "feudal_government_taxes = {\n\
+         \tdisplay_mode = tree\n\
+         \tobligation_levels = {\n\
+         \t\tdefault = { tax = 0.1 }\n\
+         \t\thigh = { tax = 0.5 parent = default }\n\
+         \t}\n\
+         }\n",
+        "common/subject_contracts/contracts/feudal.txt",
+    );
+    assert!(c.defs.iter().any(
+        |d| d.kind == pdxl_ck3::kinds::SUBJECT_CONTRACT && d.name == "feudal_government_taxes"
+    ));
+    // Obligation levels are contract-scoped, so they are structure, not symbols
+    // — `default` and `high` repeat across contracts in the corpus.
+    assert!(
+        c.defs
+            .iter()
+            .all(|d| d.name != "default" && d.name != "high")
+    );
+    assert!(c.refs.iter().all(|r| r.name != "default"));
+
+    let g = extract(
+        "feudal_vassal = {\n\
+         \tcontracts = { feudal_government_taxes special_contract }\n\
+         \tadmin_province_contract = administrative_themes\n\
+         }\n",
+        "common/subject_contracts/groups/g.txt",
+    );
+    assert!(
+        g.defs
+            .iter()
+            .any(|d| d.kind == pdxl_ck3::kinds::SUBJECT_CONTRACT_GROUP && d.name == "feudal_vassal")
+    );
+    for n in [
+        "feudal_government_taxes",
+        "special_contract",
+        "administrative_themes",
+    ] {
+        assert!(
+            g.refs
+                .iter()
+                .any(|r| r.kind == pdxl_ck3::kinds::SUBJECT_CONTRACT && r.name == n),
+            "{n}"
+        );
+    }
+    // Those two keys mean nothing outside the group directory.
+    let outside = extract(
+        "x = { contracts = { feudal_government_taxes } admin_province_contract = y }\n",
+        "common/scripted_effects/e.txt",
+    );
+    assert!(
+        outside
+            .refs
+            .iter()
+            .all(|r| r.kind != pdxl_ck3::kinds::SUBJECT_CONTRACT)
+    );
+}
+
+#[test]
+fn subject_contract_block_field_references_disambiguate_generic_type_key() {
+    // `type` alone names event types, interaction types and more, so the
+    // contract reference hangs off the wrapper key instead.
+    let f = extract(
+        "e = {\n\
+         \tvassal_contract_set_obligation_level = { type = feudal_government_taxes level = 3 }\n\
+         \ttributary_contract_set_obligation_level = { type = default_tributary_taxes level = 1 }\n\
+         \tstart_tributary = { contract_group = tributary_settled }\n\
+         }\n",
+        "common/scripted_effects/e.txt",
+    );
+    for n in ["feudal_government_taxes", "default_tributary_taxes"] {
+        assert!(
+            f.refs
+                .iter()
+                .any(|r| r.kind == pdxl_ck3::kinds::SUBJECT_CONTRACT && r.name == n),
+            "{n}"
+        );
+    }
+    assert!(f.refs.iter().any(
+        |r| r.kind == pdxl_ck3::kinds::SUBJECT_CONTRACT_GROUP && r.name == "tributary_settled"
+    ));
+    // A bare `type` elsewhere is not a contract reference.
+    let bare = extract(
+        "e = { type = character_event }\n",
+        "common/scripted_effects/e.txt",
+    );
+    assert!(
+        bare.refs
+            .iter()
+            .all(|r| r.kind != pdxl_ck3::kinds::SUBJECT_CONTRACT)
+    );
+
+    // The direct trigger/effect keys fire ungated.
+    for key in [
+        "vassal_contract_obligation_level_can_be_increased",
+        "vassal_contract_increase_obligation_level",
+        "tributary_contract_obligation_level_can_be_increased",
+    ] {
+        let f = extract(
+            &format!("e = {{ {key} = feudal_government_taxes }}\n"),
+            "common/scripted_triggers/t.txt",
+        );
+        assert!(
+            f.refs
+                .iter()
+                .any(|r| r.kind == pdxl_ck3::kinds::SUBJECT_CONTRACT),
+            "{key}"
+        );
+    }
+}
