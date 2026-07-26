@@ -44,7 +44,8 @@ pub use table::{Duplicate, SymbolTable};
 /// facts cache must embed this in its keys (alongside content hash and
 /// rel_path) and treat mismatches as misses; bump it whenever extraction rules
 /// or the [`FileFacts`] model change meaning.
-pub const ANALYSIS_VERSION: u32 = 114; // 114: CK3 governments (defs + has_/change_/bare government refs + gated self-lists + readme-complete body)
+pub const ANALYSIS_VERSION: u32 = 115; // 115: per-game fixtures, goldens and feature-gated tests (no extraction change)
+// 114: CK3 governments (defs + has_/change_/bare government refs + gated self-lists + readme-complete body)
 // 113: smart docs first-class end to end (lexer kind → tree channel → facts → LSP)
 // 112: `#!` smart-doc references extracted into FileFacts.calls
 // 111: prefixed implicit-localization patterns and EU5 game-concept links
