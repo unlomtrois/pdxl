@@ -599,6 +599,20 @@ pub fn tokenize(src: &[u8]) -> Vec<Token> {
     tokenize_inner(src, None)
 }
 
+/// Like [`tokenize`], but **keeping comments** — for consumers that render or
+/// rewrite source rather than parse it (semantic highlighting, formatting).
+pub fn tokenize_all(src: &[u8]) -> Vec<Token> {
+    let mut lexer = Lexer::init(src);
+    let mut out = Vec::with_capacity(src.len() / 8);
+    while let Some(tok) = lexer.next_token() {
+        if matches!(tok.kind, TokenKind::Invalid | TokenKind::Eof) {
+            continue;
+        }
+        out.push(tok);
+    }
+    out
+}
+
 /// Like [`tokenize`], but also returns the range of every `#!` doc comment,
 /// in source order — the parser's single-pass path.
 ///

@@ -693,22 +693,18 @@ impl ServerState {
                         .map(|r| (r.start, r.end))
                         .collect();
 
-                    // Smart-doc refs are not analysis facts, but use the same
+                    // Smart-doc refs are analysis facts now, living in `calls`
+                    // (soft: navigable, never diagnosed). They share this
                     // resolved-span channel for semantic coloring. Keep only
                     // refs which resolve through the symbol table; unresolved
                     // `![name]` remains ordinary comment text.
                     let mut cache: HashMap<PathBuf, Option<Vec<u8>>> = HashMap::new();
-                    for (start, end) in doc_ref_ranges(&src) {
-                        let content = &src[start as usize..end as usize];
-                        let (kind, off) = parse_doc_ref(content, project.schema());
-                        let Ok(name) = std::str::from_utf8(&content[off..]) else {
-                            continue;
-                        };
+                    for r in doc_refs(&src, facts) {
                         if self
-                            .resolve_doc_ref(kind, name, project, &mut cache)
+                            .resolve_doc_ref(pinned_kind(r), &r.name, project, &mut cache)
                             .is_some()
                         {
-                            spans.push((start + off as u32, end));
+                            spans.push((r.start, r.end));
                         }
                     }
                     spans.sort_by_key(|&(start, _)| start);
@@ -1118,24 +1114,24 @@ impl ServerState {
         let Ok(src) = self.read_file(&path) else {
             return Vec::new();
         };
+        let Some(facts) = project.facts_at(&path) else {
+            return Vec::new();
+        };
         let mut cache: HashMap<PathBuf, Option<Vec<u8>>> = HashMap::new();
         let mut links = Vec::new();
-        for (start, end) in doc_ref_ranges(&src) {
-            let content = &src[start as usize..end as usize];
-            let (kind, off) = parse_doc_ref(content, project.schema());
-            let Ok(name) = std::str::from_utf8(&content[off..]) else {
-                continue;
-            };
-            let Some((full, line)) = self.resolve_doc_ref(kind, name, project, &mut cache) else {
+        for r in doc_refs(&src, facts) {
+            let Some((full, line)) =
+                self.resolve_doc_ref(pinned_kind(r), &r.name, project, &mut cache)
+            else {
                 continue;
             };
             let mut target = path_to_uri(&full);
             target.set_fragment(Some(&format!("L{line}")));
-            let name_start = start + off as u32;
+            let name = &r.name;
             links.push(lsp_types::DocumentLink {
                 range: Range {
-                    start: offset_to_position(&src, name_start),
-                    end: offset_to_position(&src, end),
+                    start: offset_to_position(&src, r.start),
+                    end: offset_to_position(&src, r.end),
                 },
                 target: Some(target),
                 tooltip: Some(format!("Go to {name}")),
@@ -1485,52 +1481,45 @@ fn doc_ref_lookup_order(schema: &Schema) -> impl Iterator<Item = KindId> + '_ {
         .chain(std::iter::once(LOC_KEY))
 }
 
-/// Byte ranges of the `Name` in every `![Name]` inside a `#!` doc comment.
-/// Comments are recovered from the gaps between real tokens (same basis as the
-/// semantic-token highlighter), so a `#` inside a string is never mistaken for
-/// one.
-fn doc_ref_ranges(src: &[u8]) -> Vec<(u32, u32)> {
-    let lexed = pdxl_lexer::tokenize(src);
-    let mut out = Vec::new();
-    let mut cursor = 0usize;
-    for tok in &lexed {
-        scan_doc_gap(src, cursor, tok.range.start as usize, &mut out);
-        cursor = cursor.max(tok.range.end as usize);
-    }
-    scan_doc_gap(src, cursor, src.len(), &mut out);
-    out
+/// The kind a doc ref pins, or `None` for a bare `![Name]` whose kind is
+/// resolved by trying every kind in turn.
+fn pinned_kind(r: &pdxl_analysis::Ref) -> Option<KindId> {
+    (r.kind != pdxl_analysis::DOC_REF).then_some(r.kind)
 }
 
-fn scan_doc_gap(src: &[u8], from: usize, to: usize, out: &mut Vec<(u32, u32)>) {
-    let mut i = from;
-    while i < to {
-        if src[i] != b'#' {
-            i += 1;
-            continue;
-        }
-        let mut j = i;
-        while j < to && src[j] != b'\n' {
-            j += 1;
-        }
-        if src.get(i + 1) == Some(&b'!') {
-            let mut k = i;
-            while k + 1 < j {
-                if src[k] == b'!' && src[k + 1] == b'[' {
-                    let ns = k + 2;
-                    if let Some(rel) = src[ns..j].iter().position(|&b| b == b']') {
-                        let ne = ns + rel;
-                        if ne > ns {
-                            out.push((ns as u32, ne as u32));
-                        }
-                        k = ne + 1;
-                        continue;
-                    }
-                }
-                k += 1;
-            }
-        }
-        i = j;
+/// The smart-doc references of one file, in source order.
+///
+/// Extraction records them in `FileFacts::calls` alongside call-by-name and
+/// soft scope refs, so they are picked out by position: a call inside a `#!`
+/// token is a doc ref. The lexer hands back those token ranges directly, which
+/// is why this needs no gap reconstruction and cannot mistake a `#` inside a
+/// string for a comment.
+fn doc_refs<'f>(src: &[u8], facts: &'f pdxl_analysis::FileFacts) -> Vec<&'f pdxl_analysis::Ref> {
+    if facts.calls.is_empty() {
+        return Vec::new();
     }
+    let (_, docs) = pdxl_lexer::tokenize_with_docs(src);
+    if docs.is_empty() {
+        return Vec::new();
+    }
+    let mut out: Vec<&pdxl_analysis::Ref> = facts
+        .calls
+        .iter()
+        .filter(|r| {
+            docs.binary_search_by(|d| {
+                if r.start < d.start {
+                    std::cmp::Ordering::Greater
+                } else if r.start >= d.end {
+                    std::cmp::Ordering::Less
+                } else {
+                    std::cmp::Ordering::Equal
+                }
+            })
+            .is_ok()
+        })
+        .collect();
+    out.sort_by_key(|r| r.start);
+    out
 }
 
 /// The byte offset of the field reached by walking `field_path` (dot-separated

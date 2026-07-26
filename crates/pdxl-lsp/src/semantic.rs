@@ -378,7 +378,15 @@ fn tokens_impl(
     schema: Option<&Schema>,
     gui: bool,
 ) -> Vec<SemanticToken> {
-    let lexed = pdxl_lexer::tokenize(src);
+    // Comments are real tokens, so one pass yields both the script tokens and
+    // the comment runs. The classification loop below and the gui override
+    // pass both want the comment-free view.
+    let all = pdxl_lexer::tokenize_all(src);
+    let lexed: Vec<pdxl_lexer::Token> = all
+        .iter()
+        .copied()
+        .filter(|t| !t.kind.is_comment())
+        .collect();
 
     // (start, end, type, modifiers)
     let mut emit: Vec<(u32, u32, u32, u32)> = Vec::new();
@@ -410,36 +418,16 @@ fn tokens_impl(
         emit.push((tok.range.start, tok.range.end, ty, mods));
     }
 
-    // The lexer consumes comments as inter-token whitespace, so recover them by
-    // scanning the gaps: a `#` in a gap always starts a comment (only
-    // whitespace and comments live there), running to end of line.
-    let scan_gap = |from: usize, to: usize, emit: &mut Vec<(u32, u32, u32, u32)>| {
-        let mut i = from;
-        while i < to {
-            if src[i] == b'#' {
-                let mut j = i;
-                while j < to && src[j] != b'\n' {
-                    j += 1;
-                }
-                // A `#!` doc comment: color each `![Name]`'s name like a
-                // reference; the rest stays comment.
-                if src.get(i + 1) == Some(&b'!') {
-                    emit_doc_comment(src, i, j, resolved, schema, emit);
-                } else {
-                    emit.push((i as u32, j as u32, COMMENT, 0));
-                }
-                i = j;
-            } else {
-                i += 1;
-            }
+    // Comment runs come straight from the token stream. A `#!` doc comment
+    // colors each `![Name]`'s name like a reference; the rest stays comment.
+    for tok in all.iter().filter(|t| t.kind.is_comment()) {
+        let (i, j) = (tok.range.start as usize, tok.range.end as usize);
+        if tok.kind == T::DocComment {
+            emit_doc_comment(src, i, j, resolved, schema, &mut emit);
+        } else {
+            emit.push((tok.range.start, tok.range.end, COMMENT, 0));
         }
-    };
-    let mut cursor = 0usize;
-    for tok in &lexed {
-        scan_gap(cursor, tok.range.start as usize, &mut emit);
-        cursor = cursor.max(tok.range.end as usize);
     }
-    scan_gap(cursor, src.len(), &mut emit);
 
     // The gui layer overrides base classifications where it knows better.
     if gui {

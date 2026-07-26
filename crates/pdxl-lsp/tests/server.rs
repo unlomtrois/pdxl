@@ -2810,3 +2810,26 @@ fn game_concept_body_completion_and_hover() {
     let hover = hover_md(&server, &uri, pos_of(src, "parent = "));
     assert!(hover.contains("game_concept field parent"), "{hover}");
 }
+
+#[test]
+fn smart_doc_references_participate_in_find_references_and_code_lens() {
+    let t = TempTree::new();
+    t.write("common/traits/00.txt", "brave = { }\n");
+    let src = "#! Grants ![brave] - see also ![trait:brave].\ne = { add_trait = brave }\n";
+    t.write("common/scripted_effects/e.txt", src);
+    let (server, _rx) = server_over(&t);
+
+    // From the script reference site: the `add_trait` value plus both doc refs.
+    let script = uri_for(&t, "common/scripted_effects/e.txt");
+    let locs = server.references(&script, pos_of(src, "brave }"), false);
+    assert_eq!(locs.len(), 3, "script ref + two doc refs: {locs:?}");
+
+    // The count surfaced on the definition's lens agrees.
+    let traits = uri_for(&t, "common/traits/00.txt");
+    let lenses = server.code_lens(&traits);
+    let cmd = server
+        .code_lens_resolve(lenses[0].clone())
+        .command
+        .expect("resolve fills the command");
+    assert_eq!(cmd.title, "3 references");
+}
