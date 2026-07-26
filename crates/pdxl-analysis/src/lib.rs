@@ -44,7 +44,8 @@ pub use table::{Duplicate, SymbolTable};
 /// facts cache must embed this in its keys (alongside content hash and
 /// rel_path) and treat mismatches as misses; bump it whenever extraction rules
 /// or the [`FileFacts`] model change meaning.
-pub const ANALYSIS_VERSION: u32 = 112; // 112: `#!` smart-doc references extracted into FileFacts.calls
+pub const ANALYSIS_VERSION: u32 = 113; // 113: smart docs first-class end to end (lexer kind → tree channel → facts → LSP)
+// 112: `#!` smart-doc references extracted into FileFacts.calls
 // 111: prefixed implicit-localization patterns and EU5 game-concept links
 // 110: benchmark large color documents and raise VS Code's decorator cap for map palettes
 // 109: EU5 situation legend colors reference named-color entities

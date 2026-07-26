@@ -2,7 +2,7 @@
   "name": "pdxl",
   "displayName": "pdxl",
   "description": "Live diagnostics for Paradox script (CK3, ...) via the pdxl language server.",
-  "version": "0.112.0",
+  "version": "0.113.0",
   "publisher": "unlomtrois",
   "license": "MIT",
   "repository": {
