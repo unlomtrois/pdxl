@@ -32,7 +32,9 @@ use crate::kinds;
 use pdxl_analysis::context::ClauseKind::{self, Struct};
 use pdxl_analysis::context::ScalarKind::Setting;
 use pdxl_analysis::context::{Fallback, StructSpec, block, color, scalar};
-use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
+use pdxl_analysis::{
+    DefShape, DefSource, IconHint, ImplicitLocPattern, KindSpec, RefPattern, RefRule,
+};
 
 use super::Entity;
 
@@ -77,6 +79,11 @@ macro_rules! country_refs {
             // tag OR a coat-of-arms key (`tag = FRA_revolutionary_republic`
             // is Napoleon's tricolore) — the CoA joins the alt chain.
             RefRule {
+                pattern: RefPattern::KeyValue("important_country"),
+                gate: Some(super::religion::RELIGIONS_DIR),
+                alt: &[kinds::FORMABLE_COUNTRY, kinds::START_COUNTRY, kinds::DYNAMIC_COUNTRY],
+            },
+            RefRule {
                 pattern: RefPattern::KeyValue("tag"),
                 gate: Some("in_game/common/historical_scores/"),
                 alt: &[
@@ -95,7 +102,7 @@ macro_rules! country_refs {
 /// `in_game/common/customizable_localization/` (its 44k comparisons include
 /// ~1,200 grammar-check tags that exist nowhere statically — `tag = MEDICI`)
 /// and `main_menu/gfx/` (the city_data asset DSL's `tag = raw_resource`).
-static COUNTRY_REFS: [RefRule; 35] = country_refs!(
+static COUNTRY_REFS: [RefRule; 36] = country_refs!(
     "in_game/events/",
     "in_game/setup/",
     "main_menu/setup/",
@@ -202,6 +209,36 @@ static COUNTRY: StructSpec = StructSpec {
 pub(crate) struct Country;
 
 impl Entity for Country {
+    const IMPLICIT_LOC: &'static [ImplicitLocPattern] = &[
+        ImplicitLocPattern {
+            kind: kinds::COUNTRY,
+            suffix: "",
+        },
+        ImplicitLocPattern {
+            kind: kinds::COUNTRY,
+            suffix: "_ADJ",
+        },
+        ImplicitLocPattern {
+            kind: kinds::START_COUNTRY,
+            suffix: "",
+        },
+        ImplicitLocPattern {
+            kind: kinds::START_COUNTRY,
+            suffix: "_ADJ",
+        },
+        // Formable tags are aliases (`tag = RUS`) of the `RUS_f`
+        // definition. Registering the convention on this kind lets the alias
+        // backlink from `RUS`/`RUS_ADJ` reach that definition.
+        ImplicitLocPattern {
+            kind: kinds::FORMABLE_COUNTRY,
+            suffix: "",
+        },
+        ImplicitLocPattern {
+            kind: kinds::FORMABLE_COUNTRY,
+            suffix: "_ADJ",
+        },
+    ];
+
     const KINDS: &'static [KindSpec] = &[
         KindSpec {
             kind: kinds::COUNTRY,

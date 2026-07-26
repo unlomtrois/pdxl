@@ -94,6 +94,9 @@ static CUSTOM_LOC: StructSpec = StructSpec {
 pub(crate) struct CustomLoc;
 
 impl Entity for CustomLoc {
+    const LOC_DATAFN_ARG_REFS: &'static [(&'static str, pdxl_analysis::KindId)] =
+        &[("Custom", kinds::CUSTOM_LOC)];
+
     const KINDS: &'static [KindSpec] = &[KindSpec {
         kind: kinds::CUSTOM_LOC,
         icon: IconHint::Text,
@@ -110,6 +113,11 @@ impl Entity for CustomLoc {
             RefRule {
                 pattern: RefPattern::KeyValue("custom_name"),
                 gate: Some(super::international_organization::IO_DIR),
+                alt: &[],
+            },
+            RefRule {
+                pattern: RefPattern::KeyValue("custom_description"),
+                gate: Some(super::situation::SITUATIONS_DIR),
                 alt: &[],
             },
         ],

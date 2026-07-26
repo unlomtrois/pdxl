@@ -28,7 +28,7 @@ use pdxl_analysis::context::ScalarKind::Setting;
 use pdxl_analysis::context::{
     Fallback, FieldSpec, StructSpec, block, block_scoped, color, scalar, scalar_or_block,
 };
-use pdxl_analysis::{IconHint, KindSpec, RefPattern, RefRule};
+use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
 use super::common::SCALED_MODIFIER;
@@ -59,11 +59,44 @@ const fn value(doc: &'static str) -> FieldSpec {
     scalar_or_block(Setting, ScriptValue).doc(doc)
 }
 
+/// One dynamically-named organization variable (documented by the directory
+/// readme). `format` and `change_format` are localization keys; their
+/// extraction rules live with the `LOC_KEY` target kind.
+static VARIABLE: StructSpec = StructSpec {
+    name: "organization variable",
+    fields: &[
+        (
+            "format",
+            scalar(Setting).doc("Localization key used to display the variable."),
+        ),
+        (
+            "change_format",
+            scalar(Setting).doc("Localization key used to display its monthly change."),
+        ),
+        (
+            "monthly_change",
+            value("Script value applied to the variable each month."),
+        ),
+        (
+            "start",
+            value("Initial value when the organization is created."),
+        ),
+        ("min", scalar(Setting).doc("Minimum numeric value.")),
+        ("max", scalar(Setting).doc("Maximum numeric value.")),
+        ("hidden", toggle("Hide this variable from the world.")),
+        (
+            "monthly_change_hidden",
+            toggle("Hide the variable's monthly change from the world."),
+        ),
+    ],
+    fallback: Fallback::Deny,
+};
+
 /// `variables = { <name> = { … } }` — dynamic variable names.
 static VARIABLES: StructSpec = StructSpec {
     name: "organization variables",
     fields: &[],
-    fallback: Fallback::Ignore,
+    fallback: Fallback::Struct(&VARIABLE),
 };
 
 /// `special_statuses_implemented` / `payments_implemented` / `laws` — list
@@ -386,6 +419,63 @@ const fn in_io(key: &'static str) -> RefRule {
 pub(crate) struct InternationalOrganization;
 
 impl Entity for InternationalOrganization {
+    const SOFT_SCOPE_REFS: &'static [(&'static str, pdxl_analysis::KindId)] =
+        &[("var", kinds::IO_VARIABLE)];
+
+    const IMPLICIT_LOC: &'static [pdxl_analysis::ImplicitLocPattern] = &[
+        pdxl_analysis::ImplicitLocPattern {
+            kind: kinds::INTERNATIONAL_ORGANIZATION,
+            suffix: "",
+        },
+        pdxl_analysis::ImplicitLocPattern {
+            kind: kinds::INTERNATIONAL_ORGANIZATION,
+            suffix: "_desc",
+        },
+        pdxl_analysis::ImplicitLocPattern {
+            kind: kinds::IO_VARIABLE,
+            suffix: "",
+        },
+        pdxl_analysis::ImplicitLocPattern {
+            kind: kinds::IO_SPECIAL_STATUS,
+            suffix: "",
+        },
+        pdxl_analysis::ImplicitLocPattern {
+            kind: kinds::IO_SPECIAL_STATUS,
+            suffix: "_desc",
+        },
+        pdxl_analysis::ImplicitLocPattern {
+            kind: kinds::IO_PAYMENT,
+            suffix: "",
+        },
+        pdxl_analysis::ImplicitLocPattern {
+            kind: kinds::IO_PAYMENT,
+            suffix: "_desc",
+        },
+    ];
+
+    const LOC_DATAFN_ARG_REFS: &'static [(&'static str, pdxl_analysis::KindId)] = &[
+        (
+            "GetInternationalOrganization",
+            kinds::INTERNATIONAL_ORGANIZATION,
+        ),
+        (
+            "GetUniqueInternationalOrganization",
+            kinds::INTERNATIONAL_ORGANIZATION,
+        ),
+        ("ShowSpecialStatusName", kinds::IO_SPECIAL_STATUS),
+        ("ShowSpecialStatusNamePlural", kinds::IO_SPECIAL_STATUS),
+        (
+            "ShowSpecialStatusNameWithNoTooltip",
+            kinds::IO_SPECIAL_STATUS,
+        ),
+        (
+            "ShowSpecialStatusNamePluralWithNoTooltip",
+            kinds::IO_SPECIAL_STATUS,
+        ),
+        ("ShowPaymentName", kinds::IO_PAYMENT),
+        ("ShowPaymentNameWithNoTooltip", kinds::IO_PAYMENT),
+    ];
+
     const KINDS: &'static [KindSpec] = &[
         KindSpec {
             // The `international_organization:` / `international_organization_type:`
@@ -409,6 +499,22 @@ impl Entity for InternationalOrganization {
                 IconHint::Hierarchy,
                 IO_DIR,
             )
+        },
+        KindSpec {
+            kind: kinds::IO_VARIABLE,
+            icon: IconHint::Object,
+            defs: Some(DefSource {
+                dir_prefix: IO_DIR,
+                shape: DefShape::ChildrenOf {
+                    containers: &["variables"],
+                },
+            }),
+            refs: &[RefRule {
+                pattern: RefPattern::ScopePrefix("var"),
+                gate: Some(IO_DIR),
+                alt: &[],
+            }],
+            aliases: &[],
         },
         KindSpec {
             // The `special_status:` literal is table-derived (`crate::derived`).

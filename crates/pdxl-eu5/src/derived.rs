@@ -72,6 +72,21 @@ const TARGET_KINDS: &[(&str, KindId, &[KindId])] = &[
     ("culture_group", kinds::CULTURE_GROUP, &[]),
     ("language", kinds::LANGUAGE, &[]),
     ("parliament_type", kinds::PARLIAMENT_TYPE, &[]),
+    ("institution", kinds::INSTITUTION, &[]),
+    ("situation", kinds::SITUATION, &[]),
+    ("location", kinds::LOCATION, &[]),
+    ("province", kinds::PROVINCE, &[]),
+    ("province_definition", kinds::PROVINCE, &[]),
+    ("area", kinds::AREA, &[]),
+    ("region", kinds::REGION, &[]),
+    ("sub_continent", kinds::SUB_CONTINENT, &[]),
+    ("continent", kinds::CONTINENT, &[]),
+    ("religion", kinds::RELIGION, &[]),
+    ("religious_aspect", kinds::RELIGIOUS_ASPECT, &[]),
+    ("religious_faction", kinds::RELIGIOUS_FACTION, &[]),
+    ("religious_figure", kinds::RELIGIOUS_FIGURE, &[]),
+    ("religious_focus", kinds::RELIGIOUS_FOCUS, &[]),
+    ("religious_school", kinds::RELIGIOUS_SCHOOL, &[]),
 ];
 
 /// `ScopePrefix` rules derived from the scope-link table: one per

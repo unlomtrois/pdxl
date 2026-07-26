@@ -40,9 +40,10 @@ const FUNCTION: u32 = 8;
 const TYPE: u32 = 9;
 const NAMESPACE: u32 = 10;
 const ENUM_MEMBER: u32 = 11;
+const PARAMETER: u32 = 12;
 
 /// Legend, in wire-index order (see the constants above).
-pub const TOKEN_TYPES: [SemanticTokenType; 12] = [
+pub const TOKEN_TYPES: [SemanticTokenType; 13] = [
     SemanticTokenType::PROPERTY,
     SemanticTokenType::VARIABLE,
     SemanticTokenType::NUMBER,
@@ -55,6 +56,7 @@ pub const TOKEN_TYPES: [SemanticTokenType; 12] = [
     SemanticTokenType::TYPE,
     SemanticTokenType::NAMESPACE,
     SemanticTokenType::ENUM_MEMBER,
+    SemanticTokenType::PARAMETER,
 ];
 
 /// `defaultLibrary` marks documented builtins; `unresolved` lets clients render
@@ -224,6 +226,7 @@ pub fn tokens_yml(src: &[u8], resolved: &[(u32, u32)]) -> Vec<SemanticToken> {
                 Y::Comment => (COMMENT, 0),
                 Y::Text => (STRING, 0),
                 Y::LocReference => (TYPE, 0),
+                Y::RuntimeParameter => (PARAMETER, 0),
                 Y::Format => (KEYWORD, 0),
                 Y::Icon => (MACRO, 0),
                 Y::FunctionCandidate => {

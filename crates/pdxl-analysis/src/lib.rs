@@ -42,7 +42,28 @@ pub use table::{Duplicate, SymbolTable};
 /// facts cache must embed this in its keys (alongside content hash and
 /// rel_path) and treat mismatches as misses; bump it whenever extraction rules
 /// or the [`FileFacts`] model change meaning.
-pub const ANALYSIS_VERSION: u32 = 90; // 90: pdx-yml datafunction and localization-key completion
+pub const ANALYSIS_VERSION: u32 = 111; // 111: prefixed implicit-localization patterns and EU5 game-concept links
+// 110: benchmark large color documents and raise VS Code's decorator cap for map palettes
+// 109: EU5 situation legend colors reference named-color entities
+// 108: EU5 situations with scoped lifecycle fields, map legends, refs, and localization
+// 107: complete EU5 religion properties and important-country references
+// 106: descendant-key refs cover both EU5 religion-manager relation forms
+// 105: EU5 startup religion manager structures and religious-school references
+// 104: EU5 religion families, structures, cross-references, scopes, and localization links
+// 103: same-name implicit localization for EU5 map hierarchy entities
+// 102: EU5 named locations and five-level map hierarchy with location leaves/references
+// 101: EU5 InstitutionManager start-state contexts and institution-key references
+// 100: EU5 institutions with structural contexts, refs, loc/datafunction links, and location-scoped spawn triggers
+// 99: EU5 country/start-country/formable implicit name and _ADJ localization links
+// 98: localization-origin reference locations resolve project-relative paths for backlinks/CodeLens
+// 97: chained PDX-YML Custom(...) refs to customizable localization
+// 96: scope-aware EU5 event blocks and event-type-derived inlay hints
+// 95: EU5 event definitions, invocation/localization refs, and readme-modeled structural contexts
+// 94: IO variables as entities with implicit loc and soft var: references
+// 93: modeled IO variable structs with format/change_format and nested desc loc refs; runtime VAL/KEY/VALUE interpolation parameters
+// 92: EU5 IO/status/payment/parliament localization datafunction refs, implicit name/_desc links, and modeled IO variable structs with format/change_format loc refs and nested desc loc refs
+// 91: EU5 IO/status/payment/parliament localization datafunction refs, implicit name/_desc links, and modeled IO variable structs with format/change_format loc refs and nested desc loc refs
+// 90: pdx-yml datafunction and localization-key completion
 // 89: source-ordered pdx-yml semantic overrides for consistent entity argument coloring
 // 88: dedicated pdx-yml editor mode and enumMember entity-argument tokens
 // 87: schema-owned localization datafunction argument references

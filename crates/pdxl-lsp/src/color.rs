@@ -369,6 +369,33 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "needs PDXL_EU5_GAME; performance regression benchmark"]
+    fn eu5_named_colors_benchmark() {
+        let game = std::env::var("PDXL_EU5_GAME").expect("PDXL_EU5_GAME");
+        let path = std::path::Path::new(&game).join("main_menu/common/named_colors/02_map.txt");
+        let src = std::fs::read(&path).expect("read 02_map.txt");
+        let started = std::time::Instant::now();
+        let (tree, _) = pdxl_parser::parse(path.display().to_string(), src.clone()).into_parts();
+        let parsed = started.elapsed();
+        let started = std::time::Instant::now();
+        let colors = document_colors(
+            &tree,
+            &src,
+            "main_menu/common/named_colors/02_map.txt",
+            pdxl_game::contexts::context_schema(),
+        );
+        let scanned = started.elapsed();
+        eprintln!(
+            "{} colors: parse={parsed:?}, scan={scanned:?}",
+            colors.len()
+        );
+        assert!(
+            colors.len() > 500,
+            "fixture must exceed VS Code's default editor.colorDecoratorsLimit"
+        );
+    }
+
+    #[test]
     fn hsv_round_trip() {
         for (r, g, b) in [(0.8, 0.2, 0.2), (0.0, 0.0, 0.1), (0.3, 0.6, 0.6)] {
             let (h, s, v) = rgb_to_hsv(r, g, b);

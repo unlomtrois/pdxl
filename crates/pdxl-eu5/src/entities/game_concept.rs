@@ -8,7 +8,9 @@ use crate::kinds;
 use pdxl_analysis::context::ClauseKind::{self, Config};
 use pdxl_analysis::context::ScalarKind::Setting;
 use pdxl_analysis::context::{Fallback, StructSpec, block, scalar};
-use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
+use pdxl_analysis::{
+    DefShape, DefSource, IconHint, ImplicitLocPattern, KindSpec, RefPattern, RefRule,
+};
 
 use super::Entity;
 
@@ -46,6 +48,17 @@ static GAME_CONCEPT: StructSpec = StructSpec {
 pub(crate) struct GameConcept;
 
 impl Entity for GameConcept {
+    const IMPLICIT_LOC: &'static [ImplicitLocPattern] = &[
+        ImplicitLocPattern {
+            kind: kinds::GAME_CONCEPT,
+            suffix: "game_concept_{}",
+        },
+        ImplicitLocPattern {
+            kind: kinds::GAME_CONCEPT,
+            suffix: "game_concept_{}_desc",
+        },
+    ];
+
     const KINDS: &'static [KindSpec] = &[KindSpec {
         kind: kinds::GAME_CONCEPT,
         icon: IconHint::Tag,

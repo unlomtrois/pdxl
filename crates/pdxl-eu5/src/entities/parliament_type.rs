@@ -10,7 +10,9 @@ use crate::kinds;
 use pdxl_analysis::context::ClauseKind::{self, StaticModifier, Struct, Trigger};
 use pdxl_analysis::context::ScalarKind::Setting;
 use pdxl_analysis::context::{Fallback, StructSpec, block, block_scoped, scalar};
-use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
+use pdxl_analysis::{
+    DefShape, DefSource, IconHint, ImplicitLocPattern, KindSpec, RefPattern, RefRule,
+};
 
 use super::Entity;
 
@@ -92,6 +94,25 @@ static PARLIAMENT_TYPE: StructSpec = StructSpec {
 pub(crate) struct ParliamentType;
 
 impl Entity for ParliamentType {
+    const IMPLICIT_LOC: &'static [ImplicitLocPattern] = &[
+        ImplicitLocPattern {
+            kind: kinds::PARLIAMENT_TYPE,
+            suffix: "",
+        },
+        ImplicitLocPattern {
+            kind: kinds::PARLIAMENT_TYPE,
+            suffix: "_desc",
+        },
+    ];
+
+    const LOC_DATAFN_ARG_REFS: &'static [(&'static str, pdxl_analysis::KindId)] = &[
+        ("ShowParliamentTypeName", kinds::PARLIAMENT_TYPE),
+        (
+            "ShowParliamentTypeNameWithNoTooltip",
+            kinds::PARLIAMENT_TYPE,
+        ),
+    ];
+
     const KINDS: &'static [KindSpec] = &[KindSpec {
         kind: kinds::PARLIAMENT_TYPE,
         icon: IconHint::Hierarchy,

@@ -54,6 +54,7 @@ pub enum TokenKind {
     Comment,
     Text,
     LocReference,
+    RuntimeParameter,
     FunctionCandidate,
     Format,
     Icon,
@@ -190,18 +191,59 @@ fn byte_lines(src: &[u8]) -> impl Iterator<Item = (u32, u32)> + '_ {
     })
 }
 
+/// Runtime interpolation names supplied by engine call sites rather than
+/// looked up in the localization table. Formatting after `|` is not part of
+/// the name (`$VALUE|+=2$`).
+pub fn is_runtime_parameter(name: &str) -> bool {
+    matches!(name, "VAL" | "VALUE" | "KEY")
+}
+
 fn scan_inline(text: &[u8], base: u32, out: &mut Vec<Token>) {
     let ident = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
     let mut i = 0usize;
     let mut plain = 0usize;
     while i < text.len() {
-        let (kind, lo, hi) = if text[i] == b'$' {
+        if text[i] == b'$' {
             let Some(n) = text[i + 1..].iter().position(|&b| b == b'$') else {
                 i += 1;
                 continue;
             };
-            (TokenKind::LocReference, i + 1, i + 1 + n)
-        } else if text[i] == b'#' {
+            let close = i + 1 + n;
+            let name_end = text[i + 1..close]
+                .iter()
+                .position(|&b| b == b'|')
+                .map_or(close, |n| i + 1 + n);
+            if plain < i + 1 {
+                out.push(Token {
+                    start: base + plain as u32,
+                    end: base + (i + 1) as u32,
+                    kind: TokenKind::Text,
+                });
+            }
+            if i + 1 < name_end {
+                let name = std::str::from_utf8(&text[i + 1..name_end]).unwrap_or("");
+                out.push(Token {
+                    start: base + (i + 1) as u32,
+                    end: base + name_end as u32,
+                    kind: if is_runtime_parameter(name) {
+                        TokenKind::RuntimeParameter
+                    } else {
+                        TokenKind::LocReference
+                    },
+                });
+            }
+            if name_end < close {
+                out.push(Token {
+                    start: base + name_end as u32,
+                    end: base + close as u32,
+                    kind: TokenKind::Format,
+                });
+            }
+            i = close + 1;
+            plain = i;
+            continue;
+        }
+        let (kind, lo, hi) = if text[i] == b'#' {
             let mut end = i + 1;
             while end < text.len() && ident(text[end]) {
                 end += 1;
@@ -255,12 +297,7 @@ fn scan_inline(text: &[u8], base: u32, out: &mut Vec<Token>) {
                 kind,
             });
         }
-        // Loc refs exclude delimiters; consume the closing `$` too.
-        i = if kind == TokenKind::LocReference {
-            hi + 1
-        } else {
-            hi
-        };
+        i = hi;
         plain = i;
     }
     if plain < text.len() {
@@ -333,7 +370,7 @@ mod tests {
 
     #[test]
     fn tokenizes_inline_dialect() {
-        let src = "l_english:\n key: \"#bold $other$ [GetPlayer.GetName] @gold!#!\"\n";
+        let src = "l_english:\n key: \"#bold $other$ $VAL|0$ [GetPlayer.GetName] @gold!#!\"\n";
         let ts = tokens(src.as_bytes());
         let pieces: Vec<_> = ts
             .iter()
@@ -343,6 +380,8 @@ mod tests {
         assert!(pieces.contains(&(TokenKind::Key, "key")));
         assert!(pieces.contains(&(TokenKind::Format, "#bold")));
         assert!(pieces.contains(&(TokenKind::LocReference, "other")));
+        assert!(pieces.contains(&(TokenKind::RuntimeParameter, "VAL")));
+        assert!(pieces.contains(&(TokenKind::Format, "|0")));
         assert!(pieces.contains(&(TokenKind::FunctionCandidate, "GetPlayer")));
         assert!(pieces.contains(&(TokenKind::FunctionCandidate, "GetName")));
         assert!(pieces.contains(&(TokenKind::Icon, "@gold!")));

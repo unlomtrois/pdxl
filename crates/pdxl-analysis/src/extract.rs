@@ -94,6 +94,9 @@ pub fn extract_facts(
                 crate::schema::DefShape::QualifiedFields { separator } => {
                     harvest_qualified_fields(tree, node, separator, rule.kind, rel_path, &mut facts)
                 }
+                crate::schema::DefShape::BlocksAtDepth { depth } => harvest_blocks_at_depth(
+                    tree, node, 0, depth, rule.kind, rel_path, schema, &mut facts,
+                ),
                 // CSV-sourced definitions never reach the script extractor —
                 // the project layer routes those files to its own CSV reader.
                 crate::schema::DefShape::IdCsv => {}
@@ -106,6 +109,7 @@ pub fn extract_facts(
         harvest_nested_value_defs(tree, tree.root(), rel_path, schema, &mut facts);
     }
 
+    let mut soft_refs = Vec::new();
     extract_refs(
         tree,
         tree.root(),
@@ -115,6 +119,7 @@ pub fn extract_facts(
         0,
         schema,
         &mut facts.refs,
+        &mut soft_refs,
     );
     // Constant references are collected inline (they need no separate walk)
     // and split out afterwards: they resolve file-locally, so they must not
@@ -128,6 +133,7 @@ pub fn extract_facts(
     if let Some(targets) = calls {
         facts.calls = extract_calls(tree, full_path, targets);
     }
+    facts.calls.extend(soft_refs);
     facts
 }
 
@@ -346,6 +352,46 @@ fn harvest_grouped_defs(
 /// Harvests `NAMESPACE = { FIELD = value }` as `NAMESPACE|FIELD`-style
 /// definitions. The symbol range lands on FIELD while its lookup name retains
 /// the namespace required by reference syntax.
+#[allow(clippy::too_many_arguments)]
+fn harvest_blocks_at_depth(
+    tree: &SyntaxTree,
+    node_id: NodeId,
+    current: u8,
+    target: u8,
+    kind: KindId,
+    rel_path: &str,
+    schema: &Schema,
+    facts: &mut FileFacts,
+) {
+    let node = tree.node(node_id);
+    if node.kind == NodeKind::Field {
+        let children = tree.child_ids(node_id);
+        if children.len() == 2
+            && matches!(
+                tree.node(children[1]).kind,
+                NodeKind::Block | NodeKind::TaggedBlock
+            )
+        {
+            if current == target {
+                harvest_def(tree, node_id, kind, rel_path, schema, facts);
+                return;
+            }
+            for child in tree.children(children[1]) {
+                harvest_blocks_at_depth(
+                    tree,
+                    child,
+                    current + 1,
+                    target,
+                    kind,
+                    rel_path,
+                    schema,
+                    facts,
+                );
+            }
+        }
+    }
+}
+
 fn harvest_qualified_fields(
     tree: &SyntaxTree,
     node_id: NodeId,
@@ -673,6 +719,7 @@ fn extract_refs(
     depth: u32,
     schema: &Schema,
     refs: &mut Vec<Ref>,
+    soft_refs: &mut Vec<Ref>,
 ) {
     let node = tree.node(node_id);
     if node.kind == NodeKind::Field {
@@ -709,7 +756,7 @@ fn extract_refs(
             // (`title:k_x = { … }` appears as a key) — never for script
             // constants, whose `@name` keys are the definitions. The value's
             // subtree gets this field's key as its parent.
-            scan_prefix_refs(tree, children[0], rel_path, path, schema, refs);
+            scan_prefix_refs(tree, children[0], rel_path, path, schema, refs, soft_refs);
             extract_refs(
                 tree,
                 children[1],
@@ -719,6 +766,7 @@ fn extract_refs(
                 depth + 1,
                 schema,
                 refs,
+                soft_refs,
             );
             return;
         }
@@ -727,7 +775,12 @@ fn extract_refs(
     // ANY scalar position — value, key, or list item — so every scalar in the
     // tree is scanned, not just known-key values.
     if node.kind == NodeKind::Scalar {
-        scan_prefix_refs(tree, node_id, rel_path, path, schema, refs);
+        for rule in schema.scalar_rules() {
+            if rule.applies(rel_path) {
+                append_ref(tree, rule.kind, rule.alt, node_id, path, schema, refs);
+            }
+        }
+        scan_prefix_refs(tree, node_id, rel_path, path, schema, refs, soft_refs);
         // A `@name` scalar below file top level is a script-constant
         // reference (top-level `@name` keys are the definitions). `@[…]`
         // inline math is skipped — its variables appear un-prefixed inside.
@@ -744,7 +797,9 @@ fn extract_refs(
         }
     }
     for child in tree.children(node_id) {
-        extract_refs(tree, child, rel_path, path, parent_key, depth, schema, refs);
+        extract_refs(
+            tree, child, rel_path, path, parent_key, depth, schema, refs, soft_refs,
+        );
     }
 }
 
@@ -759,6 +814,7 @@ fn scan_prefix_refs(
     path: &str,
     schema: &Schema,
     refs: &mut Vec<Ref>,
+    soft_refs: &mut Vec<Ref>,
 ) {
     let text = tree.node_text(node_id);
     for rule in schema.scope_rules() {
@@ -793,7 +849,12 @@ fn scan_prefix_refs(
         }
         let start = node.range.start + name_start as u32;
         let end = node.range.start + name_end as u32;
-        refs.push(Ref {
+        let target = if schema.is_soft_scope_ref(rule.prefix, rule.kind) {
+            &mut *soft_refs
+        } else {
+            &mut *refs
+        };
+        target.push(Ref {
             kind: rule.kind,
             alt: rule.alt,
             name: name.into_owned(),
@@ -802,6 +863,40 @@ fn scan_prefix_refs(
             end,
         });
         break; // a scalar names at most one scope literal
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn append_descendant_key_refs(
+    tree: &SyntaxTree,
+    block_id: NodeId,
+    exclude: &[&str],
+    kind: KindId,
+    alt: &'static [KindId],
+    path: &str,
+    schema: &Schema,
+    refs: &mut Vec<Ref>,
+) {
+    for item in tree.children(block_id) {
+        if tree.node(item).kind != NodeKind::Field {
+            continue;
+        }
+        let kids = tree.child_ids(item);
+        if kids.len() != 2 {
+            continue;
+        }
+        let key_id = kids[0];
+        let range = tree.node(key_id).range;
+        let key = &tree.source()[range.start as usize..range.end as usize];
+        if !exclude.iter().any(|e| e.as_bytes() == key) {
+            append_ref(tree, kind, alt, key_id, path, schema, refs);
+        }
+        if matches!(
+            tree.node(kids[1]).kind,
+            NodeKind::Block | NodeKind::TaggedBlock
+        ) {
+            append_descendant_key_refs(tree, kids[1], exclude, kind, alt, path, schema, refs);
+        }
     }
 }
 
@@ -876,6 +971,11 @@ fn extract_field_refs(
                         append_ref(tree, rule.kind, rule.alt, key_id, path, schema, refs);
                     }
                 }
+            }
+            KeyForm::DescendantKeys(exclude) if value.kind == NodeKind::Block => {
+                append_descendant_key_refs(
+                    tree, value_id, exclude, rule.kind, rule.alt, path, schema, refs,
+                );
             }
             // Block-values form: key = { ANY = X ANY = { X Y } … } — each
             // field's scalar value (or block value's loose items) is a ref.

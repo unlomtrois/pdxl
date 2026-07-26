@@ -291,6 +291,11 @@ impl Entity for Advance {
                     gate: Some(super::government_reform::REFORMS_DIR),
                     alt: &[],
                 },
+                RefRule {
+                    pattern: RefPattern::KeyValue("age"),
+                    gate: Some(super::institution::INSTITUTIONS_DIR),
+                    alt: &[],
+                },
             ],
             ..def_only(kinds::AGE, IconHint::Hierarchy, AGE_DIR)
         },

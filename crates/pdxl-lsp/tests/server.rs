@@ -1144,12 +1144,17 @@ fn pdx_yml_completes_datafunctions_and_loc_keys() {
 fn pdx_yml_game_concept_links_resolve() {
     let t = TempTree::new();
     let concept = "subject = { alias = { subjects } texture = x }\n";
-    let loc = "l_english:\n test: \"A [subject|e], [Concept('subjects')], and [ShowAdvanceName('maona_advance')]\"\n";
+    let loc = "l_english:\n test: \"A [subject|e], [Concept('subjects')], [ShowAdvanceName('maona_advance')], and [ROOT.GetCountry.Custom('common_string_positive')]\"\n";
     let concept_path = "main_menu/common/game_concepts/00.txt";
     let loc_path = "main_menu/localization/english/x_l_english.yml";
     let advance_path = "in_game/common/advances/x.txt";
+    let custom_loc_path = "in_game/common/customizable_localization/x.txt";
     t.write(concept_path, concept);
     t.write(advance_path, "maona_advance = { age = age_1_traditions }\n");
+    t.write(
+        custom_loc_path,
+        "common_string_positive = { text = { localization_key = yes } }\n",
+    );
     t.write(loc_path, loc);
     let (server, _rx) = server_over(&t);
     let uri = uri_for(&t, loc_path);
@@ -1163,12 +1168,24 @@ fn pdx_yml_game_concept_links_resolve() {
         .definition(&uri, pos_of(loc, "maona_advance')"))
         .expect("ShowAdvanceName argument resolves");
     assert!(advance.uri.path().ends_with(advance_path), "{advance:?}");
+    let custom = server
+        .definition(&uri, pos_of(loc, "common_string_positive')"))
+        .expect("chained Custom argument resolves");
+    assert!(custom.uri.path().ends_with(custom_loc_path), "{custom:?}");
+    let custom_src = "common_string_positive = { text = { localization_key = yes } }\n";
+    let backlinks = server.references(
+        &uri_for(&t, custom_loc_path),
+        pos_of(custom_src, "common_string_positive"),
+        false,
+    );
+    assert_eq!(backlinks.len(), 1, "{backlinks:?}");
+    assert_eq!(backlinks[0].uri, uri);
 }
 
 #[test]
 fn pdx_yml_semantic_tokens_highlight_inline_dialect() {
     let t = TempTree::new();
-    let src = "l_english:\n key: \"#bold $other$ [subject|e] [GetPlayer.GetName] [ShowAdvanceName('maona_advance')] [advance|e] @gold!#!\"\n other: \"Linked text\"\n";
+    let src = "l_english:\n key: \"#bold $other$ $VAL|0$ [subject|e] [GetPlayer.GetName] [ShowAdvanceName('maona_advance')] [advance|e] @gold!#!\"\n other: \"Linked text\"\n VAL: \"Valencia\"\n";
     let path = if cfg!(feature = "eu5") {
         "main_menu/localization/english/x_l_english.yml"
     } else {
@@ -1215,12 +1232,17 @@ fn pdx_yml_semantic_tokens_highlight_inline_dialect() {
         assert_eq!(entity_type, Some(11), "maona_advance token: {types:?}");
     }
     assert!(types.contains(&6), "icon markup: {types:?}");
+    assert!(types.contains(&12), "runtime parameter: {types:?}");
 
     let uri = uri_for(&t, path);
     let target = server
         .definition(&uri, pos_of(src, "other$"))
         .expect("$key$ resolves to another localization entry");
     assert_eq!(target.range.start.line, 2);
+    assert!(
+        server.definition(&uri, pos_of(src, "VAL|0")).is_none(),
+        "runtime VAL must not resolve to the Valencia localization key"
+    );
 }
 
 #[test]
@@ -1305,6 +1327,36 @@ fn inlay_hints_show_best_effort_scope_at_block_openers() {
             // any_child inherits character (already shown by trigger) → no repeat
             ": landed_title", // title:e_test — scope change
             ": faith"         // title:e_test.faith — scope change
+        ]
+    );
+}
+
+#[cfg(feature = "eu5")]
+#[test]
+fn eu5_event_type_and_fixed_blocks_emit_scope_hints() {
+    let t = TempTree::new();
+    let src = "namespace = t\nt.1 = {\n type = location_event\n trigger = { always = yes }\n immediate = { add_location_modifier = x }\n option = { name = t.1.a add_location_modifier = x }\n major_trigger = { always = yes }\n}\n";
+    let path = "in_game/events/e.txt";
+    t.write(path, src);
+    let (server, _rx) = server_over(&t);
+    let hints = server.inlay_hints(
+        &uri_for(&t, path),
+        Range::new(Position::new(0, 0), Position::new(99, 0)),
+    );
+    let labels: Vec<&str> = hints
+        .iter()
+        .filter_map(|hint| match &hint.label {
+            InlayHintLabel::String(label) => Some(label.as_str()),
+            InlayHintLabel::LabelParts(_) => None,
+        })
+        .collect();
+    assert_eq!(
+        labels,
+        [
+            ": location (trigger)",
+            ": location (effect)",
+            ": location (effect)",
+            ": country (trigger)",
         ]
     );
 }

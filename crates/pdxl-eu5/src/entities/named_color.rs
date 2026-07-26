@@ -60,6 +60,8 @@ impl Entity for NamedColor {
                 color_in(RELIGIONS_DIR, "color"),
                 color_in(super::estate::ESTATES_DIR, "color"),
                 color_in(super::subject_type::SUBJECT_TYPES_DIR, "color"),
+                // Situation legend entries use `color = named_color`.
+                color_in(super::situation::SITUATIONS_DIR, "color"),
             ],
             aliases: &[],
         },

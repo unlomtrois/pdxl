@@ -48,7 +48,6 @@ impl Entity for Scripted {
             refs: &[],
             aliases: &[],
         },
-        def_only(kinds::EVENT, IconHint::Event, "in_game/events/"),
         KindSpec {
             kind: kinds::NAMESPACE,
             icon: IconHint::Tag,

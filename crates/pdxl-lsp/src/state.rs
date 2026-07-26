@@ -418,7 +418,13 @@ impl ServerState {
         }
         let mut slots: Vec<Option<Location>> = vec![None; matched.len()];
         for (file, idxs) in by_file {
-            let file = PathBuf::from(file);
+            // Script refs traditionally carry full paths; localization refs
+            // are extracted with their stable project-relative path. Resolve
+            // either representation before reading and producing locations.
+            let file = project
+                .rel_to_full(file)
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|| PathBuf::from(file));
             let Ok(text) = self.read_file(&file) else {
                 continue;
             };
@@ -447,7 +453,7 @@ impl ServerState {
         // even though no explicit reference token exists in script.
         if kind == LOC_KEY {
             for pattern in project.schema().all_implicit_loc_patterns() {
-                let Some(entity_name) = name.strip_suffix(pattern.suffix) else {
+                let Some(entity_name) = pattern.entity_name(&name) else {
                     continue;
                 };
                 // Empty suffix always strips successfully; reject an empty
@@ -990,7 +996,7 @@ impl ServerState {
                     text.push_str(&format!("\n\n> {loc_text}"));
                 } else if kind != LOC_KEY {
                     for pattern in project.schema().implicit_loc_patterns(kind) {
-                        let loc_name = format!("{name}{}", pattern.suffix);
+                        let loc_name = pattern.loc_name(name);
                         let Some(loc_symbol) = project.table().lookup(LOC_KEY, &loc_name) else {
                             continue;
                         };
@@ -1832,10 +1838,19 @@ pub(crate) fn scope_at(src: &[u8], rel_path: &str, off: u32) -> Option<String> {
     stack.last().and_then(|frame| frame.scope.clone())
 }
 
-/// CK3 event types that establish a character as the implicit root scope.
-/// Other event types stay unknown until their scope semantics are documented.
+/// Event `type` values establish the implicit root inherited by trigger and
+/// effect blocks. `age_event` remains unknown: EU5's dumped effect/trigger
+/// tables expose no `age` scope, and the lone vanilla event does not prove
+/// whether its script root is an age or the viewing country.
 fn event_type_scope(value: &[u8]) -> Option<&'static str> {
-    matches!(value, b"character_event" | b"letter_event").then_some("character")
+    match value {
+        b"character_event" | b"letter_event" => Some("character"),
+        b"country_event" => Some("country"),
+        b"location_event" => Some("location"),
+        b"unit_event" => Some("unit"),
+        b"exploration_event" => Some("exploration"),
+        _ => None,
+    }
 }
 
 fn event_body_context(stack: &[ScopeFrame], rel_path: &str) -> bool {

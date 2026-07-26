@@ -80,6 +80,9 @@ pub enum DefShape {
     /// `NMapColors = { COLOR = … }` → `NMapColors|COLOR`). Values may be
     /// scalar or block; top-level `@` constants are ignored.
     QualifiedFields { separator: &'static str },
+    /// Block-valued fields at an exact nesting depth become definitions
+    /// (map hierarchy: continent → sub-continent → region → area → province).
+    BlocksAtDepth { depth: u8 },
     /// Definitions come from a semicolon-separated CSV file whose **first
     /// column is a numeric id** (CK3 `map_data/definition.csv`). Not a script
     /// shape: the project layer routes matching files to a CSV reader instead
@@ -119,6 +122,11 @@ pub enum RefPattern {
     /// `key = { X = v Y = v … }` — the block's field *keys* each resolve to
     /// the kind (CK3 trait `compatibility` maps trait names to values).
     KeyBlockKeys(&'static str),
+    /// `key = { X = { Y = value relation = { Z = value } } }` — all
+    /// descendant field keys except the listed structural keys resolve.
+    /// Used by setup managers whose dynamic entity ids occur at several
+    /// equivalent nesting forms.
+    KeyDescendantKeys(&'static str, &'static [&'static str]),
     /// `key = { ANY = X ANY = { X Y } … }` — the block's field *values* each
     /// resolve to the kind, under arbitrary field keys; a block-valued field
     /// contributes its loose scalar items (CK3 religion `localization` maps
@@ -130,6 +138,9 @@ pub enum RefPattern {
     /// position (key, value, or list item, at any depth). The extracted range
     /// covers exactly `X`, so editor features land on it precisely.
     ScopePrefix(&'static str),
+    /// Every scalar value in matching files is a reference. Used for map
+    /// hierarchy leaves, whose arbitrary province keys contain location lists.
+    AllScalarValues,
     /// `X = { … }` at file top level — every top-level block's **key** is a
     /// reference to the kind (CK3 `history/provinces/`: the keys are province
     /// ids defined elsewhere, in `map_data/definition.csv`). `@var` script
@@ -155,12 +166,31 @@ pub struct RefRule {
 
 /// An implicit localization convention owned by an entity kind. For an entity
 /// `foo`, suffix `"_desc"` links localization key `foo_desc`; empty suffix
-/// links `foo` itself. These are optional project relationships, not strict
-/// extraction references.
+/// links `foo` itself. A single `{}` placeholder supports engine conventions
+/// with prefixes (`"game_concept_{}"` → `game_concept_foo`). These are optional
+/// project relationships, not strict extraction references.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ImplicitLocPattern {
     pub kind: KindId,
     pub suffix: &'static str,
+}
+
+impl ImplicitLocPattern {
+    pub fn loc_name(self, entity_name: &str) -> String {
+        if let Some((prefix, suffix)) = self.suffix.split_once("{}") {
+            format!("{prefix}{entity_name}{suffix}")
+        } else {
+            format!("{entity_name}{}", self.suffix)
+        }
+    }
+
+    pub fn entity_name(self, loc_name: &str) -> Option<&str> {
+        if let Some((prefix, suffix)) = self.suffix.split_once("{}") {
+            loc_name.strip_prefix(prefix)?.strip_suffix(suffix)
+        } else {
+            loc_name.strip_suffix(self.suffix)
+        }
+    }
 }
 
 /// ALL knowledge about one game concept, co-located: adding a kind to a game
@@ -209,6 +239,8 @@ pub(crate) enum KeyForm {
     List,
     /// The block's field keys carry the references.
     BlockKeys,
+    /// Every descendant field key except structural keys carries a reference.
+    DescendantKeys(&'static [&'static str]),
     /// The block's field values (scalar, or loose items of a block value)
     /// carry the references; keys are arbitrary.
     BlockValues,
@@ -246,8 +278,12 @@ pub struct Schema {
     key_rules: HashMap<&'static str, Vec<KeyRule>>,
     /// Scope-literal prefixes, checked against every scalar.
     scope_rules: Vec<ScopeRule>,
+    /// Scope-prefix refs which navigate/count but never diagnose when absent.
+    soft_scope_refs: HashSet<(&'static str, KindId)>,
     /// Top-level-block-keys rules, checked against every top-level field.
     top_key_rules: Vec<TopKeyRule>,
+    /// Rules applied to every scalar value in matching files.
+    scalar_rules: Vec<ScopeRule>,
     /// kind → its alias field keys.
     alias_keys: HashMap<KindId, &'static [&'static str]>,
     /// kind → its presentation hint.
@@ -340,11 +376,23 @@ impl Schema {
                     RefPattern::KeyBlockField(k, field) => (k, KeyForm::BlockField(field)),
                     RefPattern::KeyList(k) => (k, KeyForm::List),
                     RefPattern::KeyBlockKeys(k) => (k, KeyForm::BlockKeys),
+                    RefPattern::KeyDescendantKeys(k, exclude) => {
+                        (k, KeyForm::DescendantKeys(exclude))
+                    }
                     RefPattern::KeyBlockValues(k) => (k, KeyForm::BlockValues),
                     RefPattern::KeyWeighted(k) => (k, KeyForm::Weighted),
                     RefPattern::ScopePrefix(prefix) => {
                         schema.scope_rules.push(ScopeRule {
                             prefix,
+                            kind: spec.kind,
+                            gate: rule.gate,
+                            alt: rule.alt,
+                        });
+                        continue;
+                    }
+                    RefPattern::AllScalarValues => {
+                        schema.scalar_rules.push(ScopeRule {
+                            prefix: "",
                             kind: spec.kind,
                             gate: rule.gate,
                             alt: rule.alt,
@@ -400,6 +448,17 @@ impl Schema {
 
     pub fn loc_datafn_arg_kind(&self, function: &str) -> Option<KindId> {
         self.loc_datafn_arg_refs.get(function).copied()
+    }
+
+    /// Marks scope-prefix relationships as soft. Soft refs are used for
+    /// namespaces such as runtime `var:` where schema-defined names coexist
+    /// with dynamically created values.
+    pub fn set_soft_scope_refs(&mut self, refs: &[(&'static str, KindId)]) {
+        self.soft_scope_refs.extend(refs.iter().copied());
+    }
+
+    pub(crate) fn is_soft_scope_ref(&self, prefix: &'static str, kind: KindId) -> bool {
+        self.soft_scope_refs.contains(&(prefix, kind))
     }
 
     /// The def rule whose prefix matches `rel_path`, if any (Go's `ruleFor`).
@@ -541,6 +600,10 @@ impl Schema {
 
     pub(crate) fn top_key_rules(&self) -> &[TopKeyRule] {
         &self.top_key_rules
+    }
+
+    pub(crate) fn scalar_rules(&self) -> &[ScopeRule] {
+        &self.scalar_rules
     }
 
     pub(crate) fn alias_keys(&self, kind: KindId) -> Option<&'static [&'static str]> {

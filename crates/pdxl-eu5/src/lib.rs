@@ -93,5 +93,6 @@ pub(crate) fn schema_from_rows_with_skips(
     );
     schema.set_implicit_loc_patterns(&entities::implicit_loc_patterns());
     schema.set_loc_datafn_arg_refs(&entities::loc_datafn_arg_refs());
+    schema.set_soft_scope_refs(&entities::soft_scope_refs());
     schema
 }

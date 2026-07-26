@@ -228,7 +228,7 @@ fn fill_calls(
             .collect::<io::Result<Vec<_>>>()?;
         for (i, file_calls) in calls {
             if let Some(f) = facts.get_mut(&order[i].rel) {
-                f.calls = file_calls;
+                f.calls.extend(file_calls);
             }
         }
         return Ok(());
@@ -240,7 +240,7 @@ fn fill_calls(
         let full = key.full.to_string_lossy().into_owned();
         let tree = obtain_tree(&key.full, &full, cache)?;
         if let Some(f) = facts.get_mut(&key.rel) {
-            f.calls = extract_calls(&tree, &full, targets);
+            f.calls.extend(extract_calls(&tree, &full, targets));
         }
     }
     Ok(())
@@ -425,7 +425,7 @@ fn scan_loc_datafn_arg_refs(
     let ident = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] != b'[' {
+        if bytes[i] != b'[' && bytes[i] != b'.' {
             i += 1;
             continue;
         }
@@ -501,7 +501,7 @@ fn scan_loc_key_refs(
             .iter()
             .position(|&b| b == b'|')
             .map_or(close, |n| start + n);
-        if start < end {
+        if start < end && !pdxl_yml::is_runtime_parameter(&text[start..end]) {
             out.push(pdxl_analysis::Ref {
                 kind: LOC_KEY,
                 alt: &[],
