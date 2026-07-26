@@ -1471,13 +1471,15 @@ fn law_group_children_are_laws_minus_attributes() {
          }\n",
         "common/laws/00_realm_laws.txt",
     );
-    // Laws are the block children; scalar attrs and can_change_law_group and
-    // the @var are excluded. The group itself is not a symbol.
+    // Laws are the block children; scalar attrs, can_change_law_group and the
+    // @var are excluded. Since ANALYSIS_VERSION 120 the group is a symbol too —
+    // its name is localized and referenced in documentation.
     assert_eq!(
         def_names(&f),
-        vec!["crown_authority_0", "crown_authority_1"]
+        vec!["crown_authority", "crown_authority_0", "crown_authority_1"]
     );
-    assert!(f.defs.iter().all(|s| s.kind == pdxl_ck3::kinds::LAW));
+    assert_eq!(f.defs[0].kind, pdxl_ck3::kinds::LAW_GROUP);
+    assert!(f.defs[1..].iter().all(|s| s.kind == pdxl_ck3::kinds::LAW));
 }
 
 #[test]

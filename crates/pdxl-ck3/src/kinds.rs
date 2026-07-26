@@ -17,6 +17,7 @@ pub const TITLE: KindId = KindId::new("title");
 pub const CULTURE: KindId = KindId::new("culture");
 pub const FAITH: KindId = KindId::new("faith");
 pub const LAW: KindId = KindId::new("law");
+pub const LAW_GROUP: KindId = KindId::new("law_group");
 pub const SCHEME: KindId = KindId::new("scheme");
 pub const EVENT_BACKGROUND: KindId = KindId::new("event_background");
 pub const EVENT_THEME: KindId = KindId::new("event_theme");

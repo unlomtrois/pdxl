@@ -231,35 +231,50 @@ static LAW_GROUP: StructSpec = StructSpec {
 pub(crate) struct Law;
 
 impl Entity for Law {
-    const KINDS: &'static [KindSpec] = &[KindSpec {
-        kind: kinds::LAW,
-        icon: IconHint::Tag,
-        defs: Some(DefSource {
-            dir_prefix: LAWS_DIR,
-            // Top-level law groups; their block children are laws, minus the
-            // one block-valued group attribute.
-            shape: DefShape::GroupedBlocks {
-                exclude: &["can_change_law_group"],
-            },
-        }),
-        refs: &[
-            anywhere(RefPattern::KeyValue("has_realm_law")),
-            anywhere(RefPattern::KeyValue("add_realm_law")),
-            anywhere(RefPattern::KeyValue("add_realm_law_skip_effects")),
-            anywhere(RefPattern::KeyValue("remove_realm_law")),
-            // A group's `default = law_name` names a law in that group.
-            // Gated: `default` means other things outside laws files.
-            RefRule {
-                pattern: RefPattern::KeyValue("default"),
-                gate: Some(LAWS_DIR),
-                alt: &[],
-            },
-            // An innovation's tooltip-only law unlock (corpus-validated: the
-            // key never occurs in eras/ or anywhere else).
-            in_innovations(RefPattern::KeyValue("unlock_law")),
-        ],
-        aliases: &[],
-    }];
+    const KINDS: &'static [KindSpec] = &[
+        // The groups themselves. Their names are localized and referenced in
+        // documentation (`budget_allocation_military_law` is a group, not a
+        // law), so without this they resolved only as loc keys.
+        KindSpec {
+            kind: kinds::LAW_GROUP,
+            icon: IconHint::Tag,
+            defs: Some(DefSource {
+                dir_prefix: LAWS_DIR,
+                shape: DefShape::TopLevel,
+            }),
+            refs: &[],
+            aliases: &[],
+        },
+        KindSpec {
+            kind: kinds::LAW,
+            icon: IconHint::Tag,
+            defs: Some(DefSource {
+                dir_prefix: LAWS_DIR,
+                // Top-level law groups; their block children are laws, minus the
+                // one block-valued group attribute.
+                shape: DefShape::GroupedBlocks {
+                    exclude: &["can_change_law_group"],
+                },
+            }),
+            refs: &[
+                anywhere(RefPattern::KeyValue("has_realm_law")),
+                anywhere(RefPattern::KeyValue("add_realm_law")),
+                anywhere(RefPattern::KeyValue("add_realm_law_skip_effects")),
+                anywhere(RefPattern::KeyValue("remove_realm_law")),
+                // A group's `default = law_name` names a law in that group.
+                // Gated: `default` means other things outside laws files.
+                RefRule {
+                    pattern: RefPattern::KeyValue("default"),
+                    gate: Some(LAWS_DIR),
+                    alt: &[],
+                },
+                // An innovation's tooltip-only law unlock (corpus-validated: the
+                // key never occurs in eras/ or anywhere else).
+                in_innovations(RefPattern::KeyValue("unlock_law")),
+            ],
+            aliases: &[],
+        },
+    ];
 
     const ROOTS: &'static [(&'static str, ClauseKind)] =
         &[("common/laws/", ClauseKind::Struct(&LAW_GROUP))];

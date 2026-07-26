@@ -2982,3 +2982,55 @@ fn subject_contract_levels_link_to_their_implicit_loc_keys() {
         "loc key should list the obligation level: {refs:?}"
     );
 }
+
+#[cfg(feature = "ck3")]
+#[test]
+fn smart_doc_refs_prefer_entities_then_concepts_then_loc() {
+    let t = TempTree::new();
+    // One name that is a law group, a game concept, AND a loc key.
+    t.write(
+        "common/laws/00_laws.txt",
+        "budget_allocation_military_law = {\n\tbudget_allocation_military_20 = { }\n}\n\
+         another_group = { another_law = { } }\n",
+    );
+    t.write(
+        "common/game_concepts/00.txt",
+        "budget_allocation_military_law = { }\nsome_concept = { }\n",
+    );
+    t.write(
+        "localization/english/x_l_english.yml",
+        "\u{feff}l_english:\n \
+         budget_allocation_military_law: \"Military Budget\"\n \
+         some_concept: \"Concept\"\n \
+         plain_text_key: \"Just Text\"\n",
+    );
+    // Cursor targets are the *name*, never the `kind:` qualifier — extraction
+    // records only the name, so hovering the prefix finds nothing by design.
+    let src = "#! Bare ![budget_allocation_military_law] and pinned \
+               ![law_group:another_group] and ![law:budget_allocation_military_20].\n\
+               #! Concept ![some_concept], loc-only ![plain_text_key].\n\
+               e = { }\n";
+    t.write("common/scripted_effects/e.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/scripted_effects/e.txt");
+
+    // Entity beats both the concept and the loc key sharing its name.
+    let md = hover_md(
+        &server,
+        &uri,
+        pos_of(src, "budget_allocation_military_law]"),
+    );
+    assert!(md.contains("law_group"), "entity should win:\n{md}");
+
+    // Explicit prefixes pin the kind.
+    let md = hover_md(&server, &uri, pos_of(src, "another_group]"));
+    assert!(md.contains("law_group"), "law_group: prefix:\n{md}");
+    let md = hover_md(&server, &uri, pos_of(src, "budget_allocation_military_20]"));
+    assert!(md.contains("law "), "law: prefix:\n{md}");
+
+    // Concept beats a loc key of the same name; a loc-only name still resolves.
+    let md = hover_md(&server, &uri, pos_of(src, "some_concept]"));
+    assert!(md.contains("game_concept"), "concept should win:\n{md}");
+    let md = hover_md(&server, &uri, pos_of(src, "plain_text_key]"));
+    assert!(md.contains("loc_key"), "loc fallback:\n{md}");
+}

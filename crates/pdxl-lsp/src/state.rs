@@ -977,11 +977,20 @@ impl ServerState {
         if let Some((kind0, alts, name)) = symbol_at_with_alts(facts, off) {
             // The kind that actually defines the name wins the display (a
             // multi-kind ref like custom_description text shows as whichever
-            // localization kind it resolved to).
-            let kind = std::iter::once(kind0)
-                .chain(alts.iter().copied())
-                .find(|&k| project.table().lookup(k, name).is_some())
-                .unwrap_or(kind0);
+            // localization kind it resolved to). An unqualified `![Name]`
+            // carries the DOC_REF sentinel instead of a real kind, so it
+            // searches the same entity → concept → loc order the link and
+            // highlight paths use; without this it always read "unresolved".
+            let kind = if kind0 == pdxl_analysis::DOC_REF {
+                doc_ref_lookup_order(project.schema())
+                    .find(|&k| project.table().lookup(k, name).is_some())
+                    .unwrap_or(kind0)
+            } else {
+                std::iter::once(kind0)
+                    .chain(alts.iter().copied())
+                    .find(|&k| project.table().lookup(k, name).is_some())
+                    .unwrap_or(kind0)
+            };
             let mut text = format!("```pdxscript\n{} {}\n```", kind.name(), name);
             if let Some(symbol) = project.table().lookup(kind, name) {
                 let mut implicit_loc = Vec::new();
@@ -1470,14 +1479,23 @@ fn extract_doc_block(src: &[u8], def_offset: u32) -> Option<String> {
 /// here for the LSP's own hover/link paths, which rung 5 folds into facts.
 pub(crate) use pdxl_analysis::parse_doc_ref;
 
-/// Kinds to try for an unqualified `![Name]`: every kind before `LOC_KEY`, since
-/// a loc string almost always just shadows the object it names.
+/// Kinds to try for an unqualified `![Name]`, in decreasing order of how much
+/// the author probably meant them: **entities, then the game concept, then the
+/// localization key.**
+///
+/// Both tail kinds are things an entity's own name tends to shadow — a game
+/// concept explains a mechanic the entity implements, and a loc string is
+/// usually just the entity's display text — so a real definition should win
+/// over either. Between the two, a concept is the more specific answer, and its
+/// encyclopedia entry is more useful to jump to than the raw string.
 fn doc_ref_lookup_order(schema: &Schema) -> impl Iterator<Item = KindId> + '_ {
+    let concept = schema.loc_concept_kind();
     schema
         .kinds()
         .iter()
         .copied()
-        .filter(|k| *k != LOC_KEY)
+        .filter(move |k| *k != LOC_KEY && Some(*k) != concept)
+        .chain(concept)
         .chain(std::iter::once(LOC_KEY))
 }
 

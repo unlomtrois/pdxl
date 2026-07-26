@@ -44,7 +44,8 @@ pub use table::{Duplicate, SymbolTable};
 /// facts cache must embed this in its keys (alongside content hash and
 /// rel_path) and treat mismatches as misses; bump it whenever extraction rules
 /// or the [`FileFacts`] model change meaning.
-pub const ANALYSIS_VERSION: u32 = 120; // 120: DefShape::ScopedChildrenOf (parent-scoped names as gap-fill aliases) + CK3 implicit localization, applied to subject contracts and obligation levels
+pub const ANALYSIS_VERSION: u32 = 121; // 121: CK3 law groups as a kind (+ law_group: doc alias); smart-doc refs resolve entity → game concept → localization, including in hover
+// 120: DefShape::ScopedChildrenOf (parent-scoped names as gap-fill aliases) + CK3 implicit localization, applied to subject contracts and obligation levels
 // 119: CK3 religions (top-level defs alongside nested faiths + religion_tag refs) and doctrine groups (defs + gated doctrine_types)
 // 118: CK3 domiciles (5 types + 1620 buildings, has_/add_/remove_ building refs, gated previous_building and allowed_domicile_types)
 // 117: CK3 subject contracts and groups (defs + obligation-level bodies + KeyBlockField type/contract_group refs)
