@@ -2,6 +2,16 @@
 //! pattern: build a project over a temp tree, drive the handlers directly, and
 //! inspect the messages that would have gone to the client (captured on a
 //! channel instead of Go's captured notify function).
+//!
+//! Every test carries a `#[cfg(feature = …)]` for the game whose script it
+//! writes: a scenario built from CK3 directories resolves nothing under the EU5
+//! schema, so it would fail rather than skip. The bulk are CK3; the five EU5
+//! ones exercise schema-driven behavior that has no CK3 equivalent.
+
+// Helpers are shared across both feature sets but not all are used by both —
+// `m8b_project` and the completion helpers are CK3-only, for instance. Gating
+// each one would have to be re-widened the moment an EU5 test reached for it.
+#![allow(dead_code, unused_imports)]
 
 use std::path::PathBuf;
 
@@ -40,6 +50,7 @@ fn uri_for(t: &TempTree, rel: &str) -> Url {
     Url::from_file_path(t.child(rel)).unwrap()
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn initial_diagnostics_published_for_mod_files() {
     let t = TempTree::new();
@@ -56,6 +67,7 @@ fn initial_diagnostics_published_for_mod_files() {
     assert_eq!(published[0].1, 1, "exactly the unresolved 'missing'");
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn edit_fixes_reference_and_clears_diagnostics() {
     let t = TempTree::new();
@@ -88,6 +100,7 @@ fn edit_fixes_reference_and_clears_diagnostics() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn stale_debounce_generation_is_ignored() {
     let t = TempTree::new();
@@ -121,6 +134,7 @@ fn stale_debounce_generation_is_ignored() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn did_close_reverts_to_disk_state() {
     let t = TempTree::new();
@@ -152,6 +166,7 @@ fn did_close_reverts_to_disk_state() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn vanilla_files_are_never_flagged() {
     // Vanilla defines nothing the mod file needs; the vanilla file itself has
@@ -181,6 +196,7 @@ fn vanilla_files_are_never_flagged() {
     assert!(published[0].0.ends_with("m.txt"));
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn goto_definition_resolves_across_files() {
     let t = TempTree::new();
@@ -223,6 +239,7 @@ fn goto_definition_resolves_across_files() {
     ); // "brave"
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn definition_no_result_branches_return_none() {
     let t = TempTree::new();
@@ -273,6 +290,7 @@ fn definition_no_result_branches_return_none() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn docs_opened_before_project_ready_are_analyzed_after() {
     // Go parity: didOpen during the async build must not be lost.
@@ -305,6 +323,7 @@ fn docs_opened_before_project_ready_are_analyzed_after() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn event_enum_is_send() {
     // The build thread and debounce timers send these across threads.
@@ -342,6 +361,7 @@ fn server_over_parts(t: &TempTree) -> (ServerState, Receiver<Message>) {
     (server, rx)
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn references_from_a_reference_site() {
     let (t, server, _rx) = m8b_project();
@@ -362,6 +382,7 @@ fn references_from_a_reference_site() {
     }));
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn references_include_declaration_appends_definition_last() {
     let (t, server, _rx) = m8b_project();
@@ -382,6 +403,7 @@ fn references_include_declaration_appends_definition_last() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn references_from_the_definition_name() {
     // Defs-first symbolAt: cursor on the DEFINITION name finds its references.
@@ -398,6 +420,7 @@ fn references_from_the_definition_name() {
     assert_eq!(locs.len(), 3, "cursor on `brave = {{}}` finds all refs");
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn document_symbol_lists_definitions() {
     let (t, server, _rx) = m8b_project();
@@ -427,6 +450,7 @@ fn document_symbol_lists_definitions() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn hover_shows_kind_file_and_params() {
     let (t, server, _rx) = m8b_project();
@@ -465,6 +489,7 @@ fn hover_shows_kind_file_and_params() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn hover_on_unresolved_reference_says_so() {
     let t = TempTree::new();
@@ -490,6 +515,7 @@ fn hover_on_unresolved_reference_says_so() {
     assert!(m.value.contains("(unresolved)"), "{}", m.value);
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn hover_shows_builtin_effect_trigger_and_scope_link_docs() {
     let t = TempTree::new();
@@ -531,6 +557,7 @@ fn hover_md(server: &ServerState, uri: &Url, pos: Position) -> String {
     }
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn namespace_hover_shows_file_doc() {
     // A file-start `#!` doc above `namespace = X`; hovering the namespace name
@@ -577,6 +604,7 @@ fn entity_hover_and_backlinks_follow_schema_loc_patterns() {
     }
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn doc_block_shown_on_definition_and_call_site() {
     let t = TempTree::new();
@@ -600,6 +628,7 @@ fn doc_block_shown_on_definition_and_call_site() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn doc_ref_jumps_to_nested_field() {
     let t = TempTree::new();
@@ -625,6 +654,7 @@ fn doc_ref_jumps_to_nested_field() {
     assert_eq!(fragments, ["L3", "L4", "L1"]);
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn doc_ref_prefers_definition_over_loc_and_honors_explicit_kind() {
     // Name collision: a script value AND a loc key both named `my_val`.
@@ -678,6 +708,7 @@ fn position_to_off(src: &str, pos: Position) -> u32 {
     (line_start + pos.character as usize) as u32
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn doc_ref_is_clickable_document_link() {
     let t = TempTree::new();
@@ -700,6 +731,7 @@ fn doc_ref_is_clickable_document_link() {
     assert_eq!(link.range.start.character, "#! see ![".len() as u32);
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn doc_ref_semantic_color_reflects_resolution() {
     // Resolved smart-doc refs are TYPE; unresolved ones remain COMMENT.
@@ -728,6 +760,7 @@ fn doc_ref_semantic_color_reflects_resolution() {
     assert!(tokens.iter().any(|t| t.token_type == 5), "comment segments");
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn doc_block_rules() {
     // Blank line ends the block; plain `#` is not a doc; unresolved ref is plain.
@@ -750,6 +783,7 @@ fn doc_block_rules() {
     assert!(md.contains("`nope`") && !md.contains("[nope]("), "{md}");
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn option_field_completion_carries_docs() {
     let t = TempTree::new();
@@ -769,6 +803,7 @@ fn option_field_completion_carries_docs() {
     assert!(doc.value.contains("unlock-reason"), "{}", doc.value);
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn character_interaction_body_completion_and_hover() {
     let t = TempTree::new();
@@ -813,6 +848,7 @@ fn character_interaction_body_completion_and_hover() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn event_type_enum_and_structural_docs() {
     let t = TempTree::new();
@@ -842,6 +878,7 @@ fn event_type_enum_and_structural_docs() {
     assert!(hover.to_lowercase().contains("effect"), "{hover}");
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn artifact_enum_field_values_complete_and_hover() {
     let t = TempTree::new();
@@ -891,6 +928,7 @@ fn artifact_enum_field_values_complete_and_hover() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn secret_type_body_completion_and_hover() {
     let t = TempTree::new();
@@ -914,6 +952,7 @@ fn secret_type_body_completion_and_hover() {
     assert!(hover.contains("secret_type field category"), "{hover}");
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn character_template_body_completion_and_hover() {
     // A template definition body shares create_character's field structure.
@@ -938,6 +977,7 @@ fn character_template_body_completion_and_hover() {
     assert!(hover.contains("Starting age"), "{hover}");
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn create_character_block_completion_and_hover() {
     let t = TempTree::new();
@@ -1018,6 +1058,7 @@ fn advance_modifier_fallback_hover() {
     assert!(hover.contains("modifier global_max_literacy"), "{hover}");
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn hover_builtin_effect_under_struct_fallback() {
     // `start_scheme` is not a named `option` field — it falls under the
@@ -1040,6 +1081,7 @@ fn hover_builtin_effect_under_struct_fallback() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn hover_builtin_effect_in_inline_scripted_def() {
     // An inline `scripted_effect NAME = { … }` in an event file makes its body
@@ -1073,6 +1115,7 @@ fn hover_builtin_effect_in_inline_scripted_def() {
     }
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn semantic_tokens_color_keys_values_and_literals() {
     // Legend indices from src/semantic.rs: property=0, variable=1, number=2,
@@ -1182,6 +1225,7 @@ fn pdx_yml_game_concept_links_resolve() {
     assert_eq!(backlinks[0].uri, uri);
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn pdx_yml_semantic_tokens_highlight_inline_dialect() {
     let t = TempTree::new();
@@ -1245,6 +1289,7 @@ fn pdx_yml_semantic_tokens_highlight_inline_dialect() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn semantic_tokens_are_schema_aware() {
     // Legend: property=0, variable=1, operator=7, function=8, type=9,
@@ -1273,6 +1318,7 @@ fn semantic_tokens_are_schema_aware() {
     assert_eq!(data[4].token_modifiers_bitset, 0);
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn code_lens_counts_references_over_every_definition() {
     let t = TempTree::new();
@@ -1303,6 +1349,7 @@ fn code_lens_counts_references_over_every_definition() {
     assert_eq!(craven.command.unwrap().title, "0 references");
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn inlay_hints_show_best_effort_scope_at_block_openers() {
     let t = TempTree::new();
@@ -1361,6 +1408,7 @@ fn eu5_event_type_and_fixed_blocks_emit_scope_hints() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn inlay_hints_no_repeat_for_inherited_scope() {
     // Nested effect blocks that don't change scope show the hint only once, on
@@ -1382,6 +1430,7 @@ fn inlay_hints_no_repeat_for_inherited_scope() {
     assert_eq!(labels, [": character (effect)"]);
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn inlay_hints_suppress_structural_inherited_scope() {
     // `cooldown` (only duration fields) and `right_portrait` (config) merely
@@ -1404,6 +1453,7 @@ fn inlay_hints_suppress_structural_inherited_scope() {
     assert_eq!(labels, [": character (effect)"]);
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn m8b_no_result_branches_are_empty() {
     let (t, server, _rx) = m8b_project();
@@ -1547,6 +1597,7 @@ fn labels(items: &[lsp_types::CompletionItem]) -> Vec<&str> {
     items.iter().map(|i| i.label.as_str()).collect()
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn completion_in_effect_block_offers_effects_and_scripted() {
     let (server, _rx, t) = completion_server();
@@ -1574,6 +1625,7 @@ fn completion_in_effect_block_offers_effects_and_scripted() {
     assert_eq!(documentation.value, "adds gold to a character");
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn completion_in_trigger_block_offers_triggers() {
     let (server, _rx, t) = completion_server();
@@ -1588,6 +1640,7 @@ fn completion_in_trigger_block_offers_triggers() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn completion_in_option_offers_fields_and_inline_effects() {
     let (server, _rx, t) = completion_server();
@@ -1603,6 +1656,7 @@ fn completion_in_option_offers_fields_and_inline_effects() {
     assert!(names.contains(&"my_scripted_fx"));
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn completion_at_event_top_level_offers_field_snippets() {
     let (server, _rx, t) = completion_server();
@@ -1620,6 +1674,7 @@ fn completion_at_event_top_level_offers_field_snippets() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn completion_at_file_top_level_offers_event_skeleton() {
     let (server, _rx, t) = completion_server();
@@ -1644,6 +1699,7 @@ fn completion_at_file_top_level_offers_event_skeleton() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn completion_after_reference_key_offers_only_matching_symbols() {
     let (server, _rx, t) = completion_server();
@@ -1660,6 +1716,7 @@ fn completion_after_reference_key_offers_only_matching_symbols() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn completion_after_gated_capital_offers_titles_only_in_landed_titles() {
     let (server, _rx, t) = completion_server();
@@ -1678,6 +1735,7 @@ fn completion_after_gated_capital_offers_titles_only_in_landed_titles() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn completion_for_scope_prefix_offers_titles() {
     let (server, _rx, t) = completion_server();
@@ -1688,6 +1746,7 @@ fn completion_for_scope_prefix_offers_titles() {
     assert!(names.contains(&"e_test"));
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn completion_immediately_after_scope_prefix_offers_titles() {
     let (mut server, _rx, t) = completion_server();
@@ -1703,6 +1762,7 @@ fn completion_immediately_after_scope_prefix_offers_titles() {
     assert!(title.text_edit.is_some());
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn completion_for_partially_typed_scope_prefix_filters_symbols() {
     let (mut server, _rx, t) = completion_server();
@@ -1716,6 +1776,7 @@ fn completion_for_partially_typed_scope_prefix_filters_symbols() {
     assert!(!names.contains(&"e_test"));
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn completion_for_culture_and_faith_prefixes_offers_matching_symbols() {
     let (mut server, _rx, t) = completion_server();
@@ -1734,6 +1795,7 @@ fn completion_for_culture_and_faith_prefixes_offers_matching_symbols() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn completion_after_scope_link_dot_offers_members() {
     let (mut server, _rx, t) = completion_server();
@@ -1750,6 +1812,7 @@ fn completion_after_scope_link_dot_offers_members() {
     assert!(holder.text_edit.is_some());
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn completion_uses_scope_from_a_chained_title_link() {
     let (mut server, _rx, t) = completion_server();
@@ -1762,6 +1825,7 @@ fn completion_uses_scope_from_a_chained_title_link() {
     assert!(!names.contains(&"add_character_flag"));
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn completion_in_on_action_event_list_offers_events() {
     let (server, _rx, t) = completion_server();
@@ -1773,6 +1837,7 @@ fn completion_in_on_action_event_list_offers_events() {
     assert!(!names.contains(&"patient"));
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn completion_ranks_builtin_items_for_the_current_scope() {
     let (server, _rx, t) = completion_server();
@@ -1791,6 +1856,7 @@ fn completion_ranks_builtin_items_for_the_current_scope() {
     assert!(!items.iter().any(|item| item.label == "set_title_color"));
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn completion_filters_effects_in_a_known_title_scope() {
     let (server, _rx, t) = completion_server();
@@ -1809,6 +1875,7 @@ fn completion_filters_effects_in_a_known_title_scope() {
 
 // ── formatting ──────────────────────────────────────────────────────────────
 
+#[cfg(feature = "ck3")]
 #[test]
 fn formatting_returns_whole_document_edit() {
     let t = TempTree::new();
@@ -1832,6 +1899,7 @@ fn formatting_returns_whole_document_edit() {
     assert_eq!(edits[0].range.start, Position::new(0, 0));
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn formatting_already_formatted_returns_empty_and_broken_returns_none() {
     let t = TempTree::new();
@@ -1845,6 +1913,7 @@ fn formatting_already_formatted_returns_empty_and_broken_returns_none() {
 
 // ── localization ────────────────────────────────────────────────────────────
 
+#[cfg(feature = "ck3")]
 #[test]
 fn loc_key_goto_definition_and_hover_text() {
     let t = TempTree::new();
@@ -1875,6 +1944,7 @@ fn loc_key_goto_definition_and_hover_text() {
     assert!(m.value.contains("> Hold the line"), "{}", m.value);
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn loc_concept_link_goto_definition() {
     let t = TempTree::new();
@@ -1906,6 +1976,7 @@ fn loc_concept_link_goto_definition() {
     assert!(loc.uri.path().ends_with("common/game_concepts/00.txt"));
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn situation_body_completion_hover_and_effect_context() {
     let t = TempTree::new();
@@ -1951,6 +2022,7 @@ fn situation_body_completion_hover_and_effect_context() {
     assert!(hover.contains("situation_type field window"), "{hover}");
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn scheme_body_offers_corpus_fields_and_enum_values() {
     let t = TempTree::new();
@@ -1995,6 +2067,7 @@ fn scheme_body_offers_corpus_fields_and_enum_values() {
     }
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn inlay_hints_show_loc_text_for_resolved_keys() {
     let t = TempTree::new();
@@ -2042,6 +2115,7 @@ fn inlay_hints_show_loc_text_for_resolved_keys() {
     assert!(full.ends_with("drill manuals."));
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn references_work_from_inside_a_loc_yml() {
     let t = TempTree::new();
@@ -2072,6 +2146,7 @@ fn edit_pairs(edit: &lsp_types::WorkspaceEdit) -> Vec<(String, String)> {
     out
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn rename_loc_key_across_yml_and_script() {
     let t = TempTree::new();
@@ -2112,6 +2187,7 @@ fn rename_loc_key_across_yml_and_script() {
     assert_eq!(edit_pairs(&from_def), pairs);
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn rename_preserves_quoting_per_site() {
     let t = TempTree::new();
@@ -2133,6 +2209,7 @@ fn rename_preserves_quoting_per_site() {
     assert!(texts.contains(&"\"daring\"".to_string()), "{texts:?}");
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn prepare_rename_selects_identifier_and_rejects_non_symbols() {
     let t = TempTree::new();
@@ -2168,6 +2245,7 @@ fn prepare_rename_selects_identifier_and_rejects_non_symbols() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn workspace_symbols_fuzzy_search() {
     let t = TempTree::new();
@@ -2209,6 +2287,7 @@ fn workspace_symbols_fuzzy_search() {
     assert!(server.workspace_symbols("").len() >= 4);
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn rename_rejects_invalid_new_name() {
     let t = TempTree::new();
@@ -2225,6 +2304,7 @@ fn rename_rejects_invalid_new_name() {
     assert!(server.rename(&uri, Position::new(0, 0), "a=b").is_none());
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn completion_inside_a_law_offers_law_fields() {
     let (server, _rx, t) = completion_server();
@@ -2242,6 +2322,7 @@ fn completion_inside_a_law_offers_law_fields() {
     assert!(!names.contains(&"add_gold"), "{names:?}");
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn completion_inside_a_law_group_offers_attributes_only() {
     let (server, _rx, t) = completion_server();
@@ -2258,6 +2339,7 @@ fn completion_inside_a_law_group_offers_attributes_only() {
     assert!(!names.contains(&"can_keep"));
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn law_fields_get_documented_root_scope_hints() {
     let t = TempTree::new();
@@ -2296,6 +2378,7 @@ fn law_fields_get_documented_root_scope_hints() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn hover_on_a_law_field_key_describes_it() {
     let t = TempTree::new();
@@ -2322,6 +2405,7 @@ fn hover_on_a_law_field_key_describes_it() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn gui_template_definition_and_references() {
     let t = TempTree::new();
@@ -2372,6 +2456,7 @@ fn gui_template_definition_and_references() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn gui_datafn_hover_and_diagnostics() {
     let t = TempTree::new();
@@ -2400,6 +2485,7 @@ fn gui_datafn_hover_and_diagnostics() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn gui_semantic_tokens_color_keywords_types_and_datafns() {
     // Legend: property=0, variable=1, string=3, keyword=4, function=8, type=9.
@@ -2447,6 +2533,7 @@ fn gui_semantic_tokens_color_keywords_types_and_datafns() {
     assert_eq!(at(6, 1).unwrap().3, 9, "instantiation ref: {abs:?}");
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn gui_completion_keys_values_and_datafns() {
     let t = TempTree::new();
@@ -2516,6 +2603,7 @@ fn gui_completion_keys_values_and_datafns() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn gui_datafn_completion_inside_quoted_string() {
     let t = TempTree::new();
@@ -2541,6 +2629,7 @@ fn gui_datafn_completion_inside_quoted_string() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn gui_datafn_completion_with_closed_bracket() {
     // Auto-closing pairs mean the user types inside `"[GetTi]"` — the `]`
@@ -2559,6 +2648,7 @@ fn gui_datafn_completion_with_closed_bracket() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn gui_property_docs_in_hover_and_completion() {
     let t = TempTree::new();
@@ -2586,6 +2676,7 @@ fn gui_property_docs_in_hover_and_completion() {
     assert!(pa.documentation.is_some(), "doc attached");
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn custom_description_text_resolves_across_kinds() {
     let t = TempTree::new();
@@ -2639,6 +2730,7 @@ fn custom_description_text_resolves_across_kinds() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn scripted_gui_definition_from_gui_datafn_arg() {
     let t = TempTree::new();
@@ -2670,6 +2762,7 @@ fn scripted_gui_definition_from_gui_datafn_arg() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn decision_definition_from_gui_datafn_arg() {
     let t = TempTree::new();
@@ -2698,6 +2791,7 @@ fn decision_definition_from_gui_datafn_arg() {
     );
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn gui_text_and_tooltip_reference_loc_keys() {
     let t = TempTree::new();
@@ -2739,6 +2833,7 @@ fn gui_text_and_tooltip_reference_loc_keys() {
     assert!(server.definition(&uri, pos_of(src, "Just some")).is_none());
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn trait_body_completion_offers_fields_and_modifier_tags() {
     let t = TempTree::new();
@@ -2785,6 +2880,7 @@ fn trait_body_completion_offers_fields_and_modifier_tags() {
     assert!(hover.contains("trait field category"), "{hover}");
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn game_concept_body_completion_and_hover() {
     let t = TempTree::new();
@@ -2811,6 +2907,7 @@ fn game_concept_body_completion_and_hover() {
     assert!(hover.contains("game_concept field parent"), "{hover}");
 }
 
+#[cfg(feature = "ck3")]
 #[test]
 fn smart_doc_references_participate_in_find_references_and_code_lens() {
     let t = TempTree::new();
