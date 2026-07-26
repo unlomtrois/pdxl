@@ -78,6 +78,7 @@ const DOC_REF_ALIASES: &[(&str, KindId)] = &[
     ("faith", kinds::FAITH),
     ("law", kinds::LAW),
     ("scheme", kinds::SCHEME),
+    ("government", kinds::GOVERNMENT),
     ("modifier", kinds::MODIFIER),
     ("animation", kinds::PORTRAIT_ANIMATION),
     ("background", kinds::EVENT_BACKGROUND),

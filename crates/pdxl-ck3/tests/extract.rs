@@ -2189,3 +2189,126 @@ fn files_without_doc_comments_gain_no_calls() {
     );
     assert!(f.calls.is_empty());
 }
+
+#[test]
+fn governments_define_and_reference() {
+    let f = extract(
+        "feudal_government = {\n\
+         \tgovernment_rules = { create_cadet_branches = yes }\n\
+         \tblocked_subject_courts = { admin_government }\n\
+         \tcompatible_government_type_succession = { clan_government }\n\
+         }\n",
+        "common/governments/00_government_types.txt",
+    );
+    assert!(
+        f.defs
+            .iter()
+            .any(|d| d.kind == pdxl_ck3::kinds::GOVERNMENT && d.name == "feudal_government")
+    );
+    // Both government→government lists resolve, and only inside this dir.
+    for n in ["admin_government", "clan_government"] {
+        assert!(
+            f.refs
+                .iter()
+                .any(|r| r.kind == pdxl_ck3::kinds::GOVERNMENT && r.name == n),
+            "{n}"
+        );
+    }
+    // `government_rules` toggles are settings, never references.
+    assert!(f.refs.iter().all(|r| r.name != "create_cadet_branches"));
+
+    // The name lists mean nothing outside common/governments/.
+    let e = extract(
+        "x = { blocked_subject_courts = { admin_government } }\n",
+        "common/scripted_effects/e.txt",
+    );
+    assert!(e.refs.iter().all(|r| r.kind != pdxl_ck3::kinds::GOVERNMENT));
+}
+
+#[test]
+fn government_reference_keys_resolve_anywhere() {
+    // `has_government`/`change_government`/`government` are corpus-validated as
+    // unambiguous, so they fire ungated — including in title history.
+    for (src, rel) in [
+        (
+            "e = { has_government = feudal_government }\n",
+            "common/scripted_triggers/t.txt",
+        ),
+        (
+            "e = { change_government = clan_government }\n",
+            "common/scripted_effects/e.txt",
+        ),
+        (
+            "c_x = { 1066.1.1 = { government = theocracy_government } }\n",
+            "history/titles/k_france.txt",
+        ),
+        (
+            "x = { invalid_for_government = nomad_government }\n",
+            "common/culture/traditions/00_t.txt",
+        ),
+    ] {
+        let f = extract(src, rel);
+        assert!(
+            f.refs.iter().any(|r| r.kind == pdxl_ck3::kinds::GOVERNMENT),
+            "{rel}: {:?}",
+            f.refs
+        );
+    }
+}
+
+#[test]
+fn government_body_opens_documented_contexts() {
+    use pdxl_analysis::context::{ClauseKind, context_of_chain};
+    let rel = "common/governments/00_government_types.txt";
+    let ctx = |keys: &[&str]| {
+        context_of_chain(
+            keys.iter().map(|k| k.as_bytes()),
+            rel,
+            pdxl_ck3::contexts::context_schema(),
+        )
+    };
+    // Triggers, so nested effects/triggers resolve inside them.
+    assert!(matches!(
+        ctx(&["feudal_government", "can_get_government"]),
+        ClauseKind::Trigger
+    ));
+    assert!(matches!(
+        ctx(&["feudal_government", "can_move_realm_capital"]),
+        ClauseKind::Trigger
+    ));
+    // Modifier blocks fall back to the static-modifier vocabulary.
+    assert!(matches!(
+        ctx(&["feudal_government", "character_modifier"]),
+        ClauseKind::StaticModifier
+    ));
+    // Named sub-structs.
+    assert!(matches!(
+        ctx(&["feudal_government", "government_rules"]),
+        ClauseKind::Struct(_)
+    ));
+    assert!(matches!(
+        ctx(&["feudal_government", "ai"]),
+        ClauseKind::Struct(_)
+    ));
+    // The corpus spellings win over the readme's. Scalar fields resolve
+    // through `resolve_key`, not `context_of_chain` (which walks blocks).
+    let root = ctx(&["feudal_government"]);
+    for corpus in ["vassal_contract_group", "administrative_title_maa_setup"] {
+        assert!(
+            matches!(
+                pdxl_analysis::context::resolve_key(root, corpus, false),
+                ClauseKind::Config
+            ),
+            "{corpus}"
+        );
+    }
+    for readme_only in ["vassal_contract", "title_maa_setup"] {
+        assert!(
+            matches!(
+                pdxl_analysis::context::resolve_key(root, readme_only, false),
+                ClauseKind::Unknown
+            ),
+            "{readme_only}"
+        );
+    }
+}

@@ -46,6 +46,7 @@ mod event_theme;
 mod faith;
 mod game_concept;
 mod game_rule;
+mod government;
 mod gui;
 mod holy_site;
 mod law;
@@ -143,5 +144,6 @@ registry!(
     holy_site::HolySite,
     religion_family::ReligionFamily,
     game_rule::GameRule,
+    government::Government,
     loc::Loc,
 );
