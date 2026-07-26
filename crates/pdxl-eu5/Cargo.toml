@@ -16,6 +16,7 @@ pdxl-gamedocs.workspace = true
 pdxl-parser.workspace = true
 pdxl-fileset.workspace = true
 pdxl-project.workspace = true
+pdxl-testutil.workspace = true
 
 [lints.rust]
 unsafe_code = "forbid"

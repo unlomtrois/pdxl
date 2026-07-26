@@ -39,8 +39,40 @@ fn run_check(args: &[&str], roots: &[(&str, &TempTree)]) -> (String, bool) {
     (stdout, out.status.success())
 }
 
+/// The game this binary was built for. `check` output is schema-shaped — the
+/// kind table alone differs per game — so goldens are recorded per feature
+/// rather than shared.
+const GAME: &str = if cfg!(feature = "ck3") { "ck3" } else { "eu5" };
+
+/// A minimal project with one resolved and one unresolved reference, written in
+/// the script of whichever game this binary was built for.
+///
+/// Game-agnostic properties (determinism, exit codes) are still one test — only
+/// the script has to differ, because a schema sees nothing in another game's
+/// directories and would report no references at all.
+fn one_resolved_one_unresolved() -> TempTree {
+    let t = TempTree::new();
+    #[cfg(feature = "ck3")]
+    {
+        t.write("common/traits/00.txt", "brave = { }\n");
+        t.write(
+            "common/scripted_effects/e.txt",
+            "e = { add_trait = brave add_trait = nope }\n",
+        );
+    }
+    #[cfg(feature = "eu5")]
+    {
+        t.write("in_game/common/advances/00.txt", "maona_advance = { }\n");
+        t.write(
+            "in_game/common/situations/s.txt",
+            "black_death = { can_start = { has_advance = maona_advance has_advance = nope } }\n",
+        );
+    }
+    t
+}
+
 fn check_golden(name: &str, dump: &str) {
-    let dir = repo_root().join("crates/pdxl-cli/tests/goldens");
+    let dir = repo_root().join("crates/pdxl-cli/tests/goldens").join(GAME);
     let path = dir.join(format!("{name}.golden"));
     if std::env::var_os("UPDATE_GOLDENS").is_some() {
         std::fs::create_dir_all(&dir).unwrap();
@@ -52,6 +84,52 @@ fn check_golden(name: &str, dump: &str) {
     assert_eq!(dump, golden, "check output changed for '{name}'");
 }
 
+/// The EU5 counterpart of [`check_matches_goldens`]: same structural
+/// properties — a duplicate definition, a resolved ref, an unresolved ref, and
+/// a clean project exiting zero — expressed in EU5 script under its `in_game/`
+/// module root. Kept separate rather than sharing fixtures because CK3 script
+/// analyzed by the EU5 schema (or the reverse) pins meaningless output.
+#[cfg(feature = "eu5")]
+#[test]
+fn check_matches_goldens() {
+    let m = TempTree::new();
+    m.write(
+        "in_game/common/advances/00.txt",
+        "maona_advance = { }\nother_advance = { }\n",
+    );
+    m.write("in_game/common/advances/01.txt", "maona_advance = { }\n"); // duplicate
+    m.write(
+        "in_game/common/situations/s.txt",
+        "black_death = {\n\tcan_start = { has_advance = maona_advance }\n\tvisible = { has_advance = missing_advance }\n}\n",
+    );
+    let mod_s = m.path.to_string_lossy().into_owned();
+    let roots: &[(&str, &TempTree)] = &[("<mod>", &m)];
+
+    let (stdout, ok) = run_check(&["check", "--mod", &mod_s, "--no-cache"], roots);
+    assert!(!ok, "unresolved refs must exit non-zero");
+    check_golden("check_project", &stdout);
+
+    // Clean project (no unresolved → exit zero).
+    let clean = TempTree::new();
+    clean.write("in_game/common/advances/00.txt", "maona_advance = { }\n");
+    clean.write(
+        "in_game/common/situations/s.txt",
+        "black_death = { can_start = { has_advance = maona_advance } }\n",
+    );
+    let (stdout, ok) = run_check(
+        &[
+            "check",
+            "--mod",
+            clean.path.to_string_lossy().as_ref(),
+            "--no-cache",
+        ],
+        &[("<mod>", &clean)],
+    );
+    assert!(ok, "clean project must exit zero:\n{stdout}");
+    check_golden("check_clean", &stdout);
+}
+
+#[cfg(feature = "ck3")]
 #[test]
 fn check_matches_goldens() {
     // A project with duplicates, aliases, resolved and unresolved refs, plus a
@@ -141,12 +219,7 @@ fn check_matches_goldens() {
 fn check_runs_are_deterministic() {
     // Repeated runs over an unchanged tree must produce identical output
     // (HashMap iteration must never leak into any report ordering).
-    let proj = TempTree::new();
-    proj.write("common/traits/00.txt", "brave = { }\n");
-    proj.write(
-        "common/scripted_effects/e.txt",
-        "e = { add_trait = brave add_trait = nope }\n",
-    );
+    let proj = one_resolved_one_unresolved();
     let proj_s = proj.path.to_string_lossy();
     let run = || {
         Command::new(env!("CARGO_BIN_EXE_pdxl"))

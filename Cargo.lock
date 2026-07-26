@@ -760,6 +760,7 @@ dependencies = [
  "pdxl-gui",
  "pdxl-parser",
  "pdxl-project",
+ "pdxl-testutil",
 ]
 
 [[package]]
@@ -892,6 +893,10 @@ version = "0.114.0"
 [[package]]
 name = "pdxl-testutil"
 version = "0.114.0"
+dependencies = [
+ "pdxl-analysis",
+ "pdxl-parser",
+]
 
 [[package]]
 name = "pdxl-yml"

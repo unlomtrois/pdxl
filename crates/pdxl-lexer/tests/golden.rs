@@ -32,29 +32,13 @@ fn dump_tokens(src: &[u8]) -> String {
     out
 }
 
-/// Collects fixture files: `testdata/*.txt` plus `*.txt` in `testdata/ck3`,
-/// `testdata/lint`, and the crate-local stress fixtures, sorted.
+/// Every game's fixtures plus the malformed-input corner and the crate-local
+/// stress fixtures. The lexer is game-agnostic, so it deliberately walks all of
+/// them — a new game's script is free coverage here.
 fn fixtures(root: &Path) -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    let dirs = [
-        root.join("testdata"),
-        root.join("testdata/ck3"),
-        root.join("testdata/lint"),
-        root.join("crates/pdxl-lexer/testdata"),
-    ];
-    for dir in dirs {
-        let Ok(entries) = std::fs::read_dir(&dir) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) == Some("txt") {
-                out.push(path);
-            }
-        }
-    }
-    out.sort();
-    out
+    let mut dirs = pdxl_testutil::shared_fixture_dirs(root);
+    dirs.push(root.join("crates/pdxl-lexer/testdata"));
+    pdxl_testutil::collect_fixtures(&dirs)
 }
 
 #[test]

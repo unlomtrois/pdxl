@@ -18,20 +18,16 @@ fn repo_root() -> PathBuf {
 
 #[test]
 fn golden_trees_match() {
-    let testdata = repo_root().join("testdata");
-    let mut fixtures: Vec<PathBuf> = std::fs::read_dir(&testdata)
-        .expect("read testdata")
-        .flatten()
-        .map(|e| e.path())
-        .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("txt"))
-        .collect();
-    fixtures.sort();
+    let root = repo_root();
+    // Game-agnostic: the Go oracle rendered trees, not facts, so every game's
+    // fixtures are fair game. Each golden sits beside its fixture.
+    let fixtures = pdxl_testutil::collect_fixtures(&pdxl_testutil::shared_fixture_dirs(&root));
     assert!(!fixtures.is_empty(), "no fixtures found");
 
     let mut compared = 0;
     for fixture in &fixtures {
         let name = fixture.file_stem().unwrap().to_string_lossy().to_string();
-        let golden_path = testdata.join(format!("{name}.golden"));
+        let golden_path = fixture.with_extension("golden");
         if !golden_path.is_file() {
             continue; // not all fixtures have a golden tree
         }

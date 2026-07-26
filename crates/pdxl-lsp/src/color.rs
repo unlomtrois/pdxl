@@ -311,14 +311,31 @@ mod tests {
         .collect()
     }
 
+    /// A definition with two sibling color fields, in whichever game this build
+    /// targets — `document_colors` consults the *active* schema, so a CK3 path
+    /// finds nothing under EU5 and vice versa.
+    #[cfg(feature = "ck3")]
+    const TWO_COLOR_FIELDS: (&str, &str) = (
+        "hills = {\n\tcolor = hsv { 0.0 1.0 1.0 }\n\ttravel_danger_color = { 255 0 0 }\n}\n",
+        "common/terrain_types/00.txt",
+    );
+    #[cfg(feature = "eu5")]
+    const TWO_COLOR_FIELDS: (&str, &str) = (
+        "FRA = {\n\tcolor = hsv { 0.0 1.0 1.0 }\n\tcolor2 = { 255 0 0 }\n}\n",
+        "in_game/setup/countries/00.txt",
+    );
+
+    /// The named-colors directory of the active game — both schemas model one.
+    #[cfg(feature = "ck3")]
+    const NAMED_COLORS: &str = "common/named_colors/x.txt";
+    #[cfg(feature = "eu5")]
+    const NAMED_COLORS: &str = "main_menu/common/named_colors/x.txt";
+
     #[test]
     fn finds_all_three_literal_forms() {
-        let src = "hills = {\n\
-                   \tcolor = hsv { 0.0 1.0 1.0 }\n\
-                   \ttravel_danger_color = { 255 0 0 }\n\
-                   }\n";
-        let found = colors_in(src, "common/terrain_types/00.txt");
-        assert_eq!(found.len(), 2);
+        let (src, rel) = TWO_COLOR_FIELDS;
+        let found = colors_in(src, rel);
+        assert_eq!(found.len(), 2, "{found:?}");
         assert_eq!(found[0].0, "hsv { 0.0 1.0 1.0 }");
         assert_eq!(found[1].0, "{ 255 0 0 }");
         // Both are pure red.
@@ -333,8 +350,8 @@ mod tests {
                    \twhite = rgb { 255 255 255 }\n\
                    \thalf = { 0.5 0.5 0.5 }\n\
                    }\n";
-        let found = colors_in(src, "common/named_colors/x.txt");
-        assert_eq!(found.len(), 2);
+        let found = colors_in(src, NAMED_COLORS);
+        assert_eq!(found.len(), 2, "{found:?}");
         assert!((found[0].1.red - 1.0).abs() < 1e-4);
         assert!((found[1].1.green - 0.5).abs() < 1e-4);
     }

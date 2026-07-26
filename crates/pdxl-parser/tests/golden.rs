@@ -118,29 +118,13 @@ fn push_json_escaped(out: &mut String, s: &str) {
     }
 }
 
-/// Fixtures: shared `testdata` (incl. ck3 + malformed lint) plus the
-/// crate-local stress fixtures, sorted.
+/// Every game's fixtures plus the malformed-input corner and the crate-local
+/// stress fixtures. The parser is game-agnostic — the grammar is shared — so it
+/// deliberately walks all of them.
 fn fixtures(root: &Path) -> Vec<PathBuf> {
-    let mut out = Vec::new();
-    let dirs = [
-        root.join("testdata"),
-        root.join("testdata/ck3"),
-        root.join("testdata/lint"),
-        root.join("crates/pdxl-lexer/testdata"),
-    ];
-    for dir in dirs {
-        let Ok(entries) = std::fs::read_dir(&dir) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) == Some("txt") {
-                out.push(path);
-            }
-        }
-    }
-    out.sort();
-    out
+    let mut dirs = pdxl_testutil::shared_fixture_dirs(root);
+    dirs.push(root.join("crates/pdxl-lexer/testdata"));
+    pdxl_testutil::collect_fixtures(&dirs)
 }
 
 #[test]
