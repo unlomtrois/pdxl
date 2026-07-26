@@ -7,7 +7,7 @@
 
 use std::sync::Arc;
 
-use pdxl_lexer::{Token, TokenKind, tokenize};
+use pdxl_lexer::{Token, TokenKind, tokenize_with_docs};
 use pdxl_src::TextRange;
 
 use crate::diagnostic::{Diagnostic, Parse, Severity};
@@ -39,6 +39,7 @@ fn parse_inner(filename: Arc<str>, source: Arc<[u8]>, gui: bool) -> Parse {
         source,
         p.nodes.into_boxed_slice(),
         p.index.into_boxed_slice(),
+        p.doc_comments.into_boxed_slice(),
     );
     Parse {
         tree,
@@ -53,6 +54,9 @@ struct Parser {
     nodes: Vec<Node>,
     index: Vec<NodeId>,
     diags: Vec<Diagnostic>,
+    /// `#!` ranges harvested by the same lexer pass that produced `tokens`;
+    /// carried straight through to the tree's side-channel.
+    doc_comments: Vec<TextRange>,
     /// Interface-script dialect: accept `[Datafunction.Chain]` values.
     gui: bool,
 }
@@ -70,7 +74,7 @@ const fn blank(kind: NodeKind) -> Node {
 
 impl Parser {
     fn new(filename: Arc<str>, src: &[u8]) -> Self {
-        let tokens = tokenize(src);
+        let (tokens, doc_comments) = tokenize_with_docs(src);
         let cap = tokens.len() / 2;
         Parser {
             tokens,
@@ -79,6 +83,7 @@ impl Parser {
             nodes: Vec::with_capacity(cap),
             index: Vec::with_capacity(cap),
             diags: Vec::new(),
+            doc_comments,
             gui: false,
         }
     }

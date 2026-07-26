@@ -596,9 +596,31 @@ impl<'src> Lexer<'src> {
 /// handling, so comments must not reach it. Consumers that *want* comments
 /// drive [`Lexer::next_token`] directly.
 pub fn tokenize(src: &[u8]) -> Vec<Token> {
+    tokenize_inner(src, None)
+}
+
+/// Like [`tokenize`], but also returns the range of every `#!` doc comment,
+/// in source order — the parser's single-pass path.
+///
+/// Plain comments are still dropped on the spot. Only doc comments are
+/// retained, which is why this costs nothing: they are ~0.004% of comments in
+/// practice, so the returned vector is a handful of entries even for large
+/// files.
+pub fn tokenize_with_docs(src: &[u8]) -> (Vec<Token>, Vec<TextRange>) {
+    let mut docs = Vec::new();
+    let tokens = tokenize_inner(src, Some(&mut docs));
+    (tokens, docs)
+}
+
+fn tokenize_inner(src: &[u8], mut docs: Option<&mut Vec<TextRange>>) -> Vec<Token> {
     let mut lexer = Lexer::init(src);
     let mut out = Vec::with_capacity(src.len() / 8);
     while let Some(tok) = lexer.next_token() {
+        if tok.kind == TokenKind::DocComment
+            && let Some(docs) = docs.as_deref_mut()
+        {
+            docs.push(tok.range);
+        }
         if tok.kind.is_comment() || matches!(tok.kind, TokenKind::Invalid | TokenKind::Eof) {
             continue;
         }

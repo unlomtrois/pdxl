@@ -42,4 +42,4 @@
 {"id":40,"kind":"field","start":251,"end":259,"operator":"equal","child_start":33,"child_end":35},
 {"id":41,"kind":"block","start":0,"end":0,"operator":"invalid","child_start":35,"child_end":39},
 {"id":42,"kind":"field","start":3,"end":25,"operator":"equal","child_start":39,"child_end":41}
-],"child_ids":[2,3,6,7,8,5,9,12,13,14,11,15,18,19,21,22,24,25,27,28,30,31,33,34,36,37,20,23,26,29,32,35,38,17,39,4,10,16,40,1,41,42],"diagnostics":[]}
+],"child_ids":[2,3,6,7,8,5,9,12,13,14,11,15,18,19,21,22,24,25,27,28,30,31,33,34,36,37,20,23,26,29,32,35,38,17,39,4,10,16,40,1,41,42],"doc_comments":[],"diagnostics":[]}

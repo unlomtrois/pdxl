@@ -22,4 +22,4 @@
 {"id":20,"kind":"field","start":644,"end":649,"operator":"equal","child_start":12,"child_end":14},
 {"id":21,"kind":"block","start":0,"end":0,"operator":"invalid","child_start":14,"child_end":17},
 {"id":22,"kind":"field","start":572,"end":577,"operator":"equal","child_start":17,"child_end":19}
-],"child_ids":[3,4,6,7,5,8,2,9,12,13,15,16,18,19,14,17,20,11,21,1,10,22],"diagnostics":[]}
+],"child_ids":[3,4,6,7,5,8,2,9,12,13,15,16,18,19,14,17,20,11,21,1,10,22],"doc_comments":[[0,70],[71,149],[333,335],[336,379],[408,469],[484,525]],"diagnostics":[]}

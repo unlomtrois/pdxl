@@ -26,7 +26,8 @@ use pdxl_parser::{Diagnostic, Severity};
 use serde::{Deserialize, Serialize};
 
 /// Version of this on-disk layout. Bump on any change to `DiskEntry`'s shape.
-pub const FORMAT_VERSION: u32 = 1;
+pub const FORMAT_VERSION: u32 = 2; // 2: doc-comment side-channel
+// 1: initial postcard layout
 
 /// One cached parse result, self-contained: versions, freshness metadata, the
 /// exact source bytes, and the flat tree (its two arrays) plus diagnostics.
@@ -40,6 +41,10 @@ pub(crate) struct DiskEntry {
     pub nodes: Vec<NodeRepr>,
     pub child_ids: Vec<u32>,
     pub diags: Vec<DiagRepr>,
+    /// `#!` doc-comment ranges, flattened `[start, end]` pairs. Part of the
+    /// entry because analysis reads doc comments off the *cached* tree — a hit
+    /// that dropped them would silently lose every smart-doc reference.
+    pub doc_comments: Vec<u32>,
 }
 
 /// Serialization mirror of [`pdxl_ast::Node`]; enums stored as raw bytes.
@@ -101,6 +106,11 @@ impl DiskEntry {
                     severity: d.severity as u8,
                 })
                 .collect(),
+            doc_comments: tree
+                .doc_comments()
+                .iter()
+                .flat_map(|r| [r.start, r.end])
+                .collect(),
         }
     }
 
@@ -129,6 +139,11 @@ impl DiskEntry {
         for d in &entry.diags {
             Severity::from_u8(d.severity)?;
         }
+        // Ranges are stored as flat pairs; an odd count means a truncated
+        // entry. Reject it rather than let `chunks_exact` drop the tail.
+        if !entry.doc_comments.len().is_multiple_of(2) {
+            return None;
+        }
         Some(entry)
     }
 
@@ -149,7 +164,17 @@ impl DiskEntry {
             })
             .collect();
         let child_ids: Box<[NodeId]> = self.child_ids.into_iter().map(NodeId::new).collect();
-        let tree = Arc::new(SyntaxTree::from_parts(source, nodes, child_ids));
+        let doc_comments: Box<[TextRange]> = self
+            .doc_comments
+            .chunks_exact(2)
+            .map(|p| TextRange::new(p[0], p[1]))
+            .collect();
+        let tree = Arc::new(SyntaxTree::from_parts(
+            source,
+            nodes,
+            child_ids,
+            doc_comments,
+        ));
 
         let diags: Arc<[Diagnostic]> = self
             .diags
@@ -192,6 +217,40 @@ mod tests {
         assert_eq!(tree2.source(), &src[..]);
         assert_eq!(&diags2[..], &diags[..]);
         pdxl_ast::validate_tree(&tree2).unwrap();
+    }
+
+    #[test]
+    fn roundtrip_preserves_doc_comments() {
+        // Analysis reads doc comments off the *cached* tree, so a hit that
+        // dropped them would silently lose every smart-doc reference.
+        let src = b"#! Doc for ![brave].\n#! Second line.\na = { b = 1 }\n".to_vec();
+        let (tree, diags) = pdxl_parser::parse("test", src.clone()).into_parts();
+        assert_eq!(tree.doc_comments().len(), 2);
+
+        let hash = crate::fingerprint::content_hash(&src);
+        let entry = DiskEntry::build(1, hash, &src, &tree, &diags);
+        let (tree2, _) = DiskEntry::decode(&entry.encode())
+            .expect("valid entry")
+            .reconstruct();
+        assert_eq!(tree2.doc_comments(), tree.doc_comments());
+        assert_eq!(
+            &tree2.source()[tree2.doc_comments()[0].as_range()],
+            b"#! Doc for ![brave]."
+        );
+    }
+
+    #[test]
+    fn odd_doc_comment_length_is_a_miss() {
+        let (src, tree, diags) = sample();
+        let mut entry = DiskEntry::build(
+            1,
+            crate::fingerprint::content_hash(&src),
+            &src,
+            &tree,
+            &diags,
+        );
+        entry.doc_comments = vec![7]; // truncated pair
+        assert!(DiskEntry::decode(&entry.encode()).is_none());
     }
 
     #[test]

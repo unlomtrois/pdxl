@@ -132,14 +132,23 @@ impl Node {
     }
 }
 
-/// The result of parsing: a flat node pool, a child-index array, and the source.
+/// The result of parsing: a flat node pool, a child-index array, the source,
+/// and the doc-comment side-channel.
 ///
 /// `nodes[0]` is always the [`NodeKind::File`] root. The tree shares its source
 /// via `Arc<[u8]>` and never exposes a self-referential lifetime.
+///
+/// `#!` doc comments ride alongside as a **parallel array of ranges**, not as
+/// tree nodes: they are trivia the parser never sees (`tokenize` filters every
+/// comment), they are vanishingly rare next to real syntax, and a field on
+/// [`Node`] would tax all ~24 bytes of every node for a feature that touches
+/// almost none of them. Consumers group consecutive ranges into blocks and
+/// associate a block with whatever node follows it.
 pub struct SyntaxTree {
     source: Arc<[u8]>,
     nodes: Box<[Node]>,
     child_ids: Box<[NodeId]>,
+    doc_comments: Box<[TextRange]>,
 }
 
 impl SyntaxTree {
@@ -149,12 +158,28 @@ impl SyntaxTree {
     /// `pdxl-parser`, and (later) the syntax cache's deserializer. The caller is
     /// responsible for upholding the layout invariants documented on the crate;
     /// [`validate_tree`](crate::validate_tree) can check them after the fact.
-    pub fn from_parts(source: Arc<[u8]>, nodes: Box<[Node]>, child_ids: Box<[NodeId]>) -> Self {
+    ///
+    /// `doc_comments` must be in ascending source order; consumers rely on it
+    /// to group adjacent lines into a single doc block.
+    pub fn from_parts(
+        source: Arc<[u8]>,
+        nodes: Box<[Node]>,
+        child_ids: Box<[NodeId]>,
+        doc_comments: Box<[TextRange]>,
+    ) -> Self {
         SyntaxTree {
             source,
             nodes,
             child_ids,
+            doc_comments,
         }
+    }
+
+    /// The `#!` doc-comment ranges, in ascending source order. Empty for the
+    /// overwhelming majority of files.
+    #[inline]
+    pub fn doc_comments(&self) -> &[TextRange] {
+        &self.doc_comments
     }
 
     /// The source bytes this tree was parsed from.

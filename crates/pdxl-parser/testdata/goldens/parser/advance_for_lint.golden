@@ -15,6 +15,6 @@
 {"id":13,"kind":"scalar","start":190,"end":198,"operator":"invalid","child_start":0,"child_end":0},
 {"id":14,"kind":"scalar","start":201,"end":207,"operator":"invalid","child_start":0,"child_end":0},
 {"id":15,"kind":"field","start":190,"end":198,"operator":"equal","child_start":9,"child_end":11}
-],"child_ids":[1,2,5,6,7,4,8,10,11,13,14,3,9,12,15],"diagnostics":[
+],"child_ids":[1,2,5,6,7,4,8,10,11,13,14,3,9,12,15],"doc_comments":[],"diagnostics":[
 {"offset":103,"severity":"error","message":"expected value, got equal"}
 ]}

@@ -37,7 +37,7 @@
 {"id":35,"kind":"field","start":188,"end":195,"operator":"equal","child_start":19,"child_end":21},
 {"id":36,"kind":"scalar","start":202,"end":211,"operator":"invalid","child_start":0,"child_end":0},
 {"id":37,"kind":"scalar","start":212,"end":224,"operator":"invalid","child_start":0,"child_end":0}
-],"child_ids":[1,2,8,9,11,12,15,16,17,14,18,20,21,23,24,27,28,30,31,33,34,3,4,5,10,13,19,22,25,26,29,32,35,36],"diagnostics":[
+],"child_ids":[1,2,8,9,11,12,15,16,17,14,18,20,21,23,24,27,28,30,31,33,34,3,4,5,10,13,19,22,25,26,29,32,35,36],"doc_comments":[],"diagnostics":[
 {"offset":30,"severity":"error","message":"expected value, got dollar"},
 {"offset":46,"severity":"error","message":"expected value, got at"},
 {"offset":226,"severity":"error","message":"expected value, got eof"}

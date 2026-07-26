@@ -73,6 +73,13 @@ fn dump_json(parse: &Parse) -> String {
         }
         out.push_str(&id.raw().to_string());
     }
+    out.push_str("],\"doc_comments\":[");
+    for (i, r) in tree.doc_comments().iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        out.push_str(&format!("[{},{}]", r.start, r.end));
+    }
     out.push_str("],\"diagnostics\":[");
     if !diags.is_empty() {
         out.push('\n');
