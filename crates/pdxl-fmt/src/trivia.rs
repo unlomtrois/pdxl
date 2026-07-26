@@ -73,7 +73,9 @@ pub(crate) fn scan(src: &[u8]) -> Option<Vec<Item<'_>>> {
             break;
         }
         let tok = tok.unwrap();
-        if tok.kind == TokenKind::Comment {
+        // Both comment kinds are trivia to the formatter — a `#!` doc comment
+        // still lays out as a comment; only its *contents* mean more.
+        if tok.kind.is_comment() {
             // Strip every trailing CR: corpus files carry stray double-\r
             // line endings (found in vanilla scripted triggers), and any
             // retained \r would fail the re-lex verification against the

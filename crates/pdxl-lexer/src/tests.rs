@@ -361,10 +361,44 @@ fn hash_inside_string_is_not_a_comment() {
 }
 
 #[test]
+fn doc_comments_are_their_own_kind() {
+    // `#!` is smart documentation; `#` alone is ordinary prose. Only the
+    // second `#` of `##!` opens nothing — the run is one plain comment.
+    assert_kinds(
+        b"#! doc\n# plain\n##! not a doc\nkey = value",
+        &[DocComment, Comment, Comment, Identifier, Equal, Identifier],
+    );
+}
+
+#[test]
+fn doc_comment_token_covers_the_bang() {
+    // The range starts at `#`, so consumers see the `#!` marker itself.
+    let source = b"#! ![scheme:x] see\nkey = value";
+    let mut lexer = Lexer::init(source);
+    let tok = lexer.next_token().expect("a token");
+    assert_eq!(tok.kind, DocComment);
+    assert_eq!(tok.value(source), b"#! ![scheme:x] see");
+}
+
+#[test]
+fn lone_hash_bang_at_eof_is_a_doc_comment() {
+    assert_kinds(b"#!", &[DocComment]);
+}
+
+#[test]
+fn is_comment_covers_both_kinds() {
+    assert!(Comment.is_comment());
+    assert!(DocComment.is_comment());
+    assert!(!Identifier.is_comment());
+    assert!(!Invalid.is_comment());
+}
+
+#[test]
 fn tokenize_skips_comments() {
-    // The parser has no comment handling, so `tokenize` must stay comment-free.
-    let toks = tokenize(b"key = value # something commented\nkey = value");
-    assert!(toks.iter().all(|t| t.kind != Comment));
+    // The parser has no comment handling, so `tokenize` must stay comment-free
+    // — doc comments included.
+    let toks = tokenize(b"#! doc\nkey = value # something commented\nkey = value");
+    assert!(toks.iter().all(|t| !t.kind.is_comment()));
     assert_eq!(toks.len(), 6);
 }
 

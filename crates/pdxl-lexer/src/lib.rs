@@ -80,14 +80,15 @@ pub enum TokenKind {
 
     Percent, // `%`
 
-    Comment, // `#...`
-    Invalid, // invalid token
-    Eof,     // end of file
+    Comment,    // `#...`
+    DocComment, // `#!...` — smart documentation
+    Invalid,    // invalid token
+    Eof,        // end of file
 }
 
 impl TokenKind {
     /// Every kind, in discriminant order (`ALL[i] as u8 == i`).
-    pub const ALL: [TokenKind; 33] = {
+    pub const ALL: [TokenKind; 34] = {
         use TokenKind::*;
         [
             Identifier,
@@ -121,6 +122,7 @@ impl TokenKind {
             ScriptMath,
             Percent,
             Comment,
+            DocComment,
             Invalid,
             Eof,
         ]
@@ -168,9 +170,22 @@ impl TokenKind {
             ScriptMath => "script_math",
             Percent => "percent",
             Comment => "comment",
+            DocComment => "doc_comment",
             Invalid => "invalid",
             Eof => "eof",
         }
+    }
+
+    /// Whether this kind is a line comment — plain [`Comment`] or a
+    /// [`DocComment`]. Consumers that care about comments as *trivia* (the
+    /// formatter) want both; consumers that want smart-documentation
+    /// references match `DocComment` alone.
+    ///
+    /// [`Comment`]: TokenKind::Comment
+    /// [`DocComment`]: TokenKind::DocComment
+    #[inline]
+    pub const fn is_comment(self) -> bool {
+        matches!(self, TokenKind::Comment | TokenKind::DocComment)
     }
 }
 
@@ -237,9 +252,20 @@ impl<'src> Lexer<'src> {
         // Checked before `advance` so the comment body is consumed wholesale;
         // a `#` inside a string is unreachable here (`lex_string` swallows it).
         if self.peek() == CH_HASH {
+            // `#!` opens a smart-documentation comment, plain `#` ordinary
+            // prose. The split happens here, in the one place that sees every
+            // comment exactly once: doc comments are ~0.004% of the corpus
+            // (65 of ~1.7M in CK3 vanilla + T4N), so any consumer wanting
+            // only those can discard the rest on a byte compare rather than
+            // carrying every comment downstream.
+            let kind = if self.source.get(start_pos + 1) == Some(&b'!') {
+                TokenKind::DocComment
+            } else {
+                TokenKind::Comment
+            };
             self.skip_to_line_end();
             return Some(Token {
-                kind: TokenKind::Comment,
+                kind,
                 range: TextRange::from_usize(start_pos, self.pos),
             });
         }
@@ -562,8 +588,8 @@ impl<'src> Lexer<'src> {
     }
 }
 
-/// Returns all valid tokens from `src`, skipping `Comment`, `Invalid` and
-/// `Eof`.
+/// Returns all valid tokens from `src`, skipping comments (plain and doc),
+/// `Invalid` and `Eof`.
 ///
 /// Mirrors the Go `lexer.Tokenize` helper — this is what the parser consumes.
 /// The comment-free contract is load-bearing: the parser has no comment
@@ -573,10 +599,7 @@ pub fn tokenize(src: &[u8]) -> Vec<Token> {
     let mut lexer = Lexer::init(src);
     let mut out = Vec::with_capacity(src.len() / 8);
     while let Some(tok) = lexer.next_token() {
-        if matches!(
-            tok.kind,
-            TokenKind::Comment | TokenKind::Invalid | TokenKind::Eof
-        ) {
+        if tok.kind.is_comment() || matches!(tok.kind, TokenKind::Invalid | TokenKind::Eof) {
             continue;
         }
         out.push(tok);

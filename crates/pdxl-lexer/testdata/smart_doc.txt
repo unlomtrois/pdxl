@@ -1,0 +1,22 @@
+#! Smart-documentation fixture: pins how `#!` lexes against plain `#`.
+#! A doc ref looks like ![brave] or, kind-qualified, ![scripted_effect:my_fx].
+
+# An ordinary comment. Everything on this line is prose, including a ![ref]
+# that must NOT be treated as documentation.
+
+##! Two hashes open a plain comment; the `!` is just text.
+
+#!
+#!Tight against the bang, no leading space.
+
+scripted_effect my_fx = {
+	#! Indented doc comment inside a block, referencing ![brave].
+	add_gold = 1 #! trailing doc comment after real tokens
+	add_prestige = 2 # trailing plain comment
+}
+
+other = {
+	my_fx = yes
+	value = "a # inside a string is not a comment"
+	other = "a #! inside a string is not documentation"
+}

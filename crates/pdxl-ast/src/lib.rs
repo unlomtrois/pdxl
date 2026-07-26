@@ -30,7 +30,8 @@ pub use validate::{ValidationError, validate_tree};
 /// fields. This is the fix for the Go implementation's "content-keyed caveat",
 /// where entries keyed only by source content silently served stale trees
 /// after a parser change.
-pub const SYNTAX_VERSION: u32 = 1;
+pub const SYNTAX_VERSION: u32 = 2; // 2: `#!` doc comments lex as their own kind
+// 1: initial Rust port (Go-parity lexer/parser/tree)
 
 // Re-exported so tree consumers can name operator kinds and ranges without a
 // direct pdxl-lexer / pdxl-src dependency.
