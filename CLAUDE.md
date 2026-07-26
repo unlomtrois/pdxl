@@ -85,9 +85,11 @@ crates/pdxl-lsp        the language server over pdxl-project
 - Always use Cargo's release profile (`--release`) for builds, tests, Clippy, and runs. We do not debug dev-profile artifacts, and avoiding them saves substantial disk space.
 - Bump `pdxl_analysis::ANALYSIS_VERSION` whenever schema/extraction semantics
   change; `pdxl_ast::SYNTAX_VERSION` for lexer/parser/tree changes (cache
-  keys). Bump the workspace crate version (`[workspace.package] version` in
-  `Cargo.toml`; all crates inherit) on each new feature; keep it as
-  `0.<ANALYSIS_VERSION>.0`. The workspace is **not published to crates.io**
+  keys); leave the old value as a `// <N>: <one-line summary>` comment below
+  it — that stack is the schema changelog. Bump the workspace crate version
+  (`[workspace.package] version` in `Cargo.toml`; all crates inherit) on each
+  new feature; keep it as `0.<ANALYSIS_VERSION>.0`.
+  The workspace is **not published to crates.io**
   (binary-only distribution via the `v*`-tag GitHub Release; crates.io's
   newcomer rate limit makes a 16-crate publish impractical) — so path deps
   carry no version requirement.
@@ -98,8 +100,22 @@ crates/pdxl-lsp        the language server over pdxl-project
   bespoke extractors, not new pattern variants — see `docs/SCHEMA-SCALING.md`.
   When a dir readme and the corpus disagree on a key name, the corpus wins
   (mark corpus-only fields `*(corpus)*` in the StructSpec docs).
+- Game entities implement `Entity` (associated consts only — a shape
+  contract, no methods): `KINDS`, `ROOTS`, `IMPLICIT_LOC`,
+  `LOC_DATAFN_ARG_REFS`, `SOFT_SCOPE_REFS`. A new module needs its `mod` line
+  **and** a `registry!(…)` line; a new *const* needs the trait, a matching
+  accumulator in `registry!`, and a `schema.set_*` call in the game crate's
+  `lib.rs` — miss the last and it compiles but never reaches the schema.
 - Reference rules live in the file of their **target** kind (the loc.rs
   precedent), not where they fire.
+- Soft refs (`Entity::SOFT_SCOPE_REFS` → `Schema::set_soft_scope_refs`) land
+  in `FileFacts.calls`, not `.refs`: navigable and counted, never diagnosed.
+  Use for namespaces where script names coexist with runtime-created ones
+  (`var:`). `.calls` is a union — always `extend`, never assign.
+- `ImplicitLocPattern::suffix` may carry a `{}` placeholder for prefixed
+  engine conventions (`"game_concept_{}"`). Always go through
+  `pattern.loc_name(entity)` / `pattern.entity_name(loc)` — never
+  `format!("{name}{suffix}")` or `strip_suffix`.
 - EU5 scope literals (`c:`, `special_status:`, …) are table-derived: a new
   kind joins `TARGET_KINDS` in `pdxl-eu5/src/derived.rs` (scope-type → kind)
   instead of hand `ScopePrefix` rules; skip words also derive from the tables.
@@ -116,6 +132,11 @@ crates/pdxl-lsp        the language server over pdxl-project
   FileSet opt-in via `set_include_gui(true)`; gui refs are name-gated into
   `FileFacts.calls` (never diagnosed — engine builtins aren't enumerable);
   datafunction typing stops at `[unregistered]` return types.
+- Corpus-gated tests are `#[ignore]`d and read a game path from the
+  environment — `PDXL_EU5_GAME` (`pdxl-eu5/tests/derived_proof.rs`,
+  `pdxl-lsp/src/color.rs` benchmark), `PDXL_BENCH_GAME`
+  (`pdxl-lsp/tests/refbench.rs`). A plain `cargo test` skips them silently;
+  run with `-- --ignored` and the var set after schema/perf work.
 - Golden tests pin behavior that was originally byte-verified against the
   retired Go implementation; treat golden diffs as behavior changes to review,
   never as noise to regenerate blindly.
