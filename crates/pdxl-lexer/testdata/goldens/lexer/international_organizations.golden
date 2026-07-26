@@ -1,6 +1,10 @@
 identifier	0	34
 equal	35	36
 l_brace	37	38
+comment	40	105
+comment	107	152
+comment	154	219
+comment	222	251
 identifier	253	283
 equal	284	285
 l_brace	286	287

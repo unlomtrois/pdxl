@@ -223,7 +223,10 @@ impl<'src> Lexer<'src> {
     /// Returns the next token, or `None` at end of input.
     ///
     /// Unlike [`tokenize`], this yields *every* token including
-    /// [`TokenKind::Invalid`] ones (it never produces `Comment` or `Eof`).
+    /// [`TokenKind::Comment`] and [`TokenKind::Invalid`] ones (it never
+    /// produces `Eof`). Comments are real tokens here so that comment-aware
+    /// consumers (smart-doc references, the formatter) can read them from the
+    /// lexer instead of reconstructing them from the gaps between tokens.
     pub fn next_token(&mut self) -> Option<Token> {
         self.skip_whitespace();
         if self.is_at_end() {
@@ -231,6 +234,15 @@ impl<'src> Lexer<'src> {
         }
 
         let start_pos = self.pos;
+        // Checked before `advance` so the comment body is consumed wholesale;
+        // a `#` inside a string is unreachable here (`lex_string` swallows it).
+        if self.peek() == CH_HASH {
+            self.skip_to_line_end();
+            return Some(Token {
+                kind: TokenKind::Comment,
+                range: TextRange::from_usize(start_pos, self.pos),
+            });
+        }
         let (c, size) = self.advance();
 
         let kind = if is_ascii_digit_rune(c) {
@@ -466,7 +478,10 @@ impl<'src> Lexer<'src> {
         TokenKind::LiteralString
     }
 
-    /// Skips whitespace and `#` line comments.
+    /// Skips whitespace. `#` line comments are *not* skipped — [`next_token`]
+    /// emits them as [`TokenKind::Comment`].
+    ///
+    /// [`next_token`]: Lexer::next_token
     fn skip_whitespace(&mut self) {
         while !self.is_at_end() {
             match self.peek() {
@@ -477,13 +492,17 @@ impl<'src> Lexer<'src> {
                 {
                     self.advance();
                 }
-                c if c == '#' as u32 => {
-                    while !self.is_at_end() && self.peek() != '\n' as u32 {
-                        self.advance();
-                    }
-                }
                 _ => return,
             }
+        }
+    }
+
+    /// Consumes up to (not including) the next newline — the body of a `#`
+    /// line comment. The terminating `\n` stays for `skip_whitespace`, so a
+    /// comment token never spans the line break.
+    fn skip_to_line_end(&mut self) {
+        while !self.is_at_end() && self.peek() != '\n' as u32 {
+            self.advance();
         }
     }
 
@@ -543,14 +562,21 @@ impl<'src> Lexer<'src> {
     }
 }
 
-/// Returns all valid tokens from `src`, skipping `Invalid` and `Eof`.
+/// Returns all valid tokens from `src`, skipping `Comment`, `Invalid` and
+/// `Eof`.
 ///
 /// Mirrors the Go `lexer.Tokenize` helper — this is what the parser consumes.
+/// The comment-free contract is load-bearing: the parser has no comment
+/// handling, so comments must not reach it. Consumers that *want* comments
+/// drive [`Lexer::next_token`] directly.
 pub fn tokenize(src: &[u8]) -> Vec<Token> {
     let mut lexer = Lexer::init(src);
     let mut out = Vec::with_capacity(src.len() / 8);
     while let Some(tok) = lexer.next_token() {
-        if tok.kind == TokenKind::Invalid || tok.kind == TokenKind::Eof {
+        if matches!(
+            tok.kind,
+            TokenKind::Comment | TokenKind::Invalid | TokenKind::Eof
+        ) {
             continue;
         }
         out.push(tok);
@@ -563,6 +589,7 @@ pub fn tokenize(src: &[u8]) -> Vec<Token> {
 // ASCII byte constants for the symbol dispatch. Using named constants keeps the
 // match arms readable while matching against the `u32` rune values.
 const CH_QUOTE: u32 = b'"' as u32;
+const CH_HASH: u32 = b'#' as u32;
 const CH_DOT: u32 = b'.' as u32;
 const CH_COLON: u32 = b':' as u32;
 const CH_AT: u32 = b'@' as u32;

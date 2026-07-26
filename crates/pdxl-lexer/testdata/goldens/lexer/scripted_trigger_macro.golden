@@ -11,6 +11,7 @@ macro_param	132	139
 identifier	142	147
 equal	148	149
 literal_boolean	150	152
+comment	155	238
 macro_param	240	247
 equal	248	249
 l_brace	250	251

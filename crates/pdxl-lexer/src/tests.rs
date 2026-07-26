@@ -328,11 +328,44 @@ fn skipping_bom_does_not_break_value() {
 }
 
 #[test]
-fn skip_comments() {
+fn comments_are_tokens() {
     assert_kinds(
         b"key = value # something commented\nkey = value",
-        &[Identifier, Equal, Identifier, Identifier, Equal, Identifier],
+        &[
+            Identifier, Equal, Identifier, Comment, Identifier, Equal, Identifier,
+        ],
     );
+}
+
+#[test]
+fn comment_token_spans_to_end_of_line() {
+    // The token covers `#` through the last byte before `\n`; the newline
+    // itself is left to `skip_whitespace`.
+    let source = b"a = 1 # note\nb = 2";
+    let mut lexer = Lexer::init(source);
+    let mut comment = None;
+    while let Some(tok) = lexer.next_token() {
+        if tok.kind == Comment {
+            comment = Some(tok);
+        }
+    }
+    assert_eq!(comment.expect("a comment token").value(source), b"# note");
+}
+
+#[test]
+fn hash_inside_string_is_not_a_comment() {
+    assert_kinds(
+        b"a = \"x # y\" b",
+        &[Identifier, Equal, LiteralString, Identifier],
+    );
+}
+
+#[test]
+fn tokenize_skips_comments() {
+    // The parser has no comment handling, so `tokenize` must stay comment-free.
+    let toks = tokenize(b"key = value # something commented\nkey = value");
+    assert!(toks.iter().all(|t| t.kind != Comment));
+    assert_eq!(toks.len(), 6);
 }
 
 #[test]

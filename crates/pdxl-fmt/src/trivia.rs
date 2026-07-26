@@ -61,46 +61,37 @@ pub(crate) fn scan(src: &[u8]) -> Option<Vec<Item<'_>>> {
             None => (src.len(), true),
         };
 
-        // Walk the gap before this token (or the tail after the last one):
-        // count newlines, lift out comments.
-        let gap = &src[cursor..tok_start];
-        let mut i = 0;
-        while i < gap.len() {
-            match gap[i] {
-                b'\n' => {
-                    nl_pending += 1;
-                    i += 1;
-                }
-                b'#' => {
-                    let rel_end = gap[i..]
-                        .iter()
-                        .position(|&b| b == b'\n')
-                        .map_or(gap.len(), |p| i + p);
-                    let mut text = &gap[i..rel_end];
-                    // Strip every trailing CR: corpus files carry stray
-                    // double-\r line endings (found in vanilla scripted
-                    // triggers), and any retained \r would fail the
-                    // re-lex verification against the LF-only output.
-                    while text.last() == Some(&b'\r') {
-                        text = &text[..text.len() - 1];
-                    }
-                    items.push(Item {
-                        kind: ItemKind::Comment,
-                        text,
-                        nl_before: nl_pending,
-                        glued: false,
-                    });
-                    nl_pending = 0;
-                    i = rel_end;
-                }
-                _ => i += 1,
-            }
-        }
+        // Walk the gap before this token (or the tail after the last one).
+        // Gaps hold nothing but whitespace — comments are real tokens — so
+        // this only counts the blank lines feeding `nl_before`.
+        nl_pending += src[cursor..tok_start]
+            .iter()
+            .filter(|&&b| b == b'\n')
+            .count() as u32;
 
         if done {
             break;
         }
         let tok = tok.unwrap();
+        if tok.kind == TokenKind::Comment {
+            // Strip every trailing CR: corpus files carry stray double-\r
+            // line endings (found in vanilla scripted triggers), and any
+            // retained \r would fail the re-lex verification against the
+            // LF-only output.
+            let mut text = tok.range.slice(src);
+            while text.last() == Some(&b'\r') {
+                text = &text[..text.len() - 1];
+            }
+            items.push(Item {
+                kind: ItemKind::Comment,
+                text,
+                nl_before: nl_pending,
+                glued: false,
+            });
+            nl_pending = 0;
+            cursor = tok.range.end as usize;
+            continue;
+        }
         items.push(Item {
             kind: ItemKind::Token(tok.kind),
             text: tok.range.slice(src),
