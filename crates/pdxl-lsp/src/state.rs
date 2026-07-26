@@ -1293,6 +1293,59 @@ impl ServerState {
         if path.extension().is_some_and(|e| e == "gui") {
             return crate::gui_completion::items(project, &src, off);
         }
+        // Smart-doc references. Checked before the script contexts because a
+        // `#!` comment is not script — none of them apply inside one.
+        if let Some(doc) = doc_ref_cursor(&src, off, project.schema()) {
+            let range = Range::new(
+                offset_to_position(&src, doc.name_start),
+                offset_to_position(&src, off),
+            );
+            let mut items = Vec::new();
+            // Unqualified: lead with the `alias:` qualifiers, so an author who
+            // does not know the name can narrow by kind first.
+            if !doc.qualified {
+                items.extend(crate::completion::doc_ref_prefix_items(
+                    project.schema(),
+                    &doc.name_prefix,
+                ));
+            }
+            // Names: one kind when pinned, else the resolution order minus
+            // localization — 279k loc keys would swamp everything, and `loc:`
+            // reaches them deliberately.
+            let kinds: Vec<KindId> = match doc.pinned {
+                Some(k) => vec![k],
+                None => doc_ref_lookup_order(project.schema())
+                    .filter(|k| *k != LOC_KEY)
+                    .collect(),
+            };
+            // With nothing typed an unqualified request would offer every
+            // entity in the project; make the author narrow first.
+            if doc.pinned.is_some() || !doc.name_prefix.is_empty() {
+                items.extend(crate::completion::doc_ref_symbol_items(
+                    project.table(),
+                    project.schema(),
+                    kinds,
+                    &doc.name_prefix,
+                ));
+            }
+            // Edit only the name, so accepting a suggestion keeps `kind:`.
+            for item in &mut items {
+                if item.text_edit.is_none() {
+                    item.text_edit =
+                        Some(lsp_types::CompletionTextEdit::Edit(lsp_types::TextEdit {
+                            range,
+                            new_text: item.label.clone(),
+                        }));
+                }
+            }
+            log_info!(
+                "doc-ref completion: pinned={:?} prefix={:?} path={rel} items={}",
+                doc.pinned.map(KindId::name),
+                doc.name_prefix,
+                items.len()
+            );
+            return items;
+        }
         let cursor = cursor_context(&src, off);
         if let Some(member) = scope_member_context(&src, off) {
             let mut items = crate::completion::scope_link_items(&member.scope, &member.name_prefix);
@@ -1497,6 +1550,55 @@ fn doc_ref_lookup_order(schema: &Schema) -> impl Iterator<Item = KindId> + '_ {
         .filter(move |k| *k != LOC_KEY && Some(*k) != concept)
         .chain(concept)
         .chain(std::iter::once(LOC_KEY))
+}
+
+/// A cursor sitting inside an unclosed `![…]` of a `#!` doc comment.
+pub(crate) struct DocRefCursor {
+    /// Byte offset where the referenced *name* starts — past any `kind:`.
+    pub name_start: u32,
+    /// What has been typed of the name so far.
+    pub name_prefix: String,
+    /// The kind a valid `alias:` qualifier pins, when one precedes the cursor.
+    pub pinned: Option<KindId>,
+    /// Whether any `:` was typed, valid alias or not. Suppresses offering more
+    /// qualifiers once the author has clearly chosen one.
+    pub qualified: bool,
+}
+
+/// Locates a `![…]` under construction at `off`.
+///
+/// Doc comments are lexer tokens, so this asks the lexer which token contains
+/// the cursor rather than re-deriving comment bounds — a `#` inside a string
+/// can never be mistaken for one. Returns `None` unless the cursor is inside a
+/// `![` that has no closing `]` before it.
+pub(crate) fn doc_ref_cursor(src: &[u8], off: u32, schema: &Schema) -> Option<DocRefCursor> {
+    let tok = pdxl_lexer::tokenize_all(src).into_iter().find(|t| {
+        t.kind == pdxl_lexer::TokenKind::DocComment && t.range.start <= off && off <= t.range.end
+    })?;
+    // The nearest `![` at or before the cursor, with no `]` closing it first.
+    let (lo, hi) = (tok.range.start as usize, off as usize);
+    let open = src[lo..hi]
+        .windows(2)
+        .rposition(|w| w == b"![")
+        .map(|i| lo + i + 2)?;
+    if src[open..hi].contains(&b']') {
+        return None;
+    }
+    let typed = std::str::from_utf8(&src[open..hi]).ok()?;
+    match typed.split_once(':') {
+        Some((alias, name)) => Some(DocRefCursor {
+            name_start: (open + alias.len() + 1) as u32,
+            name_prefix: name.to_string(),
+            pinned: schema.kind_by_alias(alias),
+            qualified: true,
+        }),
+        None => Some(DocRefCursor {
+            name_start: open as u32,
+            name_prefix: typed.to_string(),
+            pinned: None,
+            qualified: false,
+        }),
+    }
 }
 
 /// The kind a doc ref pins, or `None` for a bare `![Name]` whose kind is

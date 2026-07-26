@@ -360,3 +360,64 @@ fn snippet(label: &str, detail: &str, body: &str) -> CompletionItem {
         ..CompletionItem::default()
     }
 }
+
+/// How many symbols one smart-doc completion request offers. The symbol table
+/// holds hundreds of thousands of names; past a few hundred the client's own
+/// filtering is what the author is really using, so more is only latency.
+const DOC_REF_LIMIT: usize = 300;
+
+/// The `alias:` qualifiers of `![…]`, offered so the author can narrow a search
+/// before knowing the name. Each inserts the alias and its colon, leaving the
+/// cursor ready for the name.
+pub fn doc_ref_prefix_items(schema: &Schema, prefix: &str) -> Vec<CompletionItem> {
+    let mut aliases: Vec<(&str, KindId)> = schema
+        .doc_ref_aliases()
+        .filter(|(alias, _)| alias.starts_with(prefix))
+        .collect();
+    aliases.sort_unstable_by_key(|(alias, _)| *alias);
+    aliases
+        .into_iter()
+        .map(|(alias, kind)| CompletionItem {
+            label: format!("{alias}:"),
+            kind: Some(CompletionItemKind::MODULE),
+            detail: Some(format!("narrow to {}", kind.name())),
+            // Sorted ahead of names: with nothing typed these are the only
+            // useful suggestion, and they stay reachable once typing starts.
+            sort_text: Some(format!("0_{alias}")),
+            ..CompletionItem::default()
+        })
+        .collect()
+}
+
+/// Symbols offered for `![Name]`, capped at [`DOC_REF_LIMIT`].
+///
+/// `kinds` should arrive in the resolution order a bare reference uses, so the
+/// kind that would actually win is listed first.
+pub fn doc_ref_symbol_items<I>(
+    table: &SymbolTable,
+    schema: &Schema,
+    kinds: I,
+    name_prefix: &str,
+) -> Vec<CompletionItem>
+where
+    I: IntoIterator<Item = KindId>,
+{
+    let mut items = Vec::new();
+    for (rank, kind) in kinds.into_iter().enumerate() {
+        for name in table.names(kind).filter(|n| n.starts_with(name_prefix)) {
+            if items.len() >= DOC_REF_LIMIT {
+                return items;
+            }
+            let symbol = table.lookup(kind, name).expect("name from symbol table");
+            items.push(CompletionItem {
+                label: name.to_string(),
+                kind: Some(completion_kind(schema.icon(kind))),
+                detail: Some(format!("{} · defined in {}", kind.name(), symbol.file)),
+                // Rank by resolution order so the winning kind sorts first.
+                sort_text: Some(format!("1_{rank:03}_{name}")),
+                ..CompletionItem::default()
+            });
+        }
+    }
+    items
+}

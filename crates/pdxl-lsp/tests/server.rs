@@ -3034,3 +3034,78 @@ fn smart_doc_refs_prefer_entities_then_concepts_then_loc() {
     let md = hover_md(&server, &uri, pos_of(src, "plain_text_key]"));
     assert!(md.contains("loc_key"), "loc fallback:\n{md}");
 }
+
+#[cfg(feature = "ck3")]
+#[test]
+fn smart_doc_completion_offers_prefixes_then_narrows_by_kind() {
+    let t = TempTree::new();
+    t.write("common/traits/00.txt", "brave = { }\nbrash = { }\n");
+    t.write(
+        "common/laws/00.txt",
+        "crown_authority = { crown_authority_0 = { } }\n",
+    );
+    t.write(
+        "localization/english/x_l_english.yml",
+        "\u{feff}l_english:\n brave: \"Brave\"\n bravado_key: \"Bravado\"\n",
+    );
+    let labels = |server: &ServerState, uri: &Url, src: &str, needle: &str| -> Vec<String> {
+        server
+            .completion(uri, pos_after(src, needle))
+            .into_iter()
+            .map(|i| i.label)
+            .collect()
+    };
+
+    // 1. `![` with nothing typed: only the `alias:` qualifiers, so the author
+    //    can narrow before knowing a name.
+    let src = "#! See ![\ne = { }\n";
+    t.write("common/scripted_effects/a.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/scripted_effects/a.txt");
+    let l = labels(&server, &uri, src, "![");
+    assert!(l.contains(&"trait:".to_string()), "{l:?}");
+    assert!(l.contains(&"law:".to_string()), "{l:?}");
+    assert!(
+        l.iter().all(|s| s.ends_with(':')),
+        "no bare names before narrowing: {l:?}"
+    );
+
+    // 2. Typing narrows to matching qualifiers *and* matching entities, but
+    //    never localization — 279k loc keys would swamp the list.
+    let src = "#! See ![bra\ne = { }\n";
+    t.write("common/scripted_effects/b.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/scripted_effects/b.txt");
+    let l = labels(&server, &uri, src, "![bra");
+    for want in ["brave", "brash"] {
+        assert!(l.contains(&want.to_string()), "{want} missing: {l:?}");
+    }
+    assert!(
+        !l.contains(&"bravado_key".to_string()),
+        "loc keys excluded unless asked for: {l:?}"
+    );
+
+    // 3. A `kind:` qualifier restricts to that kind and drops the qualifiers.
+    let src = "#! See ![law:\ne = { }\n";
+    t.write("common/scripted_effects/c.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/scripted_effects/c.txt");
+    let l = labels(&server, &uri, src, "![law:");
+    assert_eq!(l, vec!["crown_authority_0".to_string()], "{l:?}");
+
+    // 4. `loc:` is how localization is reached deliberately.
+    let src = "#! See ![loc:bra\ne = { }\n";
+    t.write("common/scripted_effects/d.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/scripted_effects/d.txt");
+    let l = labels(&server, &uri, src, "![loc:bra");
+    assert!(l.contains(&"bravado_key".to_string()), "{l:?}");
+
+    // 5. Outside a `#!` comment nothing of this fires.
+    let src = "# plain ![bra\ne = { }\n";
+    t.write("common/scripted_effects/e.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/scripted_effects/e.txt");
+    let l = labels(&server, &uri, src, "![bra");
+    assert!(!l.contains(&"brave".to_string()), "plain comment: {l:?}");
+}

@@ -583,6 +583,12 @@ impl Schema {
     }
 
     /// The kind a doc-comment reference alias names (`scheme` → the scheme kind).
+    /// Every `![alias:Name]` qualifier, for completion. Unordered — callers
+    /// that display them should sort.
+    pub fn doc_ref_aliases(&self) -> impl Iterator<Item = (&'static str, KindId)> + '_ {
+        self.by_alias.iter().map(|(a, k)| (*a, *k))
+    }
+
     pub fn kind_by_alias(&self, alias: &str) -> Option<KindId> {
         self.by_alias.get(alias).copied()
     }
