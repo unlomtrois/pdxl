@@ -28,10 +28,15 @@ pub mod coverage;
 pub mod kinds;
 pub mod tables;
 
-/// Relative-scope keywords a reference value may hold at runtime
-/// (`has_trait = prev`); unresolvable without scope tracking, so skipped.
-/// Game-wide — they belong to no single concept.
+/// Reference values that are never symbol names, so no rule should try to
+/// resolve them. Mostly relative-scope keywords a value may hold at runtime
+/// (`has_trait = prev`), unresolvable without scope tracking. Game-wide — they
+/// belong to no single concept.
 const SCOPE_KEYWORDS: &[&str] = &[
+    // The universal "nothing here" sentinel — `holding = none` in province
+    // history is ~4900 of its uses. Nothing in the corpus is ever *named*
+    // `none`, so skipping it game-wide costs no resolution.
+    "none",
     "root",
     "this",
     "prev",
@@ -79,6 +84,7 @@ const DOC_REF_ALIASES: &[(&str, KindId)] = &[
     ("law", kinds::LAW),
     ("scheme", kinds::SCHEME),
     ("government", kinds::GOVERNMENT),
+    ("holding", kinds::HOLDING),
     ("modifier", kinds::MODIFIER),
     ("animation", kinds::PORTRAIT_ANIMATION),
     ("background", kinds::EVENT_BACKGROUND),

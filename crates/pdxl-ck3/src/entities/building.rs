@@ -255,6 +255,20 @@ impl Entity for Building {
                 gate: Some("common/culture/"),
                 alt: &[],
             },
+            // Holding types name the building raised on creation, plus the
+            // first level of everything else constructible there. Gated: both
+            // keys mean other things elsewhere (`buildings` is a province
+            // history list, handled below).
+            RefRule {
+                pattern: RefPattern::KeyValue("primary_building"),
+                gate: Some(super::holding::HOLDINGS_DIR),
+                alt: &[],
+            },
+            RefRule {
+                pattern: RefPattern::KeyList("buildings"),
+                gate: Some(super::holding::HOLDINGS_DIR),
+                alt: &[],
+            },
             // Province history: preplaced special buildings and slots, and
             // the `buildings = { X Y … }` list.
             RefRule {

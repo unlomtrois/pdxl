@@ -807,6 +807,13 @@ impl Entity for Government {
             anywhere(RefPattern::KeyValue("fallback_government")),
             gov_list("blocked_subject_courts"),
             gov_list("compatible_government_type_succession"),
+            // Holdings name the governments allowed to inherit a county whose
+            // capital holds them (`common/holdings/`).
+            RefRule {
+                pattern: RefPattern::KeyList("required_heir_government_types"),
+                gate: Some(super::holding::HOLDINGS_DIR),
+                alt: &[],
+            },
         ],
         aliases: &[],
     }];

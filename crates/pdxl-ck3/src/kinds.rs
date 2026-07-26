@@ -68,3 +68,4 @@ pub const HOLY_SITE: KindId = KindId::new("holy_site");
 pub const RELIGION_FAMILY: KindId = KindId::new("religion_family");
 pub const GAME_RULE_SETTING: KindId = KindId::new("game_rule_setting");
 pub const GOVERNMENT: KindId = KindId::new("government");
+pub const HOLDING: KindId = KindId::new("holding");

@@ -46,8 +46,9 @@ mod event_theme;
 mod faith;
 mod game_concept;
 mod game_rule;
-mod government;
+pub(crate) mod government;
 mod gui;
+pub(crate) mod holding;
 mod holy_site;
 mod law;
 mod loc;
@@ -145,5 +146,6 @@ registry!(
     religion_family::ReligionFamily,
     game_rule::GameRule,
     government::Government,
+    holding::Holding,
     loc::Loc,
 );

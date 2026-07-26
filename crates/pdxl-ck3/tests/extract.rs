@@ -2312,3 +2312,103 @@ fn government_body_opens_documented_contexts() {
         );
     }
 }
+
+#[test]
+fn holdings_define_and_reference_buildings_and_governments() {
+    let f = extract(
+        "castle_holding = {\n\
+         \tprimary_building = castle_01\n\
+         \tbuildings = { hospices_01 curtain_walls_01 }\n\
+         \trequired_heir_government_types = { nomad_government }\n\
+         \tparameters = { no_buildings }\n\
+         \tcan_be_inherited = yes\n\
+         }\n",
+        "common/holdings/00_holdings.txt",
+    );
+    assert!(
+        f.defs
+            .iter()
+            .any(|d| d.kind == pdxl_ck3::kinds::HOLDING && d.name == "castle_holding")
+    );
+    // Outgoing refs, each owned by its target kind's module.
+    for n in ["castle_01", "hospices_01", "curtain_walls_01"] {
+        assert!(
+            f.refs
+                .iter()
+                .any(|r| r.kind == pdxl_ck3::kinds::BUILDING && r.name == n),
+            "{n}"
+        );
+    }
+    assert!(
+        f.refs
+            .iter()
+            .any(|r| r.kind == pdxl_ck3::kinds::GOVERNMENT && r.name == "nomad_government")
+    );
+    // `parameters` are free-form flags, never definitions or references.
+    assert!(f.refs.iter().all(|r| r.name != "no_buildings"));
+    assert!(f.defs.iter().all(|d| d.name != "no_buildings"));
+
+    // `primary_building`/`buildings` mean other things outside this directory.
+    let e = extract(
+        "x = { primary_building = castle_01 }\n",
+        "common/scripted_effects/e.txt",
+    );
+    assert!(e.refs.iter().all(|r| r.kind != pdxl_ck3::kinds::BUILDING));
+}
+
+#[test]
+fn holding_reference_keys_resolve_and_skip_the_none_sentinel() {
+    // Province history is where `holding` overwhelmingly appears.
+    let f = extract(
+        "1 = { holding = castle_holding }\n2 = { holding = none }\n",
+        "history/provinces/k_france.txt",
+    );
+    let holdings: Vec<&str> = f
+        .refs
+        .iter()
+        .filter(|r| r.kind == pdxl_ck3::kinds::HOLDING)
+        .map(|r| r.name.as_str())
+        .collect();
+    assert_eq!(holdings, ["castle_holding"], "`none` is not a name");
+
+    // Trigger/effect keys fire anywhere.
+    for (src, rel) in [
+        (
+            "e = { has_holding_type = city_holding }\n",
+            "common/scripted_triggers/t.txt",
+        ),
+        (
+            "e = { set_holding_type = church_holding }\n",
+            "common/scripted_effects/e.txt",
+        ),
+    ] {
+        let f = extract(src, rel);
+        assert!(
+            f.refs.iter().any(|r| r.kind == pdxl_ck3::kinds::HOLDING),
+            "{rel}"
+        );
+    }
+
+    // The government keys are gated to common/governments/.
+    let g = extract(
+        "feudal_government = { primary_holding = castle_holding valid_holdings = { city_holding } }\n",
+        "common/governments/00.txt",
+    );
+    assert_eq!(
+        g.refs
+            .iter()
+            .filter(|r| r.kind == pdxl_ck3::kinds::HOLDING)
+            .count(),
+        2
+    );
+    let outside = extract(
+        "x = { primary_holding = castle_holding }\n",
+        "common/scripted_effects/e.txt",
+    );
+    assert!(
+        outside
+            .refs
+            .iter()
+            .all(|r| r.kind != pdxl_ck3::kinds::HOLDING)
+    );
+}
