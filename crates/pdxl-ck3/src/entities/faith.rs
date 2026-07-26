@@ -271,24 +271,41 @@ static RELIGION: StructSpec = StructSpec {
 pub(crate) struct Faith;
 
 impl Entity for Faith {
-    const KINDS: &'static [KindSpec] = &[KindSpec {
-        kind: kinds::FAITH,
-        icon: IconHint::Object,
-        defs: Some(DefSource {
-            dir_prefix: RELIGION_DIR,
-            shape: DefShape::ChildrenOf {
-                containers: &["faiths"],
-            },
-        }),
-        refs: &[
-            anywhere(RefPattern::ScopePrefix("faith")),
-            in_dir("history/characters/", "religion"),
-            in_dir("history/characters/", "faith"),
-            in_dir("history/provinces/", "religion"),
-            in_dir("history/provinces/", "faith"),
-        ],
-        aliases: &[],
-    }];
+    const KINDS: &'static [KindSpec] = &[
+        // Religions are the top-level blocks of the same files whose `faiths`
+        // container holds the faiths below — two def rules over one directory.
+        KindSpec {
+            kind: kinds::RELIGION,
+            icon: IconHint::Object,
+            defs: Some(DefSource {
+                dir_prefix: RELIGION_DIR,
+                shape: DefShape::TopLevel,
+            }),
+            // `religion_tag` is the only key naming a religion. Bare
+            // `religion = X` means a *faith* and belongs to the rule below —
+            // every value of it in history is a faith key.
+            refs: &[anywhere(RefPattern::KeyValue("religion_tag"))],
+            aliases: &[],
+        },
+        KindSpec {
+            kind: kinds::FAITH,
+            icon: IconHint::Object,
+            defs: Some(DefSource {
+                dir_prefix: RELIGION_DIR,
+                shape: DefShape::ChildrenOf {
+                    containers: &["faiths"],
+                },
+            }),
+            refs: &[
+                anywhere(RefPattern::ScopePrefix("faith")),
+                in_dir("history/characters/", "religion"),
+                in_dir("history/characters/", "faith"),
+                in_dir("history/provinces/", "religion"),
+                in_dir("history/provinces/", "faith"),
+            ],
+            aliases: &[],
+        },
+    ];
 
     const ROOTS: &'static [(&'static str, ClauseKind)] =
         &[(RELIGION_DIR, ClauseKind::Struct(&RELIGION))];

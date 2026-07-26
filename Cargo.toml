@@ -38,7 +38,7 @@ debug = "line-tables-only"
 
 [workspace.package]
 # Bumped on each new feature; tracks ANALYSIS_VERSION (0.<N>.0).
-version = "0.118.0"
+version = "0.119.0"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/unlomtrois/pdxl"

@@ -44,7 +44,8 @@ pub use table::{Duplicate, SymbolTable};
 /// facts cache must embed this in its keys (alongside content hash and
 /// rel_path) and treat mismatches as misses; bump it whenever extraction rules
 /// or the [`FileFacts`] model change meaning.
-pub const ANALYSIS_VERSION: u32 = 118; // 118: CK3 domiciles (5 types + 1620 buildings, has_/add_/remove_ building refs, gated previous_building and allowed_domicile_types)
+pub const ANALYSIS_VERSION: u32 = 119; // 119: CK3 religions (top-level defs alongside nested faiths + religion_tag refs) and doctrine groups (defs + gated doctrine_types)
+// 118: CK3 domiciles (5 types + 1620 buildings, has_/add_/remove_ building refs, gated previous_building and allowed_domicile_types)
 // 117: CK3 subject contracts and groups (defs + obligation-level bodies + KeyBlockField type/contract_group refs)
 // 116: CK3 holdings (defs + holding/has_/set_/create refs + gated government keys + building/government outgoing refs; `none` skip word)
 // 115: per-game fixtures, goldens and feature-gated tests (no extraction change)

@@ -214,8 +214,14 @@ fn collects_faiths_nested_under_religion_type() {
         "religion_fire = { faiths = { sun_spirituality = { } fire_lord_cult = { } } }\n",
         "common/religion/religion_types/fire.txt",
     );
-    assert_eq!(def_names(&f), vec!["sun_spirituality", "fire_lord_cult"]);
-    assert!(f.defs.iter().all(|d| d.kind == pdxl_ck3::kinds::FAITH));
+    // The religion is a def too, since ANALYSIS_VERSION 119 — top-level blocks
+    // and their nested faiths are two def rules over the same directory.
+    assert_eq!(
+        def_names(&f),
+        vec!["religion_fire", "sun_spirituality", "fire_lord_cult"]
+    );
+    assert_eq!(f.defs[0].kind, pdxl_ck3::kinds::RELIGION);
+    assert!(f.defs[1..].iter().all(|d| d.kind == pdxl_ck3::kinds::FAITH));
 }
 
 #[test]
@@ -2057,8 +2063,8 @@ fn religion_domain_defs_and_refs() {
     for t in ["brave", "honest", "craven"] {
         assert_eq!(kind_of(t), pdxl_ck3::kinds::TRAIT, "{t}");
     }
-    // The faith itself is still the def.
-    assert_eq!(def_names(&r), vec!["my_faith"]);
+    // The religion and the faith it contains are both defs.
+    assert_eq!(def_names(&r), vec!["my_religion", "my_faith"]);
 }
 
 // ── religion localization maps (ANALYSIS_VERSION 58) ─────────────────────────
@@ -2617,5 +2623,90 @@ fn domicile_building_keys_resolve_and_previous_building_stays_gated() {
             .refs
             .iter()
             .all(|r| r.kind != pdxl_ck3::kinds::DOMICILE_BUILDING)
+    );
+}
+
+#[test]
+fn religions_and_faiths_both_define_from_one_directory() {
+    let f = extract(
+        "islam_religion = {\n\
+         \tfamily = rf_abrahamic\n\
+         \tfaiths = { sunni = { } shiite = { } }\n\
+         }\n",
+        "common/religion/religion_types/00_religions.txt",
+    );
+    // Two def rules over one directory: religion at top level, faiths nested.
+    assert!(
+        f.defs
+            .iter()
+            .any(|d| d.kind == pdxl_ck3::kinds::RELIGION && d.name == "islam_religion")
+    );
+    for n in ["sunni", "shiite"] {
+        assert!(
+            f.defs
+                .iter()
+                .any(|d| d.kind == pdxl_ck3::kinds::FAITH && d.name == n),
+            "{n}"
+        );
+    }
+    // `faiths` is a container, never a symbol itself.
+    assert!(f.defs.iter().all(|d| d.name != "faiths"));
+
+    // `religion_tag` names a religion...
+    let t = extract(
+        "e = { religion_tag = islam_religion }\n",
+        "common/scripted_effects/e.txt",
+    );
+    assert!(
+        t.refs
+            .iter()
+            .any(|r| r.kind == pdxl_ck3::kinds::RELIGION && r.name == "islam_religion")
+    );
+    // ...while bare `religion` in history means a *faith*, not a religion.
+    let h = extract(
+        "1 = { religion = sunni }\n",
+        "history/characters/00_chars.txt",
+    );
+    assert!(
+        h.refs
+            .iter()
+            .any(|r| r.kind == pdxl_ck3::kinds::FAITH && r.name == "sunni")
+    );
+    assert!(h.refs.iter().all(|r| r.kind != pdxl_ck3::kinds::RELIGION));
+}
+
+#[test]
+fn doctrine_groups_define_and_list_their_doctrines() {
+    let g = extract(
+        "hostility_group = {\n\
+         \tcategory = \"hostility\"\n\
+         \tnumber_of_picks = 1\n\
+         \tdoctrine_types = { pagan_hostility_doctrine eastern_hostility_doctrine }\n\
+         }\n",
+        "common/religion/doctrine_group_types/00_groups.txt",
+    );
+    assert!(
+        g.defs
+            .iter()
+            .any(|d| d.kind == pdxl_ck3::kinds::DOCTRINE_GROUP && d.name == "hostility_group")
+    );
+    for n in ["pagan_hostility_doctrine", "eastern_hostility_doctrine"] {
+        assert!(
+            g.refs
+                .iter()
+                .any(|r| r.kind == pdxl_ck3::kinds::DOCTRINE && r.name == n),
+            "{n}"
+        );
+    }
+    // `doctrine_types` is gated — it is a plausible key name anywhere.
+    let outside = extract(
+        "x = { doctrine_types = { pagan_hostility_doctrine } }\n",
+        "common/scripted_effects/e.txt",
+    );
+    assert!(
+        outside
+            .refs
+            .iter()
+            .all(|r| r.kind != pdxl_ck3::kinds::DOCTRINE)
     );
 }
