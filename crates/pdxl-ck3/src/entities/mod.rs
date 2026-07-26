@@ -38,6 +38,7 @@ mod custom_loc;
 mod death_reason;
 mod decision;
 mod doctrine;
+mod domicile;
 mod dynasty;
 mod effect_localization;
 mod event;
@@ -149,5 +150,6 @@ registry!(
     government::Government,
     holding::Holding,
     subject_contract::SubjectContract,
+    domicile::Domicile,
     loc::Loc,
 );

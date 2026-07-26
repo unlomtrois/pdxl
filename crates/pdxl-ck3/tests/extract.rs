@@ -2526,3 +2526,96 @@ fn subject_contract_block_field_references_disambiguate_generic_type_key() {
         );
     }
 }
+
+#[test]
+fn domicile_types_and_buildings_define_and_reference() {
+    let t = extract(
+        "camp = {\n\
+         \trename_window = none\n\
+         \tdomicile_building_slots = { main_slot = { slot_type = main } }\n\
+         }\n",
+        "common/domiciles/types/00_domicile_types.txt",
+    );
+    assert!(
+        t.defs
+            .iter()
+            .any(|d| d.kind == pdxl_ck3::kinds::DOMICILE_TYPE && d.name == "camp")
+    );
+    // Slot names are arbitrary ("any name you want"), so they are structure.
+    assert!(t.defs.iter().all(|d| d.name != "main_slot"));
+
+    let b = extract(
+        "camp_main_02 = {\n\
+         \tprevious_building = camp_main_01\n\
+         \tallowed_domicile_types = { camp yurt }\n\
+         \tparameters = { some_parameter = yes }\n\
+         \tslot_type = main\n\
+         }\n",
+        "common/domiciles/buildings/00_camp_buildings.txt",
+    );
+    assert!(
+        b.defs
+            .iter()
+            .any(|d| d.kind == pdxl_ck3::kinds::DOMICILE_BUILDING && d.name == "camp_main_02")
+    );
+    assert!(
+        b.refs
+            .iter()
+            .any(|r| r.kind == pdxl_ck3::kinds::DOMICILE_BUILDING && r.name == "camp_main_01")
+    );
+    for n in ["camp", "yurt"] {
+        assert!(
+            b.refs
+                .iter()
+                .any(|r| r.kind == pdxl_ck3::kinds::DOMICILE_TYPE && r.name == n),
+            "{n}"
+        );
+    }
+    // `has_domicile_parameter` only checks existence, so these are not symbols.
+    assert!(b.refs.iter().all(|r| r.name != "some_parameter"));
+    assert!(b.defs.iter().all(|d| d.name != "some_parameter"));
+}
+
+#[test]
+fn domicile_building_keys_resolve_and_previous_building_stays_gated() {
+    for key in [
+        "has_domicile_building",
+        "has_domicile_building_or_higher",
+        "add_domicile_building",
+        "remove_domicile_building",
+    ] {
+        let f = extract(
+            &format!("e = {{ {key} = camp_main_01 }}\n"),
+            "common/scripted_effects/e.txt",
+        );
+        assert!(
+            f.refs
+                .iter()
+                .any(|r| r.kind == pdxl_ck3::kinds::DOMICILE_BUILDING),
+            "{key}"
+        );
+    }
+    // `previous_building` is also a holding-building key, so outside the
+    // domicile directory it must not resolve to a domicile building.
+    let holding = extract(
+        "x = { previous_building = camp_main_01 }\n",
+        "common/buildings/00.txt",
+    );
+    assert!(
+        holding
+            .refs
+            .iter()
+            .all(|r| r.kind != pdxl_ck3::kinds::DOMICILE_BUILDING)
+    );
+    // Macro-composed values are skipped rather than reported unresolved.
+    let macro_val = extract(
+        "e = { has_domicile_building = $BUILDING$_02 }\n",
+        "common/scripted_effects/e.txt",
+    );
+    assert!(
+        macro_val
+            .refs
+            .iter()
+            .all(|r| r.kind != pdxl_ck3::kinds::DOMICILE_BUILDING)
+    );
+}

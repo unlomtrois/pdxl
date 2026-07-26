@@ -63,5 +63,7 @@ government              0
 holding                 0
 subject_contract        0
 subject_contract_group      0
+domicile_type           0
+domicile_building       0
 loc_key                 0
 total                   2
