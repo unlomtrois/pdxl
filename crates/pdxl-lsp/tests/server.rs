@@ -2930,3 +2930,55 @@ fn smart_doc_references_participate_in_find_references_and_code_lens() {
         .expect("resolve fills the command");
     assert_eq!(cmd.title, "3 references");
 }
+
+#[cfg(feature = "ck3")]
+#[test]
+fn subject_contract_levels_link_to_their_implicit_loc_keys() {
+    let t = TempTree::new();
+    let src = "feudal_government_taxes = {\n\
+               \tobligation_levels = {\n\
+               \t\tvassal_tax_normal = { tax = 0.2 }\n\
+               \t}\n\
+               }\n";
+    t.write("common/subject_contracts/contracts/feudal.txt", src);
+    t.write(
+        "localization/english/x_l_english.yml",
+        "\u{feff}l_english:\n \
+         feudal_government_taxes: \"Taxes\"\n \
+         vassal_tax_normal: \"Normal Tax\"\n \
+         vassal_tax_normal_short: \"Normal\"\n \
+         vassal_tax_normal_desc: \"A fifth of income.\"\n",
+    );
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/subject_contracts/contracts/feudal.txt");
+
+    // Hovering the level offers links to all three of its loc keys.
+    let md = hover_md(&server, &uri, pos_of(src, "vassal_tax_normal = {"));
+    for key in [
+        "vassal_tax_normal",
+        "vassal_tax_normal_short",
+        "vassal_tax_normal_desc",
+    ] {
+        assert!(
+            md.contains(&format!("[{key}]")),
+            "{key} missing from:\n{md}"
+        );
+    }
+
+    // Hovering the contract links to its own name key.
+    let md = hover_md(&server, &uri, pos_of(src, "feudal_government_taxes"));
+    assert!(
+        md.contains("[feudal_government_taxes]"),
+        "contract loc link missing from:\n{md}"
+    );
+
+    // The reverse edge: the loc key's references include the level using it.
+    let loc = uri_for(&t, "localization/english/x_l_english.yml");
+    let loc_src = std::fs::read_to_string(t.child("localization/english/x_l_english.yml")).unwrap();
+    let refs = server.references(&loc, pos_of(&loc_src, "vassal_tax_normal_desc"), false);
+    assert!(
+        refs.iter()
+            .any(|l| l.uri.to_file_path().unwrap().ends_with("feudal.txt")),
+        "loc key should list the obligation level: {refs:?}"
+    );
+}

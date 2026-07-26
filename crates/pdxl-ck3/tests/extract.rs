@@ -2434,14 +2434,27 @@ fn subject_contracts_and_groups_define_and_reference() {
     assert!(c.defs.iter().any(
         |d| d.kind == pdxl_ck3::kinds::SUBJECT_CONTRACT && d.name == "feudal_government_taxes"
     ));
-    // Obligation levels are contract-scoped, so they are structure, not symbols
-    // — `default` and `high` repeat across contracts in the corpus.
+    // Obligation levels are contract-scoped: they register as gap-fill aliases
+    // rather than definitions, so `default` recurring in another contract is
+    // not a duplicate. They still resolve, so `parent` is a real reference.
     assert!(
         c.defs
             .iter()
             .all(|d| d.name != "default" && d.name != "high")
     );
-    assert!(c.refs.iter().all(|r| r.name != "default"));
+    for n in ["default", "high"] {
+        assert!(
+            c.aliases
+                .iter()
+                .any(|a| a.kind == pdxl_ck3::kinds::OBLIGATION_LEVEL && a.name == n),
+            "{n}"
+        );
+    }
+    assert!(
+        c.refs
+            .iter()
+            .any(|r| r.kind == pdxl_ck3::kinds::OBLIGATION_LEVEL && r.name == "default")
+    );
 
     let g = extract(
         "feudal_vassal = {\n\

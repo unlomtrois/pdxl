@@ -136,7 +136,7 @@ pub fn datafn_registry() -> &'static pdxl_gui::datafn::DataFnRegistry {
 /// Builds the CK3 schema from the entity registry. Cheap to construct; build
 /// once and share.
 pub fn schema() -> Schema {
-    Schema::new(
+    let mut schema = Schema::new(
         &entities::kinds(),
         SCOPE_KEYWORDS,
         TYPED_DEFS,
@@ -146,5 +146,7 @@ pub fn schema() -> Schema {
         Some(CALL_KINDS),
         Some(GUI_KINDS),
         Some(kinds::GAME_CONCEPT),
-    )
+    );
+    schema.set_implicit_loc_patterns(&entities::implicit_loc_patterns());
+    schema
 }

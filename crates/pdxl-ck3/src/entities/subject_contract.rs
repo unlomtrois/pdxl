@@ -7,18 +7,23 @@
 //! - **contracts** (`contracts/`, 73 defs) — one negotiable obligation each.
 //! - **groups** (`groups/`, 27 defs) — the contract bundle a government uses.
 //!
-//! **Obligation levels are modeled structurally but are not a kind.** The 201
-//! rungs inside `obligation_levels = { … }` look like nested definitions — the
-//! faiths-inside-religions shape — and `parent = X` links a rung to the one it
-//! steps from, with all 119 distinct parents resolving. But level names are
-//! scoped *per contract*, not globally: `default` occurs in ten contracts,
-//! `salary_low` and `prestige_transfer_none` in several each. Registering them
-//! as symbols produced 21 false "redefined" diagnostics against the corpus,
-//! because this symbol table is global and has no per-parent scoping (the one
-//! scoped channel, file-local `@constants`, is a bespoke mechanism). So levels
-//! get a full [`StructSpec`] — hover, completion and field validation all work
-//! inside them — while `parent` stays an ordinary setting rather than a
-//! resolvable reference.
+//! - **obligation levels** (`obligation_levels = { … }` inside a contract, 201
+//!   of them) — the rungs a contract can sit on.
+//!
+//! Level names are scoped *per contract*, not globally: `default` occurs in ten
+//! contracts, `salary_low` and `prestige_transfer_none` in several each.
+//! Registering them as ordinary definitions produced 21 false "redefined"
+//! diagnostics, so they use [`DefShape::ScopedChildrenOf`] instead — gap-fill
+//! aliases that resolve and carry hover without duplicate-tracking. That
+//! matches the engine: every `default` shares the one localization key
+//! `default`, whichever contract declares it.
+//!
+//! **Localization.** The readme lists four implicit keys, and the corpus bears
+//! them out: a contract's own name (58 of 73 have one), a level's name (162 of
+//! 201), `<level>_short` (158) and `<level>_desc` (44). Declaring them as
+//! [`ImplicitLocPattern`]s turns hover on a contract or level into links
+//! straight to its text, and makes the loc key's own references list the
+//! entities consuming it.
 //!
 //! The directory is `subject_contracts`, not the `common/vassal_contracts/`
 //! the governments readme still names; that path does not exist in either
@@ -51,13 +56,24 @@ use pdxl_analysis::context::ClauseKind::{
 };
 use pdxl_analysis::context::ScalarKind::Setting;
 use pdxl_analysis::context::{Fallback, StructSpec, block, color, scalar, scalar_or_block};
-use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
+use pdxl_analysis::{
+    DefShape, DefSource, IconHint, ImplicitLocPattern, KindSpec, RefPattern, RefRule,
+};
 
 use super::Entity;
 use super::common::{OPAQUE, anywhere};
 
 pub(crate) const CONTRACTS_DIR: &str = "common/subject_contracts/contracts/";
 pub(crate) const GROUPS_DIR: &str = "common/subject_contracts/groups/";
+
+/// A reference gated to the contract directory.
+const fn in_contracts(pattern: RefPattern) -> RefRule {
+    RefRule {
+        pattern,
+        gate: Some(CONTRACTS_DIR),
+        alt: &[],
+    }
+}
 
 /// A reference gated to the group directory.
 const fn in_groups(pattern: RefPattern) -> RefRule {
@@ -235,10 +251,7 @@ static OBLIGATION_LEVEL: StructSpec = StructSpec {
         ),
         (
             "parent",
-            scalar(Setting).doc(
-                "The level this one steps from, and can step back to. Names a level of the \
-                 *same contract*; not a global symbol, so it is not resolved as a reference.",
-            ),
+            scalar(Setting).doc("The level this one steps from, and can step back to."),
         ),
         (
             "position",
@@ -410,7 +423,40 @@ static CONTRACT_GROUP: StructSpec = StructSpec {
 pub(crate) struct SubjectContract;
 
 impl Entity for SubjectContract {
+    const IMPLICIT_LOC: &'static [ImplicitLocPattern] = &[
+        ImplicitLocPattern {
+            kind: kinds::SUBJECT_CONTRACT,
+            suffix: "",
+        },
+        ImplicitLocPattern {
+            kind: kinds::OBLIGATION_LEVEL,
+            suffix: "",
+        },
+        ImplicitLocPattern {
+            kind: kinds::OBLIGATION_LEVEL,
+            suffix: "_short",
+        },
+        ImplicitLocPattern {
+            kind: kinds::OBLIGATION_LEVEL,
+            suffix: "_desc",
+        },
+    ];
+
     const KINDS: &'static [KindSpec] = &[
+        KindSpec {
+            kind: kinds::OBLIGATION_LEVEL,
+            icon: IconHint::Object,
+            defs: Some(DefSource {
+                dir_prefix: CONTRACTS_DIR,
+                shape: DefShape::ScopedChildrenOf {
+                    containers: &["obligation_levels"],
+                },
+            }),
+            // `parent` names a level of the same contract. Gated, since a bare
+            // `parent` key means other things elsewhere (game concepts, CoA).
+            refs: &[in_contracts(RefPattern::KeyValue("parent"))],
+            aliases: &[],
+        },
         KindSpec {
             kind: kinds::SUBJECT_CONTRACT,
             icon: IconHint::Object,

@@ -2526,6 +2526,14 @@ fn symbol_at_with_alts(
             return Some((r.kind, r.alt, &r.name));
         }
     }
+    // Gap-fill names (`DefShape::ScopedChildrenOf`, alias field keys) answer
+    // last, mirroring `SymbolTable::add_alias`: a real definition or reference
+    // at the same position always wins.
+    for a in &facts.aliases {
+        if a.offset <= off && off < a.end_offset {
+            return Some((a.kind, &[], &a.name));
+        }
+    }
     None
 }
 
@@ -2554,6 +2562,12 @@ fn span_at(facts: &pdxl_analysis::FileFacts, off: u32) -> Option<(u32, u32)> {
     for r in &facts.constant_refs {
         if r.start <= off && off < r.end {
             return Some((r.start, r.end));
+        }
+    }
+    // Same last-place ordering as `symbol_at_with_alts`.
+    for a in &facts.aliases {
+        if a.offset <= off && off < a.end_offset {
+            return Some((a.offset, a.end_offset));
         }
     }
     None

@@ -74,4 +74,5 @@ pub const HOLDING: KindId = KindId::new("holding");
 pub const DOMICILE_TYPE: KindId = KindId::new("domicile_type");
 pub const DOMICILE_BUILDING: KindId = KindId::new("domicile_building");
 pub const SUBJECT_CONTRACT: KindId = KindId::new("subject_contract");
+pub const OBLIGATION_LEVEL: KindId = KindId::new("obligation_level");
 pub const SUBJECT_CONTRACT_GROUP: KindId = KindId::new("subject_contract_group");

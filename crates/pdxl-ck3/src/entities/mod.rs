@@ -15,8 +15,8 @@
 //! [`ContextSchema`]: pdxl_analysis::context::ContextSchema
 //! [`StructSpec`]: pdxl_analysis::context::StructSpec
 
-use pdxl_analysis::KindSpec;
 use pdxl_analysis::context::ClauseKind;
+use pdxl_analysis::{ImplicitLocPattern, KindSpec};
 
 pub(crate) mod common;
 
@@ -80,6 +80,11 @@ pub(crate) trait Entity {
     const KINDS: &'static [KindSpec] = &[];
     /// Directory prefix → root structural context for this concept's bodies.
     const ROOTS: &'static [(&'static str, ClauseKind)] = &[];
+    /// Localization keys this concept's entities claim by name alone, with no
+    /// reference token in script — `<key>`, `<key>_desc` and the like. They
+    /// power the hover links from an entity to its text, and the reverse
+    /// edge that makes a loc key's references include the entities using it.
+    const IMPLICIT_LOC: &'static [ImplicitLocPattern] = &[];
 }
 
 /// Assembles the registered entities into the flat rows the engine consumes.
@@ -97,6 +102,12 @@ macro_rules! registry {
         pub(crate) fn roots() -> Vec<(&'static str, ClauseKind)> {
             let mut v = Vec::new();
             $( v.extend_from_slice(<$e as Entity>::ROOTS); )+
+            v
+        }
+        /// Every concept's implicit-localization conventions.
+        pub(crate) fn implicit_loc_patterns() -> Vec<ImplicitLocPattern> {
+            let mut v = Vec::new();
+            $( v.extend_from_slice(<$e as Entity>::IMPLICIT_LOC); )+
             v
         }
     };

@@ -68,6 +68,18 @@ pub enum DefShape {
     /// Definitions are the direct block-valued children of named container
     /// blocks found anywhere in the file (CK3 faiths inside `faiths = {}`).
     ChildrenOf { containers: &'static [&'static str] },
+    /// Like [`ChildrenOf`], but the child names are scoped to their parent
+    /// rather than globally unique, so the same name legitimately recurs under
+    /// different parents (CK3 obligation levels: ten subject contracts each
+    /// define a `default`).
+    ///
+    /// These register as **gap-fill aliases**, not definitions: they resolve
+    /// and support hover and implicit localization, but a repeat is not a
+    /// duplicate. That matches the engine, where such names share one
+    /// localization key regardless of which parent declares them.
+    ///
+    /// [`ChildrenOf`]: DefShape::ChildrenOf
+    ScopedChildrenOf { containers: &'static [&'static str] },
     /// Definitions are the block-valued children of every **top-level**
     /// block, minus the named block-valued attributes of that outer block.
     /// CK3 laws: top-level law groups whose block children are laws, except

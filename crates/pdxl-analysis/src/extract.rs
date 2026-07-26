@@ -88,6 +88,17 @@ pub fn extract_facts(
                 crate::schema::DefShape::ChildrenOf { containers } => harvest_container_defs(
                     tree, node, containers, rule.kind, rel_path, schema, &mut facts,
                 ),
+                // Same harvest, but the results move to `aliases` so a name
+                // recurring under a different parent gap-fills instead of
+                // being reported as a duplicate definition.
+                crate::schema::DefShape::ScopedChildrenOf { containers } => {
+                    let before = facts.defs.len();
+                    harvest_container_defs(
+                        tree, node, containers, rule.kind, rel_path, schema, &mut facts,
+                    );
+                    let scoped: Vec<_> = facts.defs.drain(before..).collect();
+                    facts.aliases.extend(scoped);
+                }
                 crate::schema::DefShape::GroupedBlocks { exclude } => harvest_grouped_defs(
                     tree, node, exclude, rule.kind, rel_path, schema, &mut facts,
                 ),
