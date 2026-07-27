@@ -34,36 +34,7 @@ use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule
 use crate::kinds;
 
 use super::Entity;
-use super::common::{DURATION, OPAQUE, anywhere};
-
-/// `cost = { gold = … piety = … prestige = … renown = … }`. Deducted from the
-/// actor on send; the interaction is disabled if they cannot pay. Renown can
-/// only be spent by the dynast. The info lists only the first four currencies;
-/// `influence` / `treasury` / `treasury_or_gold` are corpus-only (and
-/// `influence` outnumbers `gold` in the vanilla corpus).
-static COST: StructSpec = StructSpec {
-    name: "cost",
-    fields: &[
-        ("gold", scalar_or_block(Setting, ScriptValue)),
-        ("piety", scalar_or_block(Setting, ScriptValue)),
-        ("prestige", scalar_or_block(Setting, ScriptValue)),
-        ("renown", scalar_or_block(Setting, ScriptValue)),
-        (
-            "influence",
-            scalar_or_block(Setting, ScriptValue).doc("Administrative influence *(corpus)*."),
-        ),
-        (
-            "treasury",
-            scalar_or_block(Setting, ScriptValue).doc("Domicile treasury *(corpus)*."),
-        ),
-        (
-            "treasury_or_gold",
-            scalar_or_block(Setting, ScriptValue)
-                .doc("Pay from the treasury, falling back to gold *(corpus)*."),
-        ),
-    ],
-    fallback: Fallback::Deny,
-};
+use super::common::{COST, DURATION, OPAQUE, anywhere};
 
 /// A `send_option = { … }` block: an extra toggle shown when sending.
 static SEND_OPTION: StructSpec = StructSpec {

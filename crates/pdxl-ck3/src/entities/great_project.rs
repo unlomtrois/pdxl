@@ -192,8 +192,11 @@ static GREAT_PROJECT: StructSpec = StructSpec {
     fields: &[
         (
             "icon",
-            scalar(Setting)
-                .doc("Image under `GREAT_PROJECT_ICON_PATH`; defaults to the project key."),
+            scalar_or_block(Setting, Struct(&TRIGGERED_ASSET)).doc(
+                "Image under `GREAT_PROJECT_ICON_PATH`; defaults to the project key. \
+                 The info shows only the bare form, but every use in the corpus is a \
+                 triggered block like `illustration` *(corpus)*.",
+            ),
         ),
         (
             "illustration",

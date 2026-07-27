@@ -62,13 +62,43 @@ pub(crate) static DURATION: StructSpec = StructSpec {
     fallback: Fallback::Deny,
 };
 
-/// `gold/piety/prestige = <script value>` — decision and law costs.
+/// A scripted cost — decisions, laws, casus belli, interactions, great
+/// projects. Deducted from the actor when the action is taken, and the action
+/// is disabled if they cannot pay.
+///
+/// The currency list is corpus-wide, not per-consumer: an earlier version held
+/// only gold/piety/prestige, so every other currency fell through
+/// `Fallback::Deny` into an unknown context and stopped hovering. Counts across
+/// the modeled directories: piety 131, treasury_or_gold 123, prestige 122,
+/// gold 98, treasury 46, influence 8, herd 1.
 pub(crate) static COST: StructSpec = StructSpec {
     name: "cost",
     fields: &[
         ("gold", scalar_or_block(Setting, ScriptValue)),
         ("piety", scalar_or_block(Setting, ScriptValue)),
         ("prestige", scalar_or_block(Setting, ScriptValue)),
+        (
+            "renown",
+            scalar_or_block(Setting, ScriptValue)
+                .doc("Dynasty renown — only the dynast may spend it."),
+        ),
+        (
+            "influence",
+            scalar_or_block(Setting, ScriptValue).doc("Administrative influence."),
+        ),
+        (
+            "treasury",
+            scalar_or_block(Setting, ScriptValue).doc("Domicile treasury."),
+        ),
+        (
+            "treasury_or_gold",
+            scalar_or_block(Setting, ScriptValue)
+                .doc("Pay from the treasury, falling back to personal gold."),
+        ),
+        (
+            "herd",
+            scalar_or_block(Setting, ScriptValue).doc("Herd, for nomadic rulers."),
+        ),
     ],
     fallback: Fallback::Deny,
 };
