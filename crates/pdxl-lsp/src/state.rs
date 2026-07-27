@@ -767,6 +767,28 @@ impl ServerState {
             .collect()
     }
 
+    /// Whether the definition a lens anchors on is one the engine raises
+    /// itself. Matches on the definition's own offset, so a reference sharing
+    /// the position cannot answer instead.
+    fn is_intrinsic_at(&self, uri: &Url, pos: Position) -> bool {
+        let path = uri_to_path(uri);
+        let Some(project) = &self.project else {
+            return false;
+        };
+        let Some(facts) = project.facts_at(&path) else {
+            return false;
+        };
+        let Ok(src) = self.read_file(&path) else {
+            return false;
+        };
+        let off = position_to_offset(&src, pos);
+        facts
+            .defs
+            .iter()
+            .filter(|d| d.offset == off)
+            .any(|d| project.schema().is_intrinsic(d.kind, &d.name))
+    }
+
     /// `codeLens/resolve`: fill in the "N references" title and a click action
     /// (peek references) for one lens. Runs the reference search only now, so
     /// off-screen lenses cost nothing.
@@ -782,10 +804,20 @@ impl ServerState {
         };
         // The lens anchors on the definition name; resolve references there.
         let locations = self.references(&uri, lens.range.start, false);
-        let title = match locations.len() {
+        let mut title = match locations.len() {
             1 => "1 reference".to_string(),
             n => format!("{n} references"),
         };
+        // A symbol the engine raises itself has no call site in script, so the
+        // count alone is misleading. Saying so in the lens answers the question
+        // where it is asked, rather than only on hover.
+        if self.is_intrinsic_at(&uri, lens.range.start) {
+            if locations.is_empty() {
+                title = "engine intrinsic".to_string();
+            } else {
+                title.push_str(" · engine intrinsic");
+            }
+        }
         lens.command = Some(lsp_types::Command {
             title,
             // A client-side shim (see editor/vscode) — it converts these

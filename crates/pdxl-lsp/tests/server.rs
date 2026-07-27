@@ -3336,3 +3336,32 @@ fn engine_intrinsic_message_explains_its_empty_reference_list() {
         "ordinary message must not be marked:\n{md}"
     );
 }
+
+#[cfg(feature = "ck3")]
+#[test]
+fn code_lens_names_an_engine_intrinsic_instead_of_counting_to_zero() {
+    let t = TempTree::new();
+    t.write(
+        "common/messages/00.txt",
+        "msg_siege_won = { style = good }\nmsg_scripted = { style = good }\n",
+    );
+    t.write(
+        "common/scripted_effects/e.txt",
+        "e = { send_interface_toast = { type = msg_scripted } }\n",
+    );
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/messages/00.txt");
+    let lenses = server.code_lens(&uri);
+    assert_eq!(lenses.len(), 2);
+
+    // The engine raises this one, so the count is replaced rather than shown.
+    let intrinsic = server.code_lens_resolve(lenses[0].clone());
+    assert_eq!(
+        intrinsic.command.expect("resolved").title,
+        "engine intrinsic"
+    );
+
+    // An ordinary message still counts, and is not mislabelled.
+    let scripted = server.code_lens_resolve(lenses[1].clone());
+    assert_eq!(scripted.command.expect("resolved").title, "1 reference");
+}
