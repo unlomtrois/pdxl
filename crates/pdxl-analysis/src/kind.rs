@@ -38,6 +38,18 @@ pub const LOC_KEY: KindId = KindId::new("loc_key");
 /// they resolve per file and never enter the global symbol table.
 pub const SCRIPT_CONSTANT: KindId = KindId::new("script_constant");
 
+/// Smart-doc anchors (`#! @name`) — the third engine-owned kind, and the one
+/// no game could own: `#!` is pdxl's own convention, invisible to every
+/// Paradox engine, so an anchor names whatever its author says it names.
+///
+/// Unlike [`SCRIPT_CONSTANT`] these are project-global and registered:
+/// cross-file navigation is the entire point, and they must be counted,
+/// doc-ref-linkable, and visible in the symbol outline. [`Schema::new`] adds
+/// this kind and its `anchor:` alias for every game.
+///
+/// [`Schema::new`]: crate::Schema::new
+pub const DOC_ANCHOR: KindId = KindId::new("doc_anchor");
+
 /// The kinds a game's call-by-name references resolve to (scripted effects and
 /// triggers matched in *key* position, script values in *value* position).
 /// Supplied by the game schema so the engine's extractor stays kind-agnostic.

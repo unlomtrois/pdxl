@@ -2207,6 +2207,61 @@ fn files_without_doc_comments_gain_no_calls() {
     assert!(f.calls.is_empty());
 }
 
+// ── smart-doc anchors (`#! @key`) ────────────────────────────────────────────
+
+#[test]
+fn smart_doc_anchor_is_a_definition() {
+    let src = "#! @todo:rebalance_piety rework the piety curve\na = { b = 1 }\n";
+    let f = extract(src, "common/scripted_effects/x.txt");
+    let anchor = f
+        .defs
+        .iter()
+        .find(|d| d.kind == pdxl_analysis::DOC_ANCHOR)
+        .expect("anchor def");
+    assert_eq!(anchor.name, "todo:rebalance_piety");
+    // The span covers the key alone, so navigation lands on the name rather
+    // than the `#!` marker or the trailing description.
+    assert_eq!(
+        &src.as_bytes()[anchor.offset as usize..anchor.end_offset as usize],
+        b"todo:rebalance_piety"
+    );
+    // Definitions carry the FileSet rel_path, not the on-disk path.
+    assert_eq!(&*anchor.file, "common/scripted_effects/x.txt");
+}
+
+#[test]
+fn only_a_doc_comment_opening_with_at_declares_an_anchor() {
+    let anchors = |src: &str| {
+        extract(src, "common/scripted_effects/x.txt")
+            .defs
+            .iter()
+            .filter(|d| d.kind == pdxl_analysis::DOC_ANCHOR)
+            .count()
+    };
+    // A plain `#` comment is prose, as it is for references.
+    assert_eq!(anchors("# @not_an_anchor\na = { b = 1 }\n"), 0);
+    // `@name` mid-sentence is PDXScript's constant syntax, not a declaration.
+    assert_eq!(
+        anchors("#! Scales with @rich_threshold.\na = { b = 1 }\n"),
+        0
+    );
+    assert_eq!(anchors("#! @real_anchor\na = { b = 1 }\n"), 1);
+}
+
+#[test]
+fn an_anchor_line_still_yields_its_doc_refs() {
+    let f = extract(
+        "#! @todo:x see ![trait:brave]\na = { b = 1 }\n",
+        "common/scripted_effects/x.txt",
+    );
+    assert!(
+        f.defs
+            .iter()
+            .any(|d| d.kind == pdxl_analysis::DOC_ANCHOR && d.name == "todo:x")
+    );
+    assert!(f.calls.iter().any(|r| r.name == "brave"));
+}
+
 #[test]
 fn governments_define_and_reference() {
     let f = extract(

@@ -433,6 +433,15 @@ impl Schema {
                 });
             }
         }
+        // Smart-doc anchors are the engine's own kind — `#!` is pdxl's
+        // convention, not any game's — so they register here instead of waiting
+        // for a game crate to declare a `KindSpec` row. Registered last, beside
+        // the other non-script kind, so reports read naturally; the priority a
+        // doc reference gives them is stated separately, not implied by this
+        // position.
+        schema.kinds.push(crate::kind::DOC_ANCHOR);
+        schema.icons.insert(crate::kind::DOC_ANCHOR, IconHint::Tag);
+        schema.by_alias.insert("anchor", crate::kind::DOC_ANCHOR);
         schema
     }
 

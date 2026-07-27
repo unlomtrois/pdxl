@@ -29,9 +29,9 @@ mod resolve;
 mod schema;
 mod table;
 
-pub use doc::{DOC_REF, doc_ref_spans, parse_doc_ref};
+pub use doc::{DOC_REF, doc_anchor_span, doc_ref_spans, parse_doc_ref};
 pub use extract::{extract_calls, extract_facts};
-pub use kind::{CallKinds, GuiKinds, KindId, LOC_KEY, SCRIPT_CONSTANT};
+pub use kind::{CallKinds, DOC_ANCHOR, GuiKinds, KindId, LOC_KEY, SCRIPT_CONSTANT};
 pub use model::{CallTargets, FileFacts, Ref, Symbol};
 pub use resolve::{RefDiag, merge_and_resolve, resolve_refs};
 pub use schema::{
@@ -44,7 +44,8 @@ pub use table::{Duplicate, SymbolTable};
 /// facts cache must embed this in its keys (alongside content hash and
 /// rel_path) and treat mismatches as misses; bump it whenever extraction rules
 /// or the [`FileFacts`] model change meaning.
-pub const ANALYSIS_VERSION: u32 = 127; // 127: CK3 casus belli implicit localization — the CB key is its name key, plus the 3x3 outcome-description family (navigation only; no extraction or diagnostic change)
+pub const ANALYSIS_VERSION: u32 = 128; // 128: smart-doc anchors — `#! @key description` defines an engine-owned DOC_ANCHOR symbol in `defs`; `![key]` resolves to it ahead of entities; Schema::new registers the kind and its `anchor:` alias for every game
+// 127: CK3 casus belli implicit localization — the CB key is its name key, plus the 3x3 outcome-description family (navigation only; no extraction or diagnostic change)
 // 126: pdxl-cache removed — no extraction change; the constant is now release numbering and this changelog only, since nothing reads it
 // 125: FieldSpec::ref_kind — a modeled body's own fields carry their references (scalar(LocKey) implies one), so extraction threads the clause context and reads refs off the shape instead of a gated RefRule per key; refs deduped per file
 // 124: CK3 casus-belli loc keys are now references — war_name/cb_name/on_*_desc and the descs nested in their dynamic-description blocks (1621 new refs in vanilla; 3 unresolved, all genuine dead loc)

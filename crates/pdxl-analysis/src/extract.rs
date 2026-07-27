@@ -158,6 +158,7 @@ pub fn extract_facts(
     }
     facts.calls.extend(soft_refs);
     extract_doc_refs(tree, full_path, schema, &mut facts.calls);
+    extract_doc_anchors(tree, rel_path, &mut facts.defs);
     facts
 }
 
@@ -184,6 +185,39 @@ fn is_identifier_value(tree: &SyntaxTree, node_id: NodeId) -> bool {
 fn dedupe_refs(refs: &mut Vec<Ref>) {
     let mut seen: std::collections::HashSet<(KindId, u32, u32)> = std::collections::HashSet::new();
     refs.retain(|r| seen.insert((r.kind, r.start, r.end)));
+}
+
+/// Harvests `#! @key` anchor declarations out of the `#!` side-channel.
+///
+/// Anchors are ordinary definitions — they go to `defs`, so they are
+/// duplicate-tracked, enter the symbol table, and answer find-references and
+/// the outline like any entity. `rel_path` (not the full path) is the symbol's
+/// file, matching every other definition.
+fn extract_doc_anchors(tree: &SyntaxTree, rel_path: &str, out: &mut Vec<Symbol>) {
+    let docs = tree.doc_comments();
+    if docs.is_empty() {
+        return;
+    }
+    let src = tree.source();
+    let file: Arc<str> = Arc::from(rel_path);
+    for range in docs {
+        let Some((start, end)) = crate::doc::doc_anchor_span(src, range.start, range.end) else {
+            continue;
+        };
+        let Ok(name) = std::str::from_utf8(&src[start as usize..end as usize]) else {
+            continue;
+        };
+        out.push(Symbol {
+            name: name.to_string(),
+            kind: crate::kind::DOC_ANCHOR,
+            file: Arc::clone(&file),
+            // The key itself is the go-to-definition target, so navigation
+            // lands on the name rather than the `#!` marker.
+            offset: start,
+            end_offset: end,
+            params: Vec::new(),
+        });
+    }
 }
 
 /// Harvests `![Name]` / `![kind:Name]` out of the tree's `#!` side-channel.

@@ -337,12 +337,21 @@ impl ServerState {
             });
         }
 
-        // Primary kind first, then the rule's alternates (multi-kind refs
-        // like custom_description's text resolve to whichever kind defines
-        // the name).
-        let symbol = std::iter::once(reference.kind)
-            .chain(reference.alt.iter().copied())
-            .find_map(|k| project.table().lookup(k, &reference.name))?;
+        // An unqualified `![Name]` carries the DOC_REF sentinel rather than a
+        // real kind, so it searches the same anchor → entity → concept → loc
+        // order hover and the link path use. Without this every bare doc ref
+        // looked up a kind no table holds, and jumping from one did nothing.
+        let symbol = if reference.kind == pdxl_analysis::DOC_REF {
+            doc_ref_lookup_order(project.schema())
+                .find_map(|k| project.table().lookup(k, &reference.name))?
+        } else {
+            // Primary kind first, then the rule's alternates (multi-kind refs
+            // like custom_description's text resolve to whichever kind defines
+            // the name).
+            std::iter::once(reference.kind)
+                .chain(reference.alt.iter().copied())
+                .find_map(|k| project.table().lookup(k, &reference.name))?
+        };
         let def_full = project.rel_to_full(&symbol.file)?.to_path_buf();
         let def_src = self.read_file(&def_full).ok()?;
 
@@ -1015,9 +1024,16 @@ impl ServerState {
                         implicit_loc.push(format!("[{loc_name}]({}#L{line})", path_to_uri(full)));
                     }
                 }
-                // A `#!` doc block above the definition (resolved even when
-                // hovering a reference, so a call site shows the target's doc).
-                if let Some(doc) = self.doc_comment_for(project, symbol) {
+                // An anchor documents itself on its declaring line; every other
+                // kind takes the `#!` block above its definition (resolved even
+                // when hovering a reference, so a call site shows the target's
+                // doc).
+                let authored = if kind == pdxl_analysis::DOC_ANCHOR {
+                    self.anchor_description(project, symbol)
+                } else {
+                    self.doc_comment_for(project, symbol)
+                };
+                if let Some(doc) = authored {
                     text.push_str("\n\n");
                     text.push_str(&self.render_doc(&doc, project));
                 }
@@ -1072,6 +1088,28 @@ impl ServerState {
         let full = project.rel_to_full(&symbol.file)?;
         let src = self.read_file(full).ok()?;
         extract_doc_block(&src, symbol.offset)
+    }
+
+    /// An anchor's description: the text after `#! @key` on its declaring line.
+    ///
+    /// Anchors need their own reader because [`extract_doc_block`] collects the
+    /// `#!` lines *above* a definition — right for a symbol the comment
+    /// documents, but an anchor's declaration is itself the comment, so that
+    /// walk starts one line too high and returns the wrong block entirely.
+    fn anchor_description(
+        &self,
+        project: &Project,
+        symbol: &pdxl_analysis::Symbol,
+    ) -> Option<String> {
+        let full = project.rel_to_full(&symbol.file)?;
+        let src = self.read_file(full).ok()?;
+        let from = (symbol.end_offset as usize).min(src.len());
+        let line_end = src[from..]
+            .iter()
+            .position(|&b| b == b'\n')
+            .map_or(src.len(), |i| from + i);
+        let text = std::str::from_utf8(&src[from..line_end]).ok()?.trim();
+        (!text.is_empty()).then(|| text.to_string())
     }
 
     /// Renders a doc block to hover markdown, turning each `![Name]` into a
@@ -1533,8 +1571,12 @@ fn extract_doc_block(src: &[u8], def_offset: u32) -> Option<String> {
 pub(crate) use pdxl_analysis::parse_doc_ref;
 
 /// Kinds to try for an unqualified `![Name]`, in decreasing order of how much
-/// the author probably meant them: **entities, then the game concept, then the
-/// localization key.**
+/// the author probably meant them: **the smart-doc anchor, then entities, then
+/// the game concept, then the localization key.**
+///
+/// An anchor leads because it is the only kind an author declares *for this
+/// purpose* — `#! @name` exists solely to be linked to, so it should win over
+/// an entity that merely happens to share the name.
 ///
 /// Both tail kinds are things an entity's own name tends to shadow — a game
 /// concept explains a mechanic the entity implements, and a loc string is
@@ -1543,11 +1585,10 @@ pub(crate) use pdxl_analysis::parse_doc_ref;
 /// encyclopedia entry is more useful to jump to than the raw string.
 fn doc_ref_lookup_order(schema: &Schema) -> impl Iterator<Item = KindId> + '_ {
     let concept = schema.loc_concept_kind();
-    schema
-        .kinds()
-        .iter()
-        .copied()
-        .filter(move |k| *k != LOC_KEY && Some(*k) != concept)
+    std::iter::once(pdxl_analysis::DOC_ANCHOR)
+        .chain(schema.kinds().iter().copied().filter(move |k| {
+            *k != LOC_KEY && *k != pdxl_analysis::DOC_ANCHOR && Some(*k) != concept
+        }))
         .chain(concept)
         .chain(std::iter::once(LOC_KEY))
 }

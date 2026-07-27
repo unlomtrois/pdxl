@@ -3033,6 +3033,72 @@ fn casus_belli_links_to_its_implicit_loc_keys() {
 
 #[cfg(feature = "ck3")]
 #[test]
+fn smart_doc_anchors_are_symbols_referenced_across_files() {
+    let t = TempTree::new();
+    // The anchor names something the schema has no row for at all.
+    let decl = "#! @todo:rebalance_piety rework the piety curve\n\
+                fx = { add_trait = brave }\n";
+    t.write("common/scripted_effects/a.txt", decl);
+    t.write(
+        "common/scripted_effects/b.txt",
+        "#! blocked on ![todo:rebalance_piety]\ne = { }\n",
+    );
+    t.write("common/traits/00.txt", "brave = { }\n");
+    let (server, _rx) = server_over(&t);
+    let a = uri_for(&t, "common/scripted_effects/a.txt");
+    let b = uri_for(&t, "common/scripted_effects/b.txt");
+
+    // Hovering the declaration names the kind and shows the description.
+    let md = hover_md(&server, &a, pos_of(decl, "todo:rebalance_piety"));
+    assert!(md.contains("doc_anchor"), "kind missing from:\n{md}");
+    assert!(
+        md.contains("rework the piety curve"),
+        "description missing from:\n{md}"
+    );
+
+    // A reference in another file jumps back to the declaration.
+    let b_src = std::fs::read_to_string(t.child("common/scripted_effects/b.txt")).unwrap();
+    let loc = server
+        .definition(&b, pos_of(&b_src, "todo:rebalance_piety"))
+        .expect("anchor definition");
+    assert!(
+        loc.uri.to_file_path().unwrap().ends_with("a.txt"),
+        "expected a.txt, got {loc:?}"
+    );
+
+    // And find-references from the declaration sees the other file's use.
+    let refs = server.references(&a, pos_of(decl, "todo:rebalance_piety"), false);
+    assert!(
+        refs.iter()
+            .any(|l| l.uri.to_file_path().unwrap().ends_with("b.txt")),
+        "anchor reference not found: {refs:?}"
+    );
+}
+
+#[cfg(feature = "ck3")]
+#[test]
+fn a_doc_anchor_outranks_an_entity_of_the_same_name() {
+    let t = TempTree::new();
+    // `brave` is a real trait; the author deliberately declares an anchor
+    // shadowing it, and the deliberate declaration must win.
+    t.write("common/traits/00.txt", "brave = { }\n");
+    let src = "#! @brave the courage rework, not the trait\n\
+               #! see ![brave]\n\
+               e = { }\n";
+    t.write("common/scripted_effects/a.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/scripted_effects/a.txt");
+
+    // `brave]` occurs only inside the reference, so this lands on the name.
+    let md = hover_md(&server, &uri, pos_of(src, "brave]"));
+    assert!(
+        md.contains("doc_anchor"),
+        "anchor should outrank the trait:\n{md}"
+    );
+}
+
+#[cfg(feature = "ck3")]
+#[test]
 fn smart_doc_refs_prefer_entities_then_concepts_then_loc() {
     let t = TempTree::new();
     // One name that is a law group, a game concept, AND a loc key.

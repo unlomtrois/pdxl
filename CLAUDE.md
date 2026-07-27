@@ -130,6 +130,19 @@ crates/pdxl-lsp        the language server over pdxl-project
   vanilla but raw prose in mods), and only where the dir has a `ROOTS` body.
   `extract_facts` dedups refs per file by (kind, range), so a rule and its
   `FieldSpec` successor can coexist while entities migrate one at a time.
+- Engine-owned kinds live in `pdxl-analysis/src/kind.rs`, not a game's
+  `kinds.rs`. `LOC_KEY` is registered by each game's `KindSpec` row;
+  `SCRIPT_CONSTANT` is file-local and deliberately unregistered (so it never
+  reaches `Schema::kinds()`, count tables, or doc-ref lookup); `DOC_ANCHOR` is
+  registered by `Schema::new` itself, since `#!` is pdxl's own convention and
+  no game should have to declare it. That call is the only engine-side path
+  into `Schema::kinds()`.
+- Smart-doc anchors: `#! @key description` defines a `DOC_ANCHOR`, `![key]`
+  references it. Declaring is a **whole-line** act — the `@` must follow `#!`
+  with only spaces between — because `@name` is PDXScript's script-constant
+  syntax and reads naturally mid-sentence. Anchors are ordinary `defs`, so
+  duplicates, outline, CodeLens and find-references come free, and they lead
+  `doc_ref_lookup_order` (a declared name beats a coincidental entity).
 - Soft refs (`Entity::SOFT_SCOPE_REFS` → `Schema::set_soft_scope_refs`) land
   in `FileFacts.calls`, not `.refs`: navigable and counted, never diagnosed.
   Use for namespaces where script names coexist with runtime-created ones
