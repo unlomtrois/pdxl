@@ -15,6 +15,8 @@
 
 use pdxl_ast::{NodeId, NodeKind, SyntaxTree};
 
+use crate::kind::KindId;
+
 /// The kind of clause a block position expects.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ClauseKind {
@@ -104,6 +106,33 @@ pub struct FieldSpec {
     /// these vocabularies (e.g. new artifact slot types), so an unlisted
     /// value is never diagnosed.
     pub values: Option<&'static [&'static str]>,
+    /// The symbol kind this field's scalar value *names*, making the field
+    /// itself a reference — extraction reads it straight off the shape, with
+    /// no [`RefRule`](crate::RefRule) restating the same key elsewhere.
+    ///
+    /// [`ScalarKind::LocKey`] implies [`crate::kind::LOC_KEY`], since a field
+    /// declared to hold a loc key is by definition a loc reference. Every other
+    /// kind is declared with [`FieldSpec::refs`].
+    ///
+    /// This only fires where the directory has a modeled body; cross-cutting
+    /// patterns (a key valid in *any* file, scope literals, list forms) stay
+    /// with [`RefRule`](crate::RefRule).
+    pub ref_kind: Option<KindId>,
+    /// Fallback kinds tried when `ref_kind` does not define the name — the
+    /// [`FieldSpec`] counterpart of [`RefRule::alt`](crate::RefRule::alt).
+    /// Diagnosed only when no kind in the chain defines it; navigation follows
+    /// whichever resolves.
+    pub ref_alt: &'static [KindId],
+}
+
+/// The kind a scalar form references on its own, before any explicit
+/// [`FieldSpec::refs`]: a field declared to hold a localization key *is* a
+/// localization reference, so the shape alone carries it.
+const fn implied_ref(kind: ScalarKind) -> Option<KindId> {
+    match kind {
+        ScalarKind::LocKey => Some(crate::kind::LOC_KEY),
+        ScalarKind::Setting | ScalarKind::Target => None,
+    }
 }
 
 /// A block-valued field.
@@ -114,6 +143,8 @@ pub const fn block(kind: ClauseKind) -> FieldSpec {
         scope: None,
         doc: None,
         values: None,
+        ref_kind: None,
+        ref_alt: &[],
     }
 }
 
@@ -125,6 +156,8 @@ pub const fn block_scoped(kind: ClauseKind, scope: &'static str) -> FieldSpec {
         scope: Some(scope),
         doc: None,
         values: None,
+        ref_kind: None,
+        ref_alt: &[],
     }
 }
 
@@ -136,6 +169,8 @@ pub const fn scalar(kind: ScalarKind) -> FieldSpec {
         scope: None,
         doc: None,
         values: None,
+        ref_kind: implied_ref(kind),
+        ref_alt: &[],
     }
 }
 
@@ -147,6 +182,8 @@ pub const fn scalar_or_block(s: ScalarKind, b: ClauseKind) -> FieldSpec {
         scope: None,
         doc: None,
         values: None,
+        ref_kind: implied_ref(s),
+        ref_alt: &[],
     }
 }
 
@@ -171,6 +208,44 @@ impl FieldSpec {
     pub const fn values(self, values: &'static [&'static str]) -> FieldSpec {
         FieldSpec {
             values: Some(values),
+            ..self
+        }
+    }
+
+    /// Declares that this field's scalar value names a symbol of `kind`,
+    /// making the field a reference wherever the shape applies (chainable in
+    /// `const`).
+    ///
+    /// This is the structural counterpart of a gated
+    /// [`RefRule`](crate::RefRule): the key is already written once as a field
+    /// of the body that owns it, so the reference travels with the shape
+    /// instead of being restated — and cannot drift out of sync with it.
+    /// Reach for a `RefRule` when the key is *not* tied to one modeled body:
+    /// valid in any file, a scope literal, or a list/block form.
+    pub const fn refs(self, kind: KindId) -> FieldSpec {
+        FieldSpec {
+            ref_kind: Some(kind),
+            ..self
+        }
+    }
+
+    /// Like [`FieldSpec::refs`], with fallback kinds tried when the first does
+    /// not define the name (see [`FieldSpec::ref_alt`]).
+    pub const fn refs_any(self, kind: KindId, alt: &'static [KindId]) -> FieldSpec {
+        FieldSpec {
+            ref_kind: Some(kind),
+            ref_alt: alt,
+            ..self
+        }
+    }
+
+    /// Suppresses the reference this field's scalar kind would otherwise imply
+    /// — for a loc-shaped field whose value is not a real key (an engine
+    /// default, or a name built by macro interpolation).
+    pub const fn no_ref(self) -> FieldSpec {
+        FieldSpec {
+            ref_kind: None,
+            ref_alt: &[],
             ..self
         }
     }
@@ -204,6 +279,10 @@ pub struct ContextSchema {
 }
 
 impl ContextSchema {
+    pub(crate) fn body_kind(&self, rel_path: &str) -> Option<ClauseKind> {
+        self.root_for(rel_path)
+    }
+
     fn root_for(&self, rel_path: &str) -> Option<ClauseKind> {
         self.roots
             .iter()
@@ -339,6 +418,33 @@ pub fn resolve_key(ctx: ClauseKind, key: &str, value_is_block: bool) -> ClauseKi
 }
 
 /// The context transition: entering the value of `key = value` from `ctx`.
+/// The symbol kind (and fallback chain) that the scalar value of `key` names,
+/// read from within `ctx` — the structural model's own answer to "is this a
+/// reference, and to what?".
+///
+/// The only source is a [`StructSpec`] field carrying a
+/// [`FieldSpec::ref_kind`]: a body says which of its own fields name symbols,
+/// and nothing is inferred from a key's spelling. The engine holds no opinion
+/// about particular keys — a `desc` is a reference exactly where some entity
+/// declared it to be one, so a clause that merely *contains* text keys
+/// (a dynamic description, a weighted script value) yields nothing on its own.
+/// Those positions belong to a [`RefRule`](crate::RefRule), which is what
+/// cross-cutting keys are for.
+pub(crate) fn field_ref(ctx: ClauseKind, key: &[u8]) -> Option<(KindId, &'static [KindId])> {
+    let ClauseKind::Struct(spec) = ctx else {
+        return None;
+    };
+    let field = std::str::from_utf8(key).ok().and_then(|k| spec.field(k))?;
+    Some((field.ref_kind?, field.ref_alt))
+}
+
+/// The clause `key` opens from `ctx`. Exposed to the extraction walk so it can
+/// fold the context forward as it descends, at O(1) per node — rather than
+/// re-walking root→node per query the way [`context_at`] must.
+pub(crate) fn step_ctx(ctx: ClauseKind, key: &[u8], value_is_block: bool) -> ClauseKind {
+    step(ctx, key, value_is_block)
+}
+
 fn step(ctx: ClauseKind, key: &[u8], value_is_block: bool) -> ClauseKind {
     match ctx {
         // Inside effects, `limit`/`filter` flip to trigger context (the

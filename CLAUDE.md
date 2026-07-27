@@ -83,6 +83,10 @@ crates/pdxl-lsp        the language server over pdxl-project
 ### Key invariants & gotchas
 
 - Always use Cargo's release profile (`--release`) for builds, tests, Clippy, and runs. We do not debug dev-profile artifacts, and avoiding them saves substantial disk space.
+- All game features share one `target/release/` — `cargo test --features
+  pdxl-cli/eu5` silently rebuilds `pdxl`/`pdxl-graph` as EU5 binaries. Rebuild
+  for the game you are inspecting before trusting their output; `pdxl-graph`
+  prints the active `(schema: …)` in its header, so check it.
 - Bump `pdxl_analysis::ANALYSIS_VERSION` whenever schema/extraction semantics
   change; `pdxl_ast::SYNTAX_VERSION` for lexer/parser/tree changes (cache
   keys); leave the old value as a `// <N>: <one-line summary>` comment below
@@ -106,8 +110,24 @@ crates/pdxl-lsp        the language server over pdxl-project
   **and** a `registry!(…)` line; a new *const* needs the trait, a matching
   accumulator in `registry!`, and a `schema.set_*` call in the game crate's
   `lib.rs` — miss the last and it compiles but never reaches the schema.
-- Reference rules live in the file of their **target** kind (the loc.rs
-  precedent), not where they fire.
+- Two ways to declare a reference; pick by whether the key belongs to one
+  modeled body. **`FieldSpec::ref_kind`** — the key is a field of a
+  `StructSpec`, so it carries its own ref where it is already written
+  (`scalar(LocKey)` implies `LOC_KEY`; `.refs(kind)` / `.refs_any(kind, alt)`
+  for anything else; `.no_ref()` opts out). **`RefRule`** — everything not tied
+  to one body: valid in any file, scope literals, list forms, and *depths no
+  body enumerates* (dynamic-description leaves, script-value `modifier`
+  tooltips — this is why `desc` is still a rule). A `ScalarKind` alone never
+  extracted anything; declaring `scalar(LocKey)` without a ref was the old
+  silent-death trap.
+- `RefRule`s live in the file of their **target** kind (the loc.rs precedent),
+  not where they fire; `FieldSpec` refs live with the body that owns the field.
+- Structure-carried refs need `Schema::set_contexts` in the game crate's
+  `lib.rs` — miss it and every `ref_kind` is silently inert. They fire only on
+  identifier-shaped values (no whitespace: a dynasty `motto` is a loc key in
+  vanilla but raw prose in mods), and only where the dir has a `ROOTS` body.
+  `extract_facts` dedups refs per file by (kind, range), so a rule and its
+  `FieldSpec` successor can coexist while entities migrate one at a time.
 - Soft refs (`Entity::SOFT_SCOPE_REFS` → `Schema::set_soft_scope_refs`) land
   in `FileFacts.calls`, not `.refs`: navigable and counted, never diagnosed.
   Use for namespaces where script names coexist with runtime-created ones

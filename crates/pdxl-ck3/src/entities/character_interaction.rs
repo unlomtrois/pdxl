@@ -3,6 +3,28 @@
 //! by `interaction = X` (corpus-validated, 0 unresolved), and their bodies are a
 //! large documented structure so the many trigger/effect/AI/loc fields complete
 //! and hover.
+//!
+//! The body is reconciled against the live corpus (58 files, game + T4N): every
+//! depth-1 key in use is modeled. Corpus-only fields absent from the info are
+//! marked `*(corpus)*` — `name`, `recipient_recieve_cooldown` (the engine's own
+//! misspelling, alongside the info's `ignore_recipient_recieve_cooldown`),
+//! `shows_military_strength`, and the `cost` currencies `influence` / `treasury`
+//! / `treasury_or_gold`. The info's `cost` lists only gold/piety/prestige/renown,
+//! yet `influence` outnumbers `gold` — and since `COST` denies unknown keys, that
+//! gap was a dead spot rather than a soft one.
+//!
+//! Enum vocabularies come from the info's FAQ and `ai_targets` appendices
+//! (`target_filter`, `ai_recipients`, `target_type`), each with the corpus-only
+//! additions the info missed (`recipient_lessee_titles`, `diarch`).
+//! `interface` / `special_interaction` are engine-side with no enumerable list,
+//! so their `values()` are purely corpus-derived.
+//!
+//! Deliberate omissions: `filter_tags` and `custom_character_sort` hold
+//! bare-word lists, not key/value pairs, so they stay opaque with their
+//! vocabularies in the field docs. Filter tags imply `<tag>_filter_tag_desc` loc
+//! keys, but the tags are not defs of any kind, so no implicit-loc pattern
+//! applies. `scheme = X` already resolves via the ungated rule in `scheme.rs`,
+//! and `override_background.reference` via the shared event-background rule.
 
 use pdxl_analysis::context::ClauseKind::{self, DynamicDesc, Effect, ScriptValue, Struct, Trigger};
 use pdxl_analysis::context::ScalarKind::{LocKey, Setting};
@@ -14,7 +36,11 @@ use crate::kinds;
 use super::Entity;
 use super::common::{DURATION, OPAQUE, anywhere};
 
-/// `cost = { gold = … piety = … prestige = … renown = … }`.
+/// `cost = { gold = … piety = … prestige = … renown = … }`. Deducted from the
+/// actor on send; the interaction is disabled if they cannot pay. Renown can
+/// only be spent by the dynast. The info lists only the first four currencies;
+/// `influence` / `treasury` / `treasury_or_gold` are corpus-only (and
+/// `influence` outnumbers `gold` in the vanilla corpus).
 static COST: StructSpec = StructSpec {
     name: "cost",
     fields: &[
@@ -22,6 +48,19 @@ static COST: StructSpec = StructSpec {
         ("piety", scalar_or_block(Setting, ScriptValue)),
         ("prestige", scalar_or_block(Setting, ScriptValue)),
         ("renown", scalar_or_block(Setting, ScriptValue)),
+        (
+            "influence",
+            scalar_or_block(Setting, ScriptValue).doc("Administrative influence *(corpus)*."),
+        ),
+        (
+            "treasury",
+            scalar_or_block(Setting, ScriptValue).doc("Domicile treasury *(corpus)*."),
+        ),
+        (
+            "treasury_or_gold",
+            scalar_or_block(Setting, ScriptValue)
+                .doc("Pay from the treasury, falling back to gold *(corpus)*."),
+        ),
     ],
     fallback: Fallback::Deny,
 };
@@ -51,13 +90,103 @@ static SEND_OPTION: StructSpec = StructSpec {
     fallback: Fallback::Deny,
 };
 
+/// The engine's `ai_targets` candidate lists, in the info's own order. `diarch`
+/// is corpus-only (the info's list omits it).
+static AI_RECIPIENTS: &[&str] = &[
+    "known_secrets",
+    "scheme_targets",
+    "hooked_characters",
+    "neighboring_rulers",
+    "neighboring_rulers_including_tributary_borders",
+    "neighboring_top_overlords_including_tributary_borders",
+    "neighboring_top_overlords_connected_by_land",
+    "peer_vassals",
+    "guests",
+    "dynasty",
+    "courtiers",
+    "councillors",
+    "prisoners",
+    "confederation_house_heads",
+    "sub_realm_characters",
+    "realm_characters",
+    "vassals",
+    "tributaries",
+    "liege",
+    "top_liege",
+    "suzerain",
+    "top_suzerain",
+    "self",
+    "head_of_faith",
+    "spouses",
+    "family",
+    "children",
+    "primary_war_enemies",
+    "war_enemies",
+    "war_allies",
+    "scripted_relations",
+    "activity_host",
+    "activity_guests",
+    "contacts",
+    "domicile_location_top_ruler",
+    "domicile_location_top_realm_vassals",
+    "domicile_location_neighboring_top_rulers",
+    "domicile_location_neighboring_top_realm_vassals",
+    "top_realm_domicile_owners",
+    "sub_realm_domicile_owners",
+    "nearby_domicile_owners",
+    "situation_participant_group",
+    "diarch",
+];
+
+/// The `target_filter` vocabulary (info FAQ). `recipient_lessee_titles` is
+/// corpus-only.
+static TARGET_FILTERS: &[&str] = &[
+    "actor_domain_titles",
+    "recipient_domain_titles",
+    "secondary_actor_domain_titles",
+    "secondary_recipient_domain_titles",
+    "actor_domain_titles_including_leases",
+    "recipient_domain_titles_including_leases",
+    "secondary_actor_domain_titles_including_leases",
+    "secondary_recipient_domain_titles_including_leases",
+    "actor_de_jure_titles",
+    "recipient_de_jure_titles",
+    "secondary_actor_de_jure_titles",
+    "secondary_recipient_de_jure_titles",
+    "actor_realm_titles",
+    "recipient_realm_titles",
+    "secondary_actor_realm_titles",
+    "secondary_recipient_realm_titles",
+    "actor_top_liege_de_jure_titles",
+    "recipient_top_liege_de_jure_titles",
+    "secondary_actor_top_liege_de_jure_titles",
+    "secondary_recipient_top_liege_de_jure_titles",
+    "recipient_lessee_titles",
+    "actor_artifacts",
+    "recipient_artifacts",
+    "actor_artifacts_claimable",
+    "recipient_artifacts_claimable",
+    "actor_maa",
+    "recipient_maa",
+    "actor_personal_maa",
+    "recipient_personal_maa",
+    "actor_title_maa",
+    "recipient_title_maa",
+    "count",
+];
+
 /// `ai_targets = { ai_recipients = … max = … chance = … }`.
 static AI_TARGETS: StructSpec = StructSpec {
     name: "ai_targets",
     fields: &[
         (
             "ai_recipients",
-            scalar(Setting).doc("Which target list the AI considers (see the `ai_targets` list)."),
+            scalar(Setting)
+                .doc(
+                    "Which target list the AI considers; may be repeated to combine lists. \
+                     A list the engine does not know is a hard error.",
+                )
+                .values(AI_RECIPIENTS),
         ),
         (
             "max",
@@ -68,6 +197,40 @@ static AI_TARGETS: StructSpec = StructSpec {
             scalar(Setting).doc("0–1; randomly skips that fraction of targets (perf)."),
         ),
         ("parameter", scalar(Setting)),
+    ],
+    fallback: Fallback::Deny,
+};
+
+/// `ai_target_quick_trigger = { adult = yes … }` — cheap engine-side prefilters
+/// applied to `ai_targets` before any scripted trigger runs. The corpus uses
+/// exactly the four keys the info documents.
+static AI_TARGET_QUICK_TRIGGER: StructSpec = StructSpec {
+    name: "ai_target_quick_trigger",
+    fields: &[
+        (
+            "adult",
+            scalar(Setting)
+                .doc("The target must be an adult.")
+                .values(&["yes", "no"]),
+        ),
+        (
+            "attracted_to_owner",
+            scalar(Setting)
+                .doc("The target must be attracted to the actor.")
+                .values(&["yes", "no"]),
+        ),
+        (
+            "owner_attracted",
+            scalar(Setting)
+                .doc("The actor must be attracted to the target.")
+                .values(&["yes", "no"]),
+        ),
+        (
+            "prison",
+            scalar(Setting)
+                .doc("The target must be imprisoned.")
+                .values(&["yes", "no"]),
+        ),
     ],
     fallback: Fallback::Deny,
 };
@@ -115,7 +278,14 @@ static INTERACTION: StructSpec = StructSpec {
             "common_interaction",
             scalar(Setting).doc("`yes`/`no` — keep out of the More… submenu."),
         ),
-        ("filter_tags", block(Struct(&OPAQUE)).doc("Tags to filter the menu by.")),
+        (
+            "filter_tags",
+            block(Struct(&OPAQUE)).doc(
+                "Bare-word tags for the filtered interaction menu \
+                 (`ToggleFilteredCharacterInteractionMenu`); each is localized as \
+                 `<tag>_filter_tag_desc`.",
+            ),
+        ),
         ("icon", scalar(Setting).doc("Icon key under gfx/interface/icons/character_interactions/.")),
         ("icon_small", scalar(Setting)),
         ("alert_icon", scalar(Setting)),
@@ -126,9 +296,41 @@ static INTERACTION: StructSpec = StructSpec {
             block(Struct(&OVERRIDE_BACKGROUND))
                 .doc("Interaction-window background (root is `scope:actor`)."),
         ),
-        ("interface", scalar(Setting).doc("Specialized GUI to use (marriage, grant_titles, …).")),
-        ("special_interaction", scalar(Setting)),
-        ("special_ai_interaction", scalar(Setting)),
+        (
+            "interface",
+            scalar(Setting)
+                .doc("Specialized GUI to use. Engine-side; values below are corpus-derived.")
+                .values(&[
+                    "blackmail",
+                    "call_ally",
+                    "concubine_list",
+                    "council_task_interaction",
+                    "court_task_interaction",
+                    "create_claimant_faction_against",
+                    "declare_war",
+                    "grant_titles",
+                    "interfere_in_war",
+                    "marriage",
+                    "migration",
+                    "modify_vassal_contract",
+                    "offer_peace",
+                    "revoke_title",
+                    "transfer_vassal",
+                ]),
+        ),
+        (
+            "special_interaction",
+            scalar(Setting).doc(
+                "Hard-coded engine behaviour keyed off this id (e.g. \
+                 `arrange_marriage_interaction` adds the marriage setup, auto-betrothal, \
+                 alliances and prestige). Adds its own is_shown/can_send checks.",
+            ),
+        ),
+        (
+            "special_ai_interaction",
+            scalar(Setting)
+                .doc("Identifies the interaction to specialized AI code (e.g. recruit_courtier)."),
+        ),
         ("scheme", scalar(Setting).doc("The scheme type this interaction starts.")),
         ("hidden", scalar(Setting)),
         ("diarch_interaction", scalar(Setting)),
@@ -137,9 +339,38 @@ static INTERACTION: StructSpec = StructSpec {
         ("force_notification", scalar(Setting)),
         ("needs_recipient_to_open", scalar(Setting)),
         ("show_effects_in_notification", scalar(Setting)),
-        ("target_type", scalar(Setting).doc("title / artifact / men_at_arms / court_position_type / count.")),
-        ("target_filter", scalar(Setting)),
-        ("custom_character_sort", block(Struct(&OPAQUE))),
+        (
+            "shows_military_strength",
+            scalar(Setting)
+                .doc("Show both parties' military strength in the window *(corpus)*.")
+                .values(&["yes", "no"]),
+        ),
+        (
+            "target_type",
+            scalar(Setting)
+                .doc("What kind of thing the interaction targets. Defaults to `count`.")
+                .values(&[
+                    "title",
+                    "artifact",
+                    "men_at_arms",
+                    "court_position_type",
+                    "count",
+                ]),
+        ),
+        (
+            "target_filter",
+            scalar(Setting)
+                .doc("Which pool the target list is drawn from (see the info FAQ).")
+                .values(TARGET_FILTERS),
+        ),
+        (
+            "custom_character_sort",
+            block(Struct(&OPAQUE)).doc(
+                "Bare-word sort options for the character picker, last-defined shown first: \
+                 `candidate_score` (needs a target title), `governor_efficiency`, \
+                 `obedience`, `merit`.",
+            ),
+        ),
         ("secondary_actor", scalar(Setting)),
         ("secondary_recipient", scalar(Setting)),
         ("secondary_scopes_optional", scalar(Setting)),
@@ -180,6 +411,13 @@ static INTERACTION: StructSpec = StructSpec {
         // ── cooldowns / cost ─────────────────────────────────────────────
         ("cooldown", block(Struct(&DURATION)).doc("Reuse cooldown (`{ years = x }`).")),
         ("cooldown_against_recipient", block(Struct(&DURATION))),
+        (
+            "recipient_recieve_cooldown",
+            block(Struct(&DURATION)).doc(
+                "Cooldown on the recipient *receiving* this interaction \
+                 (engine spelling: `recieve`) *(corpus)*.",
+            ),
+        ),
         ("category_cooldown", block(Struct(&DURATION))),
         ("category_cooldown_against_recipient", block(Struct(&DURATION))),
         (
@@ -207,7 +445,11 @@ static INTERACTION: StructSpec = StructSpec {
         ("ai_potential", block(Trigger).doc("Deprecated — use is_available.")),
         ("ai_set_target", block(Effect)),
         ("ai_targets", block(Struct(&AI_TARGETS))),
-        ("ai_target_quick_trigger", block(Struct(&OPAQUE))),
+        (
+            "ai_target_quick_trigger",
+            block(Struct(&AI_TARGET_QUICK_TRIGGER))
+                .doc("Cheap engine prefilters applied to `ai_targets` before scripted triggers."),
+        ),
         ("ai_frequency", scalar(Setting)),
         ("ai_frequency_by_tier", block(Struct(&AI_FREQUENCY_BY_TIER))),
         ("ai_instant_response", scalar(Setting)),
@@ -220,7 +462,17 @@ static INTERACTION: StructSpec = StructSpec {
         ("ignores_pending_interaction_block", scalar(Setting)),
         // ── text (loc keys) ──────────────────────────────────────────────
         ("desc", scalar_or_block(LocKey, DynamicDesc)),
-        ("greeting", scalar(Setting).doc("`positive` / `negative` — tone of the request text.")),
+        (
+            "name",
+            scalar_or_block(LocKey, DynamicDesc)
+                .doc("Overrides the displayed interaction name; defaults to the key *(corpus)*."),
+        ),
+        (
+            "greeting",
+            scalar(Setting)
+                .doc("Tone of the request text.")
+                .values(&["positive", "negative"]),
+        ),
         ("highlighted_reason", scalar_or_block(LocKey, DynamicDesc)),
         ("send_name", scalar(LocKey)),
         ("prompt", scalar(LocKey)),

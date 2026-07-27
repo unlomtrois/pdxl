@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 use pdxl_ast::{NodeId, NodeKind, SyntaxTree};
 
+use crate::context::ClauseKind;
 use crate::kind::KindId;
 use crate::model::{CallTargets, FileFacts, Ref, Symbol};
 use crate::schema::{KeyForm, Schema};
@@ -122,16 +123,27 @@ pub fn extract_facts(
 
     let mut soft_refs = Vec::new();
     extract_refs(
-        tree,
+        RefWalk {
+            tree,
+            rel_path,
+            path: full_path,
+            schema,
+        },
         tree.root(),
-        rel_path,
-        full_path,
         b"",
         0,
-        schema,
+        ClauseKind::Config,
         &mut facts.refs,
         &mut soft_refs,
     );
+    // A key can be reached by both a `RefRule` and the structural model (a
+    // gated rule plus the `FieldSpec` of the body that owns the same key).
+    // Two references identical in kind, name, and byte range carry no distinct
+    // information — they resolve alike and would only double the diagnostic —
+    // so the first wins. This lets a rule and its structural successor coexist
+    // while entities migrate one at a time, instead of forcing every gated
+    // rule to be retired in the same change.
+    dedupe_refs(&mut facts.refs);
     // Constant references are collected inline (they need no separate walk)
     // and split out afterwards: they resolve file-locally, so they must not
     // reach the global reference stream.
@@ -147,6 +159,31 @@ pub fn extract_facts(
     facts.calls.extend(soft_refs);
     extract_doc_refs(tree, full_path, schema, &mut facts.calls);
     facts
+}
+
+/// Whether a value is shaped like a symbol name, and so can carry a
+/// structure-derived reference.
+///
+/// Several fields accept *either* a key or literal display text — a dynasty
+/// `motto` is a loc key in vanilla (`dynn_Andersson_motto`) but raw prose in
+/// mods (`"Flow, Adapt, Change"`), and the engine renders whatever it is given.
+/// A symbol name never contains whitespace, so quoted prose is literal text and
+/// must not be reported as a missing key. Rule-driven references are unaffected;
+/// this guards only what the structural model infers.
+fn is_identifier_value(tree: &SyntaxTree, node_id: NodeId) -> bool {
+    let text = trim_quotes(tree.node_text(node_id));
+    !text.is_empty() && !text.iter().any(u8::is_ascii_whitespace)
+}
+
+/// Drops references identical in kind, name, and byte range, keeping the first.
+///
+/// Order is preserved (the golden dumps pin it), so this is a stable retain
+/// over a seen-set rather than a sort. `alt` is deliberately not part of the
+/// identity: a bare kind and the same kind carrying a fallback chain resolve to
+/// the same symbol, and keeping the first is what the rule-only engine did.
+fn dedupe_refs(refs: &mut Vec<Ref>) {
+    let mut seen: std::collections::HashSet<(KindId, u32, u32)> = std::collections::HashSet::new();
+    refs.retain(|r| seen.insert((r.kind, r.start, r.end)));
 }
 
 /// Harvests `![Name]` / `![kind:Name]` out of the tree's `#!` side-channel.
@@ -760,17 +797,60 @@ fn harvest_nested_defs(
 /// `depth` counts enclosing fields (a top-level definition's body fields sit
 /// at depth 1 — what [`KeyForm::ValueTop`] matches).
 #[allow(clippy::too_many_arguments)]
-fn extract_refs(
-    tree: &SyntaxTree,
-    node_id: NodeId,
+/// The context a field's *value* opens, given the context of its container.
+///
+/// Mirrors [`context_at`](crate::context::context_at)'s descent: a top-level
+/// `NAME = { … }` opens the directory's body clause, a top-level scalar is
+/// plain config, and everything below folds through the normal step. A schema
+/// with no modeled contexts stays at [`ClauseKind::Unknown`] throughout, which
+/// simply means no structure-carried references — the rule-driven path is
+/// untouched.
+fn child_ctx(
+    ctx: ClauseKind,
+    key: &[u8],
+    value_is_block: bool,
+    depth: u32,
     rel_path: &str,
-    path: &str,
+    schema: &Schema,
+) -> ClauseKind {
+    if depth > 0 {
+        return crate::context::step_ctx(ctx, key, value_is_block);
+    }
+    let Some(contexts) = schema.contexts() else {
+        return ClauseKind::Unknown;
+    };
+    if !value_is_block {
+        return ClauseKind::Config;
+    }
+    contexts.body_kind(rel_path).unwrap_or(ClauseKind::Unknown)
+}
+
+/// What stays fixed for the whole reference walk: the tree, where it came from,
+/// and the schema. Only the position — node, parent key, depth, clause — varies
+/// as it descends, so those remain parameters.
+#[derive(Clone, Copy)]
+struct RefWalk<'a> {
+    tree: &'a SyntaxTree,
+    rel_path: &'a str,
+    path: &'a str,
+    schema: &'a Schema,
+}
+
+fn extract_refs(
+    w: RefWalk<'_>,
+    node_id: NodeId,
     parent_key: &[u8],
     depth: u32,
-    schema: &Schema,
+    ctx: ClauseKind,
     refs: &mut Vec<Ref>,
     soft_refs: &mut Vec<Ref>,
 ) {
+    let RefWalk {
+        tree,
+        rel_path,
+        path,
+        schema,
+    } = w;
     let node = tree.node(node_id);
     if node.kind == NodeKind::Field {
         let children = tree.child_ids(node_id);
@@ -807,14 +887,25 @@ fn extract_refs(
             // constants, whose `@name` keys are the definitions. The value's
             // subtree gets this field's key as its parent.
             scan_prefix_refs(tree, children[0], rel_path, path, schema, refs, soft_refs);
+            let value_is_block = matches!(
+                tree.node(children[1]).kind,
+                NodeKind::Block | NodeKind::TaggedBlock
+            );
+            // Structure-carried references: a field the owning entity already
+            // declared as naming a symbol *is* a reference, whatever the kind,
+            // so no RefRule restates it.
+            if !value_is_block
+                && let Some((kind, alt)) = crate::context::field_ref(ctx, key)
+                && is_identifier_value(tree, children[1])
+            {
+                append_ref(tree, kind, alt, children[1], path, schema, refs);
+            }
             extract_refs(
-                tree,
+                w,
                 children[1],
-                rel_path,
-                path,
                 key,
                 depth + 1,
-                schema,
+                child_ctx(ctx, key, value_is_block, depth, rel_path, schema),
                 refs,
                 soft_refs,
             );
@@ -847,9 +938,19 @@ fn extract_refs(
         }
     }
     for child in tree.children(node_id) {
-        extract_refs(
-            tree, child, rel_path, path, parent_key, depth, schema, refs, soft_refs,
-        );
+        // An anonymous list item — a block directly inside a block
+        // (`holy_order_names = { { name = … } … }`) — steps with an empty key,
+        // matching `context_at`. Every other child inherits this node's clause.
+        let next_ctx = if matches!(node.kind, NodeKind::Block | NodeKind::TaggedBlock)
+            && matches!(
+                tree.node(child).kind,
+                NodeKind::Block | NodeKind::TaggedBlock
+            ) {
+            crate::context::step_ctx(ctx, b"", true)
+        } else {
+            ctx
+        };
+        extract_refs(w, child, parent_key, depth, next_ctx, refs, soft_refs);
     }
 }
 

@@ -94,5 +94,8 @@ pub(crate) fn schema_from_rows_with_skips(
     schema.set_implicit_loc_patterns(&entities::implicit_loc_patterns());
     schema.set_loc_datafn_arg_refs(&entities::loc_datafn_arg_refs());
     schema.set_soft_scope_refs(&entities::soft_scope_refs());
+    // Hands extraction the modeled bodies, so a `FieldSpec` carrying a
+    // `ref_kind` is itself a reference — no `RefRule` restating the same key.
+    schema.set_contexts(contexts::context_schema());
     schema
 }

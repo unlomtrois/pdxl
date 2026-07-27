@@ -149,5 +149,8 @@ pub fn schema() -> Schema {
         Some(kinds::GAME_CONCEPT),
     );
     schema.set_implicit_loc_patterns(&entities::implicit_loc_patterns());
+    // Hands extraction the modeled bodies, so a `FieldSpec` carrying a
+    // `ref_kind` is itself a reference — no `RefRule` restating the same key.
+    schema.set_contexts(contexts::context_schema());
     schema
 }

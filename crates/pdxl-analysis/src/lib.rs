@@ -44,7 +44,10 @@ pub use table::{Duplicate, SymbolTable};
 /// facts cache must embed this in its keys (alongside content hash and
 /// rel_path) and treat mismatches as misses; bump it whenever extraction rules
 /// or the [`FileFacts`] model change meaning.
-pub const ANALYSIS_VERSION: u32 = 122; // 122: smart-doc completion — `alias:` qualifiers and kind-narrowed symbol names inside `![…]` (LSP-only; extraction unchanged)
+pub const ANALYSIS_VERSION: u32 = 125; // 125: FieldSpec::ref_kind — a modeled body's own fields carry their references (scalar(LocKey) implies one), so extraction threads the clause context and reads refs off the shape instead of a gated RefRule per key; refs deduped per file
+// 124: CK3 casus-belli loc keys are now references — war_name/cb_name/on_*_desc and the descs nested in their dynamic-description blocks (1621 new refs in vanilla; 3 unresolved, all genuine dead loc)
+// 123: CK3 character-interaction body reconciled with the corpus — cost currencies (influence/treasury), name/recipient_recieve_cooldown/shows_military_strength, real ai_target_quick_trigger, enum vocabularies (contexts only; extraction unchanged)
+// 122: smart-doc completion — `alias:` qualifiers and kind-narrowed symbol names inside `![…]` (LSP-only; extraction unchanged)
 // 121: CK3 law groups as a kind (+ law_group: doc alias); smart-doc refs resolve entity → game concept → localization, including in hover
 // 120: DefShape::ScopedChildrenOf (parent-scoped names as gap-fill aliases) + CK3 implicit localization, applied to subject contracts and obligation levels
 // 119: CK3 religions (top-level defs alongside nested faiths + religion_tag refs) and doctrine groups (defs + gated doctrine_types)

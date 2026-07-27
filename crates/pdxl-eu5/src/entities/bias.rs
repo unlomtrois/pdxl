@@ -22,6 +22,8 @@ const fn setting(doc: &'static str) -> FieldSpec {
         scope: None,
         doc: Some(doc),
         values: None,
+        ref_kind: None,
+        ref_alt: &[],
     }
 }
 

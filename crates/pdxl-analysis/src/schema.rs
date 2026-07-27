@@ -333,6 +333,12 @@ pub struct Schema {
     /// The kind that bare `[concept|E]` encyclopedia links in localization text
     /// resolve to (CK3: game concepts). `None` disables loc-layer concept refs.
     loc_concept_kind: Option<KindId>,
+    /// The structural contexts, when the game models definition bodies. Lets
+    /// extraction thread the clause context through its walk and read
+    /// references straight off the [`FieldSpec`](crate::context::FieldSpec)
+    /// rows — a `scalar(LocKey)` field *is* a loc reference, with no separate
+    /// [`RefRule`] restating it. `None` leaves extraction rule-driven only.
+    contexts: Option<&'static crate::context::ContextSchema>,
 }
 
 impl Schema {
@@ -471,6 +477,17 @@ impl Schema {
 
     pub(crate) fn is_soft_scope_ref(&self, prefix: &'static str, kind: KindId) -> bool {
         self.soft_scope_refs.contains(&(prefix, kind))
+    }
+
+    /// Hands extraction the structural contexts, so `FieldSpec` rows can carry
+    /// references directly (see [`Schema::contexts`]). Without this call the
+    /// engine still works — it just stays purely rule-driven.
+    pub fn set_contexts(&mut self, contexts: &'static crate::context::ContextSchema) {
+        self.contexts = Some(contexts);
+    }
+
+    pub(crate) fn contexts(&self) -> Option<&'static crate::context::ContextSchema> {
+        self.contexts
     }
 
     /// The def rule whose prefix matches `rel_path`, if any (Go's `ruleFor`).

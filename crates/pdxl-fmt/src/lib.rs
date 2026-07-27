@@ -262,6 +262,8 @@ mod tests {
             scope: None,
             doc: None,
             values: None,
+            ref_kind: None,
+            ref_alt: &[],
         };
         static SPEC: StructSpec = StructSpec {
             name: "test",

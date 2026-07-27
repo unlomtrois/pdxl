@@ -9,15 +9,6 @@ use pdxl_analysis::{IconHint, KindSpec, RefPattern, RefRule};
 use super::Entity;
 use super::common::anywhere;
 
-/// A `key = <loc>` scalar loc reference gated to character interactions.
-const fn interaction_loc(key: &'static str) -> RefRule {
-    RefRule {
-        pattern: RefPattern::KeyValue(key),
-        gate: Some("common/character_interactions/"),
-        alt: &[],
-    }
-}
-
 /// A `key = <loc>` scalar loc reference gated to scheme types.
 const fn scheme_loc(key: &'static str) -> RefRule {
     RefRule {
@@ -140,17 +131,27 @@ impl Entity for Loc {
                     gate: Some("common/decisions/"),
                     alt: &[],
                 },
-                // Character-interaction text fields (from `_character_interactions.info`).
-                // `desc` also catches nested dynamic-description descs. All corpus-
-                // validated at ~0 unresolved.
-                interaction_loc("desc"),
-                interaction_loc("notification_text"),
-                interaction_loc("intermediary_notification_text"),
-                interaction_loc("prompt"),
-                interaction_loc("send_name"),
-                interaction_loc("options_heading"),
-                interaction_loc("highlighted_reason"),
-                interaction_loc("reply_item_key"),
+                // Character-interaction and casus-belli text fields used to be
+                // listed here, one gated rule per key. The *named* ones are now
+                // carried by the `FieldSpec` rows of the bodies that own them
+                // (`character_interaction.rs`, `casus_belli.rs`), which is where
+                // the keys were already written down — see `FieldSpec::refs`.
+                //
+                // `desc` stays a rule in both dirs: besides the body field, it
+                // appears at depths no body enumerates — the leaves of a dynamic
+                // description (`first_valid`/`triggered_desc`) and the tooltip of
+                // a weighted script-value line (`ai_accept`'s `modifier` blocks).
+                // A key that is not a field of one modeled shape is a rule's job.
+                RefRule {
+                    pattern: RefPattern::KeyValue("desc"),
+                    gate: Some("common/character_interactions/"),
+                    alt: &[],
+                },
+                RefRule {
+                    pattern: RefPattern::KeyValue("desc"),
+                    gate: Some("common/casus_belli_types/"),
+                    alt: &[],
+                },
                 // Scheme-type text fields (all scalar loc keys in the corpus).
                 scheme_loc("desc"),
                 scheme_loc("success_desc"),

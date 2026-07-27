@@ -15,6 +15,28 @@
 //!
 //! All effects and triggers in a CB body are in CB scope unless the `.info`
 //! says otherwise.
+//!
+//! Text fields are loc-key references. The named ones — the four war/CB name
+//! keys and the four `on_*_desc` outcome fields — carry that themselves, via
+//! the `scalar(LocKey)` in their own `FieldSpec` (see `FieldSpec::refs`); only
+//! `desc` still needs a rule in `loc.rs`, because it also appears at depths no
+//! body enumerates (dynamic-description leaves, script-value `modifier`
+//! tooltips). Before this, a CB body produced *zero* loc references: the name
+//! fields were already declared `scalar(LocKey)`, but a `ScalarKind` drove only
+//! completion and hover, and nothing turned it into extraction.
+//! Corpus: 1621 refs in vanilla, 3 unresolved across game + T4N
+//! (`REMOVE_REGENT_WAR_NAME_BASE`, `REMOVE_REGENT_CB_NAME`,
+//! `DEJURE_WAR_NAME_BASE` — present in no localization file in any language,
+//! genuine dead-loc bugs the tool now surfaces).
+//!
+//! `cb_name` / `cb_name_no_target` / `on_invalidated_desc` were missing from the
+//! body entirely; `on_invalidated_desc` left its whole subtree at `Unknown`, so
+//! the triggers nested in it lost their clause context too. All four `on_*_desc`
+//! fields take a bare key or a block — the corpus uses the block form for the
+//! three peace outcomes and mostly the scalar form for `on_invalidated_desc`
+//! (91 vs 30).
+//!
+//! `common/casus_belli_groups/` carries no text fields, so it needs no rules.
 
 use crate::kinds;
 use pdxl_analysis::context::ClauseKind::{self, DynamicDesc, Effect, ScriptValue, Trigger};
@@ -186,20 +208,28 @@ static CASUS_BELLI: StructSpec = StructSpec {
             "on_invalidated",
             block(Effect).doc("Effect when the war is invalidated."),
         ),
+        // Outcome descriptions. Each takes a bare loc key or a dynamic-description
+        // block; the corpus uses the block form for the three peace outcomes and
+        // overwhelmingly the scalar form for `on_invalidated_desc` (91 vs 30).
         (
             "on_victory_desc",
-            block(DynamicDesc)
-                .doc("Dynamic description of the victory outcome (same scopes as the effect)."),
+            scalar_or_block(LocKey, DynamicDesc)
+                .doc("Description of the victory outcome (same scopes as the effect)."),
         ),
         (
             "on_defeat_desc",
-            block(DynamicDesc)
-                .doc("Dynamic description of the defeat outcome (same scopes as the effect)."),
+            scalar_or_block(LocKey, DynamicDesc)
+                .doc("Description of the defeat outcome (same scopes as the effect)."),
         ),
         (
             "on_white_peace_desc",
-            block(DynamicDesc)
-                .doc("Dynamic description of the white-peace outcome (same scopes as the effect)."),
+            scalar_or_block(LocKey, DynamicDesc)
+                .doc("Description of the white-peace outcome (same scopes as the effect)."),
+        ),
+        (
+            "on_invalidated_desc",
+            scalar_or_block(LocKey, DynamicDesc)
+                .doc("Description shown when the war is invalidated."),
         ),
         (
             "should_invalidate",
@@ -306,6 +336,14 @@ static CASUS_BELLI: StructSpec = StructSpec {
         (
             "my_war_name_base",
             scalar(LocKey).doc("Base name used when the claimant and attacker is the same person."),
+        ),
+        (
+            "cb_name",
+            scalar(LocKey).doc("The CB's own name, as shown in the war-declaration interface."),
+        ),
+        (
+            "cb_name_no_target",
+            scalar(LocKey).doc("The CB name used when no target title is selected."),
         ),
         ("truce_days", knob("Days of truce after the war.")),
         (

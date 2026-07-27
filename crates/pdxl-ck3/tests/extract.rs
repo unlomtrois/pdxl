@@ -422,8 +422,11 @@ fn character_interaction_def_and_ref() {
         .find(|r| r.name == "my_interaction_desc")
         .expect("desc loc ref");
     assert_eq!(desc.kind, pdxl_ck3::kinds::LOC_KEY);
-    // `desc` outside interactions/events/decisions is not a loc ref.
-    let elsewhere = extract("x = { desc = whatever }\n", "common/traits/00.txt");
+    // `desc` in a directory whose body is *not* modeled stays unreferenced:
+    // neither a gated rule nor a `FieldSpec` claims it there. (Inside a modeled
+    // body that declares `desc` as a loc key — a trait, a CB — it is a
+    // reference, carried by the shape itself.)
+    let elsewhere = extract("x = { desc = whatever }\n", "common/bookmarks/00.txt");
     assert!(elsewhere.refs.iter().all(|r| r.name != "whatever"));
 }
 
@@ -579,17 +582,23 @@ fn dynasty_defs_and_refs() {
         "common/dynasties/00.txt",
     );
     assert_eq!(d.defs[0].kind, pdxl_ck3::kinds::DYNASTY);
-    // The dynasty's `culture` attribute is a culture ref (quotes stripped).
-    assert_eq!(ref_names(&d), vec!["andalusian"]);
-    assert_eq!(d.refs[0].kind, pdxl_ck3::kinds::CULTURE);
+    // `name` is a loc key (`dynn_Andersson` and friends live in localization),
+    // carried by the dynasty body's own `FieldSpec`; `culture` is a culture ref
+    // from a rule. Both have their quotes stripped.
+    assert_eq!(ref_names(&d), vec!["dynn_X", "andalusian"]);
+    assert_eq!(d.refs[0].kind, pdxl_ck3::kinds::LOC_KEY);
+    assert_eq!(d.refs[1].kind, pdxl_ck3::kinds::CULTURE);
 
     let h = extract(
         "house_chiny = { name = \"dynn_Chiny\" dynasty = 25061 }\n",
         "common/dynasty_houses/00.txt",
     );
     assert_eq!(h.defs[0].kind, pdxl_ck3::kinds::DYNASTY_HOUSE);
-    assert_eq!(ref_names(&h), vec!["25061"]);
-    assert_eq!(h.refs[0].kind, pdxl_ck3::kinds::DYNASTY);
+    // Same split as above: `name` from the house body's `FieldSpec`, `dynasty`
+    // from a rule.
+    assert_eq!(ref_names(&h), vec!["dynn_Chiny", "25061"]);
+    assert_eq!(h.refs[0].kind, pdxl_ck3::kinds::LOC_KEY);
+    assert_eq!(h.refs[1].kind, pdxl_ck3::kinds::DYNASTY);
 }
 
 #[test]

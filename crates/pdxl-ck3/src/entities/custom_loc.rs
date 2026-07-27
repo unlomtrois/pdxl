@@ -54,11 +54,17 @@ static TEXT_ENTRY: StructSpec = StructSpec {
         ),
         (
             "localization_key",
-            scalar(LocKey).doc(
-                "The localization key returned (scopes from `setup_scope` are accessible). \
-                 May live in any language's localization, so it is not resolved as a \
-                 reference.",
-            ),
+            scalar(LocKey)
+                .doc(
+                    "The localization key returned (scopes from `setup_scope` are accessible). \
+                     May live in any language's localization, so it is not resolved as a \
+                     reference.",
+                )
+                // Opts out of the reference `scalar(LocKey)` would otherwise
+                // carry: language-specific entries (`CustomLoc_DE_*`) name keys
+                // that exist only in that language's files, so resolving them
+                // reports ~1900 false misses on the CK3 + T4N corpus.
+                .no_ref(),
         ),
         (
             "fallback",
