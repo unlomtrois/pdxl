@@ -2935,3 +2935,49 @@ fn message_kinds_carry_their_implicit_localization() {
         vec!["message_group_type_{}"]
     );
 }
+
+// ── table-derived scope-link references ─────────────────────────────────────
+
+#[test]
+fn scope_prefixes_are_derived_from_the_link_table() {
+    // None of these has a hand-written rule; each comes from a data-carrying
+    // row in the generated scope-link table via the curated kind map.
+    let f = extract(
+        "e = {\n\
+         \tadd_trait = trait:brave\n\
+         \tsome_key = doctrine:tenet_pacifism\n\
+         \tother = casus_belli_type:claim_cb\n\
+         }\n",
+        "common/scripted_effects/x.txt",
+    );
+    let by = |k| {
+        f.refs
+            .iter()
+            .filter(|r| r.kind == k)
+            .map(|r| r.name.as_str())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(by(pdxl_ck3::kinds::TRAIT), vec!["brave"]);
+    assert_eq!(by(pdxl_ck3::kinds::DOCTRINE), vec!["tenet_pacifism"]);
+    assert_eq!(by(pdxl_ck3::kinds::CASUS_BELLI), vec!["claim_cb"]);
+}
+
+#[test]
+fn derivation_adds_rules_the_hand_schema_lacks() {
+    // The guard against a silently empty map: the table must actually yield
+    // rules, and they must be rules the hand rows do not already carry.
+    let derived = pdxl_ck3::derived::derived_link_rules();
+    assert!(!derived.is_empty(), "no kinds derived");
+    let rules: usize = derived.iter().map(|k| k.refs.len()).sum();
+    assert!(rules >= 20, "only {rules} derived rules");
+
+    let src = "e = { x = doctrine:tenet_pacifism }\n";
+    let path = "common/scripted_effects/x.txt";
+    let hand = pdxl_ck3::schema_hand_only();
+    let (tree, _) = pdxl_parser::parse(path.to_string(), src.as_bytes().to_vec()).into_parts();
+    let f = pdxl_analysis::extract_facts(&tree, path, path, &hand, None);
+    assert!(
+        f.refs.iter().all(|r| r.kind != pdxl_ck3::kinds::DOCTRINE),
+        "hand schema should not already resolve doctrine:"
+    );
+}

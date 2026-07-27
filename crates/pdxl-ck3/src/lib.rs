@@ -25,6 +25,7 @@ mod entities;
 
 pub mod contexts;
 pub mod coverage;
+pub mod derived;
 pub mod kinds;
 pub mod tables;
 
@@ -134,11 +135,25 @@ pub fn datafn_registry() -> &'static pdxl_gui::datafn::DataFnRegistry {
     REG.get_or_init(|| pdxl_gui::datafn::DataFnRegistry::from_rows(tables::DATA_FNS))
 }
 
-/// Builds the CK3 schema from the entity registry. Cheap to construct; build
+/// Builds the CK3 schema: the hand-written entity rows plus the table-derived
+/// scope-link rules and skip words (see [`derived`]). Cheap to construct; build
 /// once and share.
 pub fn schema() -> Schema {
+    let mut rows = entities::kinds();
+    rows.extend(derived::derived_link_rules());
+    schema_from_rows(&rows)
+}
+
+/// The hand-written rows only — the baseline the derivation proof harness
+/// (`tests/derived_proof.rs`) measures against.
+pub fn schema_hand_only() -> Schema {
+    schema_from_rows(&entities::kinds())
+}
+
+/// Builds a schema from explicit rows.
+fn schema_from_rows(rows: &[pdxl_analysis::KindSpec]) -> Schema {
     let mut schema = Schema::new(
-        &entities::kinds(),
+        rows,
         SCOPE_KEYWORDS,
         TYPED_DEFS,
         KEYED_VALUE_DEFS,

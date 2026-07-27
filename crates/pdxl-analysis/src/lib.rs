@@ -44,7 +44,8 @@ pub use table::{Duplicate, SymbolTable};
 /// facts cache must embed this in its keys (alongside content hash and
 /// rel_path) and treat mismatches as misses; bump it whenever extraction rules
 /// or the [`FileFacts`] model change meaning.
-pub const ANALYSIS_VERSION: u32 = 130; // 130: CK3 messages, message filter types and message group types — defs, the send_interface_toast/message `type` refs, the filter/group chain, and all three implicit localization conventions
+pub const ANALYSIS_VERSION: u32 = 131; // 131: CK3 adopts EU5's table-driven scope-link derivation — 20 curated scope-type → kind entries yield the ScopePrefix rules (+1668 refs, 99.5% resolve); the skip-word half was measured and rejected
+// 130: CK3 messages, message filter types and message group types — defs, the send_interface_toast/message `type` refs, the filter/group chain, and all three implicit localization conventions
 // 129: smart-doc anchor declarations get their own semantic token type (decorator), so `#! @key` no longer reads as plain comment (LSP-only; extraction unchanged)
 // 128: smart-doc anchors — `#! @key description` defines an engine-owned DOC_ANCHOR symbol in `defs`; `![key]` resolves to it ahead of entities; Schema::new registers the kind and its `anchor:` alias for every game
 // 127: CK3 casus belli implicit localization — the CB key is its name key, plus the 3x3 outcome-description family (navigation only; no extraction or diagnostic change)

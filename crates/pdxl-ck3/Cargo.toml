@@ -15,6 +15,7 @@ pdxl-gamedocs.workspace = true
 pdxl-parser.workspace = true
 
 [dev-dependencies]
+pdxl-fileset.workspace = true
 pdxl-testutil.workspace = true
 
 [lints.rust]
