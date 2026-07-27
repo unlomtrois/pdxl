@@ -126,8 +126,10 @@ crates/pdxl-lsp        the language server over pdxl-project
   (`msg_siege_won` is raised by the siege code — a quarter of CK3's messages are
   like this). List those in `Entity::INTRINSICS` → `Schema::set_intrinsics`;
   hover then says so, instead of a zero reference count reading as dead content.
-  Confirm membership with `strings` over the game binary before adding a name —
-  a genuinely dead symbol is not in there.
+  Prefer the game's own dumps where they say so — `logs/on_actions.log` flags
+  every entry `From Code: Yes/No`. Where no dump covers a kind, `strings` over
+  the game binary is the fallback (how the message list was built); a genuinely
+  dead symbol is in neither.
 - `RefRule`s live in the file of their **target** kind (the loc.rs precedent),
   not where they fire; `FieldSpec` refs live with the body that owns the field.
 - Structure-carried refs need `Schema::set_contexts` in the game crate's

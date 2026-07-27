@@ -44,7 +44,8 @@ pub use table::{Duplicate, SymbolTable};
 /// facts cache must embed this in its keys (alongside content hash and
 /// rel_path) and treat mismatches as misses; bump it whenever extraction rules
 /// or the [`FileFacts`] model change meaning.
-pub const ANALYSIS_VERSION: u32 = 133; // 133: engine intrinsics surface in the CodeLens title, not only on hover — an intrinsic with no script caller reads "engine intrinsic" instead of "0 references" (LSP-only)
+pub const ANALYSIS_VERSION: u32 = 134; // 134: CK3 on-actions carry engine-intrinsic marking — the 195 the game's own dump flags "From Code: Yes"; all 184 that exist in the corpus had zero references (presentation only)
+// 133: engine intrinsics surface in the CodeLens title, not only on hover — an intrinsic with no script caller reads "engine intrinsic" instead of "0 references" (LSP-only)
 // 132: engine-intrinsic marking — Entity::INTRINSICS names symbols the game raises itself, so hover explains a zero reference count instead of it reading as dead content (CK3 messages first; presentation only)
 // 131: CK3 adopts EU5's table-driven scope-link derivation — 20 curated scope-type → kind entries yield the ScopePrefix rules (+1668 refs, 99.5% resolve); the skip-word half was measured and rejected
 // 130: CK3 messages, message filter types and message group types — defs, the send_interface_toast/message `type` refs, the filter/group chain, and all three implicit localization conventions

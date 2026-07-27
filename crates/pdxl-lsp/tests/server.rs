@@ -3365,3 +3365,34 @@ fn code_lens_names_an_engine_intrinsic_instead_of_counting_to_zero() {
     let scripted = server.code_lens_resolve(lenses[1].clone());
     assert_eq!(scripted.command.expect("resolved").title, "1 reference");
 }
+
+#[cfg(feature = "ck3")]
+#[test]
+fn engine_called_on_actions_are_marked_intrinsic() {
+    let t = TempTree::new();
+    // `on_death` is fired by the game; `my_custom_pulse` is scripted and
+    // reached from a fire list, so only the first is intrinsic.
+    let src = "on_death = { events = { my.1 } }\n\
+               my_custom_pulse = { events = { my.1 } }\n\
+               chained = { on_actions = { my_custom_pulse } }\n";
+    t.write("common/on_action/00.txt", src);
+    t.write("events/e.txt", "namespace = my\nmy.1 = { }\n");
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/on_action/00.txt");
+
+    let md = hover_md(&server, &uri, pos_of(src, "on_death"));
+    assert!(
+        md.contains("Engine intrinsic"),
+        "on_death is fired by the game:\n{md}"
+    );
+    let md = hover_md(&server, &uri, pos_of(src, "my_custom_pulse ="));
+    assert!(
+        !md.contains("Engine intrinsic"),
+        "a scripted on-action must not be marked:\n{md}"
+    );
+
+    // And the lens says so instead of counting to zero.
+    let lenses = server.code_lens(&uri);
+    let first = server.code_lens_resolve(lenses[0].clone());
+    assert_eq!(first.command.expect("resolved").title, "engine intrinsic");
+}
