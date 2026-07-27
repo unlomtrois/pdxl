@@ -69,6 +69,8 @@ subject_contract        0
 subject_contract_group      0
 domicile_type           0
 domicile_building       0
+great_project_type      0
+great_project_contribution      0
 message                 0
 message_filter_type      0
 message_group_type      0

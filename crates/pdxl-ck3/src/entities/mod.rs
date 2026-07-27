@@ -49,6 +49,7 @@ mod faith;
 mod game_concept;
 mod game_rule;
 pub(crate) mod government;
+mod great_project;
 mod gui;
 pub(crate) mod holding;
 mod holy_site;
@@ -180,6 +181,7 @@ registry!(
     holding::Holding,
     subject_contract::SubjectContract,
     domicile::Domicile,
+    great_project::GreatProject,
     message::Message,
     loc::Loc,
 );

@@ -82,6 +82,7 @@ const TARGET_KINDS: &[(&str, KindId, &[KindId])] = &[
     ("government_type", kinds::GOVERNMENT, &[]),
     ("holding_type", kinds::HOLDING, &[]),
     ("situation", kinds::SITUATION_TYPE, &[]),
+    ("great_project_type", kinds::GREAT_PROJECT_TYPE, &[]),
     ("vassal_contract", kinds::SUBJECT_CONTRACT, &[]),
     (
         "vassal_contract_obligation_level",

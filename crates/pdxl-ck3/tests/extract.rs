@@ -3004,3 +3004,61 @@ fn only_links_needing_no_input_scope_name_a_literal_key() {
         .collect();
     assert_eq!(chars, vec!["Moriya_1"], "only character: names a character");
 }
+
+// ── great projects and their contributions ──────────────────────────────────
+
+#[test]
+fn great_project_defs_contributions_and_refs() {
+    let f = extract(
+        "great_wall = {\n\
+         \tinvite_interaction = request_great_project_contribution_interaction\n\
+         \tai_target_quick_trigger = { government_type = { mandala_government } }\n\
+         \tproject_contributions = {\n\
+         \t\tfoundations = { is_required = yes }\n\
+         \t\ttowers = { is_required = no }\n\
+         \t}\n\
+         }\n",
+        "common/great_projects/types/00.txt",
+    );
+    assert_eq!(f.defs[0].kind, pdxl_ck3::kinds::GREAT_PROJECT_TYPE);
+    assert_eq!(f.defs[0].name, "great_wall");
+
+    // Contributions are scoped: the same key may recur under another project,
+    // so they gap-fill as aliases rather than being duplicate-tracked.
+    let mut contribs: Vec<&str> = f
+        .aliases
+        .iter()
+        .filter(|a| a.kind == pdxl_ck3::kinds::GREAT_PROJECT_CONTRIBUTION)
+        .map(|a| a.name.as_str())
+        .collect();
+    contribs.sort_unstable();
+    assert_eq!(contribs, vec!["foundations", "towers"]);
+
+    // Both outgoing references fire. `government_type` is a bare word list.
+    let by = |k| {
+        f.refs
+            .iter()
+            .filter(|r| r.kind == k)
+            .map(|r| r.name.as_str())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        by(pdxl_ck3::kinds::CHARACTER_INTERACTION),
+        vec!["request_great_project_contribution_interaction"]
+    );
+    assert_eq!(by(pdxl_ck3::kinds::GOVERNMENT), vec!["mandala_government"]);
+}
+
+#[test]
+fn great_project_keys_are_gated_to_their_directory() {
+    // `invite_interaction` and `government_type` mean nothing elsewhere.
+    let f = extract(
+        "x = { invite_interaction = foo ai_target_quick_trigger = { government_type = { bar } } }\n",
+        "common/scripted_effects/x.txt",
+    );
+    assert!(
+        f.refs.iter().all(|r| r.name != "foo" && r.name != "bar"),
+        "{:?}",
+        f.refs
+    );
+}
