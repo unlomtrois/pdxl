@@ -24,6 +24,11 @@
 //! tooltips). Before this, a CB body produced *zero* loc references: the name
 //! fields were already declared `scalar(LocKey)`, but a `ScalarKind` drove only
 //! completion and hover, and nothing turned it into extraction.
+//! Those three are stale rather than broken: nothing renders them, because a
+//! CB's *displayed* name comes from the implicit key convention below
+//! (`remove_regent_cb` is localized in every language). They are not engine
+//! intrinsics either — `strings` over the CK3 binary finds none of them, and
+//! each appears in exactly one file corpus-wide: the CB that references it.
 //! Corpus: 1621 refs in vanilla, 3 unresolved across game + T4N
 //! (`REMOVE_REGENT_WAR_NAME_BASE`, `REMOVE_REGENT_CB_NAME`,
 //! `DEJURE_WAR_NAME_BASE` — present in no localization file in any language,
@@ -42,7 +47,9 @@ use crate::kinds;
 use pdxl_analysis::context::ClauseKind::{self, DynamicDesc, Effect, ScriptValue, Trigger};
 use pdxl_analysis::context::ScalarKind::{LocKey, Setting};
 use pdxl_analysis::context::{Fallback, FieldSpec, StructSpec, block, scalar, scalar_or_block};
-use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
+use pdxl_analysis::{
+    DefShape, DefSource, IconHint, ImplicitLocPattern, KindSpec, RefPattern, RefRule,
+};
 
 use super::Entity;
 use super::common::{COST, DURATION, anywhere};
@@ -513,6 +520,64 @@ static CASUS_BELLI_GROUP: StructSpec = StructSpec {
 pub(crate) struct CasusBelli;
 
 impl Entity for CasusBelli {
+    /// A CB's key doubles as a localization key — its display name, and a
+    /// family of outcome descriptions. Corpus-derived from vanilla's 121 CBs:
+    /// the bare key on 112 (93%), then `_{outcome}_desc` optionally suffixed by
+    /// the side that reads it, a complete 3x3 matrix (victory 61/28/15, defeat
+    /// 48/17/22, white peace 50/4/24 for none/attacker/defender).
+    ///
+    /// Navigation only — a pattern with no matching key is skipped, never
+    /// diagnosed — so the 9 CBs vanilla leaves unlocalized cost nothing.
+    ///
+    /// Observed but omitted as vanilla inconsistencies rather than convention:
+    /// `_ended_invalid.desc` (9), `_name` (8), `_invalidated_desc` (4), and the
+    /// reversed `_white_peace_{defender,attacker}_desc` (4 and 3).
+    /// `common/casus_belli_groups/` has no such convention — only 4 of its 19
+    /// keys match a loc key, all generic words (`conquest`, `debug`,
+    /// `struggle`, `mandala`) colliding with unrelated entries.
+    const IMPLICIT_LOC: &'static [ImplicitLocPattern] = &[
+        ImplicitLocPattern {
+            kind: kinds::CASUS_BELLI,
+            suffix: "",
+        },
+        ImplicitLocPattern {
+            kind: kinds::CASUS_BELLI,
+            suffix: "_victory_desc",
+        },
+        ImplicitLocPattern {
+            kind: kinds::CASUS_BELLI,
+            suffix: "_victory_desc_attacker",
+        },
+        ImplicitLocPattern {
+            kind: kinds::CASUS_BELLI,
+            suffix: "_victory_desc_defender",
+        },
+        ImplicitLocPattern {
+            kind: kinds::CASUS_BELLI,
+            suffix: "_defeat_desc",
+        },
+        ImplicitLocPattern {
+            kind: kinds::CASUS_BELLI,
+            suffix: "_defeat_desc_attacker",
+        },
+        ImplicitLocPattern {
+            kind: kinds::CASUS_BELLI,
+            suffix: "_defeat_desc_defender",
+        },
+        ImplicitLocPattern {
+            kind: kinds::CASUS_BELLI,
+            suffix: "_white_peace_desc",
+        },
+        ImplicitLocPattern {
+            kind: kinds::CASUS_BELLI,
+            suffix: "_white_peace_desc_attacker",
+        },
+        ImplicitLocPattern {
+            kind: kinds::CASUS_BELLI,
+            suffix: "_white_peace_desc_defender",
+        },
+    ];
+
     const KINDS: &'static [KindSpec] = &[
         KindSpec {
             kind: kinds::CASUS_BELLI,

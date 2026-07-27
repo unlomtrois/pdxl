@@ -2985,6 +2985,54 @@ fn subject_contract_levels_link_to_their_implicit_loc_keys() {
 
 #[cfg(feature = "ck3")]
 #[test]
+fn casus_belli_links_to_its_implicit_loc_keys() {
+    let t = TempTree::new();
+    let src = "claim_cb = {\n\tgroup = claim\n}\n";
+    t.write("common/casus_belli_types/00_cb.txt", src);
+    // The CB's own key names it; the outcome descriptions suffix that key,
+    // optionally by the side reading them. `_defeat_desc` is deliberately
+    // absent — an unmatched pattern must simply not appear.
+    t.write(
+        "localization/english/x_l_english.yml",
+        "\u{feff}l_english:\n \
+         claim_cb: \"Claim War\"\n \
+         claim_cb_victory_desc: \"You win.\"\n \
+         claim_cb_victory_desc_attacker: \"We win.\"\n \
+         claim_cb_white_peace_desc_defender: \"They relent.\"\n",
+    );
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/casus_belli_types/00_cb.txt");
+
+    let md = hover_md(&server, &uri, pos_of(src, "claim_cb"));
+    for key in [
+        "claim_cb",
+        "claim_cb_victory_desc",
+        "claim_cb_victory_desc_attacker",
+        "claim_cb_white_peace_desc_defender",
+    ] {
+        assert!(
+            md.contains(&format!("[{key}]")),
+            "{key} missing from:\n{md}"
+        );
+    }
+    assert!(
+        !md.contains("[claim_cb_defeat_desc]"),
+        "a pattern with no matching key must not be offered:\n{md}"
+    );
+
+    // The reverse edge: the loc key's references include the CB using it.
+    let loc = uri_for(&t, "localization/english/x_l_english.yml");
+    let loc_src = std::fs::read_to_string(t.child("localization/english/x_l_english.yml")).unwrap();
+    let refs = server.references(&loc, pos_of(&loc_src, "claim_cb_victory_desc:"), false);
+    assert!(
+        refs.iter()
+            .any(|l| l.uri.to_file_path().unwrap().ends_with("00_cb.txt")),
+        "loc key should list the casus belli: {refs:?}"
+    );
+}
+
+#[cfg(feature = "ck3")]
+#[test]
 fn smart_doc_refs_prefer_entities_then_concepts_then_loc() {
     let t = TempTree::new();
     // One name that is a law group, a game concept, AND a loc key.
