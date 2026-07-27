@@ -44,7 +44,8 @@ pub use table::{Duplicate, SymbolTable};
 /// facts cache must embed this in its keys (alongside content hash and
 /// rel_path) and treat mismatches as misses; bump it whenever extraction rules
 /// or the [`FileFacts`] model change meaning.
-pub const ANALYSIS_VERSION: u32 = 128; // 128: smart-doc anchors — `#! @key description` defines an engine-owned DOC_ANCHOR symbol in `defs`; `![key]` resolves to it ahead of entities; Schema::new registers the kind and its `anchor:` alias for every game
+pub const ANALYSIS_VERSION: u32 = 129; // 129: smart-doc anchor declarations get their own semantic token type (decorator), so `#! @key` no longer reads as plain comment (LSP-only; extraction unchanged)
+// 128: smart-doc anchors — `#! @key description` defines an engine-owned DOC_ANCHOR symbol in `defs`; `![key]` resolves to it ahead of entities; Schema::new registers the kind and its `anchor:` alias for every game
 // 127: CK3 casus belli implicit localization — the CB key is its name key, plus the 3x3 outcome-description family (navigation only; no extraction or diagnostic change)
 // 126: pdxl-cache removed — no extraction change; the constant is now release numbering and this changelog only, since nothing reads it
 // 125: FieldSpec::ref_kind — a modeled body's own fields carry their references (scalar(LocKey) implies one), so extraction threads the clause context and reads refs off the shape instead of a gated RefRule per key; refs deduped per file

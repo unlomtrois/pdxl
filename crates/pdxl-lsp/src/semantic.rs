@@ -41,9 +41,10 @@ const TYPE: u32 = 9;
 const NAMESPACE: u32 = 10;
 const ENUM_MEMBER: u32 = 11;
 const PARAMETER: u32 = 12;
+const DECORATOR: u32 = 13;
 
 /// Legend, in wire-index order (see the constants above).
-pub const TOKEN_TYPES: [SemanticTokenType; 13] = [
+pub const TOKEN_TYPES: [SemanticTokenType; 14] = [
     SemanticTokenType::PROPERTY,
     SemanticTokenType::VARIABLE,
     SemanticTokenType::NUMBER,
@@ -57,6 +58,11 @@ pub const TOKEN_TYPES: [SemanticTokenType; 13] = [
     SemanticTokenType::NAMESPACE,
     SemanticTokenType::ENUM_MEMBER,
     SemanticTokenType::PARAMETER,
+    // Smart-doc anchor declarations (`#! @key`). A standard type, so themes
+    // already give it a colour — and `@name` is what `decorator` means in
+    // most languages, which is exactly what an anchor is: an annotation
+    // naming the code beneath it.
+    SemanticTokenType::DECORATOR,
 ];
 
 /// `defaultLibrary` marks documented builtins; `unresolved` lets clients render
@@ -171,6 +177,17 @@ fn emit_doc_comment(
 ) {
     let mut seg = start; // start of the current pending comment segment
     let mut k = start;
+    // A `#! @key` declaration colours its key. Declaring is a whole-line act,
+    // so the key always precedes any `![…]` on the line and handling it first
+    // keeps the emitted segments in ascending order, as the encoder requires.
+    if let Some((key_start, key_end)) =
+        pdxl_analysis::doc_anchor_span(src, start as u32, end as u32)
+    {
+        emit.push((seg as u32, key_start, COMMENT, 0));
+        emit.push((key_start, key_end, DECORATOR, 0));
+        seg = key_end as usize;
+        k = key_end as usize;
+    }
     while k + 1 < end {
         if src[k] == b'!' && src[k + 1] == b'[' {
             let bracket = k + 2;

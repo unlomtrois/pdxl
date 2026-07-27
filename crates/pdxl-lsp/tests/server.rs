@@ -762,6 +762,36 @@ fn doc_ref_semantic_color_reflects_resolution() {
 
 #[cfg(feature = "ck3")]
 #[test]
+fn anchor_declaration_is_coloured_apart_from_its_comment() {
+    let t = TempTree::new();
+    // One line declares, the next references — the two must not read alike,
+    // and neither may read as plain comment text.
+    let src = "#! @todo:piety rework the curve\n\
+               #! blocked on ![@todo:piety]\n\
+               fx = { }\n";
+    t.write("events/e.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "events/e.txt");
+    let tokens = server.semantic_tokens(&uri).expect("tokens").data;
+
+    // Legend (semantic.rs TOKEN_TYPES): comment=5, type=9, decorator=13.
+    let decorators: Vec<_> = tokens.iter().filter(|t| t.token_type == 13).collect();
+    assert_eq!(
+        decorators.len(),
+        1,
+        "exactly the declaration is a decorator: {tokens:?}"
+    );
+    assert_eq!(decorators[0].length as usize, "todo:piety".len());
+    // The reference stays TYPE, resolved (no modifier).
+    let refs: Vec<_> = tokens.iter().filter(|t| t.token_type == 9).collect();
+    assert_eq!(refs.len(), 1, "the reference is a type: {tokens:?}");
+    assert_eq!(refs[0].token_modifiers_bitset, 0, "it resolves");
+    // The prose around them is still comment.
+    assert!(tokens.iter().any(|t| t.token_type == 5), "comment segments");
+}
+
+#[cfg(feature = "ck3")]
+#[test]
 fn doc_block_rules() {
     // Blank line ends the block; plain `#` is not a doc; unresolved ref is plain.
     let t = TempTree::new();
