@@ -157,7 +157,9 @@ pub fn extract_facts(
         facts.calls = extract_calls(tree, full_path, targets);
     }
     facts.calls.extend(soft_refs);
-    extract_doc_refs(tree, full_path, schema, &mut facts.calls);
+    // After `dedupe_refs` and the constant split above, so anchor references
+    // appended to `refs` here cannot be swept into `constant_refs`.
+    extract_doc_refs(tree, full_path, schema, &mut facts.refs, &mut facts.calls);
     extract_doc_anchors(tree, rel_path, &mut facts.defs);
     facts
 }
@@ -220,13 +222,26 @@ fn extract_doc_anchors(tree: &SyntaxTree, rel_path: &str, out: &mut Vec<Symbol>)
     }
 }
 
-/// Harvests `![Name]` / `![kind:Name]` out of the tree's `#!` side-channel.
+/// Harvests `![Name]` / `![kind:Name]` / `![@anchor]` out of the tree's `#!`
+/// side-channel, splitting them by whether they can be checked.
 ///
-/// These go to `calls`, never `refs`: documentation may legitimately point at
-/// a symbol that does not exist yet, so a doc ref navigates and counts but is
-/// never diagnosed. A qualified ref carries the kind its prefix names; a bare
-/// one carries [`DOC_REF`], resolved by name across kinds at query time.
-fn extract_doc_refs(tree: &SyntaxTree, full_path: &str, schema: &Schema, out: &mut Vec<Ref>) {
+/// Most doc refs go to `calls`, never `refs`: documentation may legitimately
+/// point at a symbol that does not exist yet, so they navigate and count but
+/// are never diagnosed. A qualified ref carries the kind its prefix names; a
+/// bare one carries [`DOC_REF`], resolved by name across kinds at query time.
+///
+/// An **anchor** reference is the exception and goes to `refs`. Anchors are a
+/// closed namespace pdxl fully owns — every one of them is declared by a
+/// `#! @key` in this same project — so a reference matching none is a typo
+/// rather than a link to something unwritten, and saying so is useful. It is
+/// reported at warning severity, since documentation must never fail a build.
+fn extract_doc_refs(
+    tree: &SyntaxTree,
+    full_path: &str,
+    schema: &Schema,
+    refs: &mut Vec<Ref>,
+    calls: &mut Vec<Ref>,
+) {
     let docs = tree.doc_comments();
     if docs.is_empty() {
         return;
@@ -241,13 +256,19 @@ fn extract_doc_refs(tree: &SyntaxTree, full_path: &str, schema: &Schema, out: &m
             let content = &src[start as usize..end as usize];
             let (kind, offset) = crate::doc::parse_doc_ref(content, schema);
             // The recorded range covers the name only, so navigation and
-            // highlighting land past any `kind:` qualifier.
+            // highlighting land past any `@` sigil or `kind:` qualifier.
             let name_start = start + offset as u32;
             let Ok(name) = std::str::from_utf8(&src[name_start as usize..end as usize]) else {
                 continue;
             };
+            let kind = kind.unwrap_or(crate::doc::DOC_REF);
+            let out = if kind == crate::kind::DOC_ANCHOR {
+                &mut *refs
+            } else {
+                &mut *calls
+            };
             out.push(Ref {
-                kind: kind.unwrap_or(crate::doc::DOC_REF),
+                kind,
                 alt: &[],
                 name: name.to_string(),
                 file: Arc::clone(&file),

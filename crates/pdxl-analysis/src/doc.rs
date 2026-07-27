@@ -33,9 +33,17 @@ pub const DOC_REF: KindId = KindId::new("doc_ref");
 
 /// Splits a `![…]` ref's inner text into an optional explicit kind (resolved
 /// against the schema's aliases) and the byte offset where the referenced name
-/// begins. `scheme:Name` → `(Some(scheme kind), 7)`; a bare or unknown-prefix
-/// text → `(None, 0)`.
+/// begins. `@Name` → `(Some(anchor kind), 1)`; `scheme:Name` →
+/// `(Some(scheme kind), 7)`; a bare or unknown-prefix text → `(None, 0)`.
 pub fn parse_doc_ref(content: &[u8], schema: &Schema) -> (Option<KindId>, usize) {
+    // `![@key]` mirrors the `#! @key` declaration, and naming the anchor kind
+    // outright is what makes the reference diagnosable — a bare `![key]`
+    // cannot be, since extraction runs per file before any kind is known.
+    // Checked before the alias split so a key whose first `:`-segment happens
+    // to be a registered alias (`![@trait:brave_rework]`) is never stolen.
+    if content.len() > 1 && content[0] == b'@' {
+        return (Some(crate::kind::DOC_ANCHOR), 1);
+    }
     if let Some(colon) = content.iter().position(|&b| b == b':')
         && let Ok(prefix) = std::str::from_utf8(&content[..colon])
         && let Some(kind) = schema.kind_by_alias(prefix)

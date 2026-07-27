@@ -33,7 +33,7 @@ pub use doc::{DOC_REF, doc_anchor_span, doc_ref_spans, parse_doc_ref};
 pub use extract::{extract_calls, extract_facts};
 pub use kind::{CallKinds, DOC_ANCHOR, GuiKinds, KindId, LOC_KEY, SCRIPT_CONSTANT};
 pub use model::{CallTargets, FileFacts, Ref, Symbol};
-pub use resolve::{RefDiag, merge_and_resolve, resolve_refs};
+pub use resolve::{RefDiag, Severity, merge_and_resolve, resolve_refs};
 pub use schema::{
     DefRule, DefShape, DefSource, IconHint, ImplicitLocPattern, KindSpec, RefPattern, RefRule,
     Schema,

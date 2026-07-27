@@ -149,17 +149,27 @@ fn report_project(
         }
     }
 
-    if !diags.is_empty() {
-        writeln!(w, "\n{} unresolved references:", diags.len())?;
-        let mut cache = HashMap::new();
-        for d in diags {
+    // Warnings are reported but never fail the run: the only warning kind is
+    // the smart-doc anchor, a pdxl convention the game never reads, so a stale
+    // documentation link must not gate a build.
+    let (errors, warnings): (Vec<&RefDiag>, Vec<&RefDiag>) = diags
+        .iter()
+        .partition(|d| d.severity == pdxl_analysis::Severity::Error);
+    let mut cache = HashMap::new();
+    if !errors.is_empty() {
+        writeln!(w, "\n{} unresolved references:", errors.len())?;
+        for d in &errors {
             writeln!(w, "  {}: {}", diag_loc(&mut cache, d), d.msg)?;
         }
-        w.flush()?;
-        return Ok(ExitCode::FAILURE);
+    }
+    if !warnings.is_empty() {
+        writeln!(w, "\n{} warnings:", warnings.len())?;
+        for d in &warnings {
+            writeln!(w, "  {}: {}", diag_loc(&mut cache, d), d.msg)?;
+        }
     }
     w.flush()?;
-    if gui_errors.is_empty() {
+    if errors.is_empty() && gui_errors.is_empty() {
         Ok(ExitCode::SUCCESS)
     } else {
         Ok(ExitCode::FAILURE)

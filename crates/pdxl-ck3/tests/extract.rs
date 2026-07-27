@@ -2249,6 +2249,44 @@ fn only_a_doc_comment_opening_with_at_declares_an_anchor() {
 }
 
 #[test]
+fn only_sigil_anchor_references_are_diagnosable() {
+    let f = extract(
+        "#! @a see ![@a] and ![anchor:a] and ![a] and ![trait:brave]\na = { b = 1 }\n",
+        "common/scripted_effects/x.txt",
+    );
+    // `![@a]` and `![anchor:a]` name the anchor kind outright, so they can be
+    // checked and live in `refs`.
+    let anchors: Vec<&str> = f
+        .refs
+        .iter()
+        .filter(|r| r.kind == pdxl_analysis::DOC_ANCHOR)
+        .map(|r| r.name.as_str())
+        .collect();
+    assert_eq!(anchors, vec!["a", "a"]);
+    // A bare `![a]` cannot be classified before the merge, so it stays soft
+    // alongside every other doc ref.
+    assert!(f.calls.iter().any(|r| r.name == "a"));
+    assert!(f.calls.iter().any(|r| r.name == "brave"));
+    assert!(f.refs.iter().all(|r| r.name != "brave"));
+}
+
+#[test]
+fn the_anchor_sigil_is_not_stolen_by_a_kind_alias() {
+    // `trait:` is a registered doc-ref alias; the sigil must still win, or an
+    // anchor keyed `trait:…` would silently resolve to the wrong namespace.
+    let f = extract(
+        "#! see ![@trait:brave_rework]\na = { b = 1 }\n",
+        "common/scripted_effects/x.txt",
+    );
+    let r = f
+        .refs
+        .iter()
+        .find(|r| r.kind == pdxl_analysis::DOC_ANCHOR)
+        .expect("anchor ref");
+    assert_eq!(r.name, "trait:brave_rework");
+}
+
+#[test]
 fn an_anchor_line_still_yields_its_doc_refs() {
     let f = extract(
         "#! @todo:x see ![trait:brave]\na = { b = 1 }\n",

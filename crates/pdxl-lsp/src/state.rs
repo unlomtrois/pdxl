@@ -259,7 +259,10 @@ impl ServerState {
                         start: offset_to_position(&text, d.start),
                         end: offset_to_position(&text, d.end),
                     },
-                    severity: Some(DiagnosticSeverity::ERROR),
+                    severity: Some(match d.severity {
+                        pdxl_analysis::Severity::Warning => DiagnosticSeverity::WARNING,
+                        pdxl_analysis::Severity::Error => DiagnosticSeverity::ERROR,
+                    }),
                     source: Some("pdxl".to_string()),
                     message: d.msg.clone(),
                     ..Diagnostic::default()
@@ -1090,12 +1093,16 @@ impl ServerState {
         extract_doc_block(&src, symbol.offset)
     }
 
-    /// An anchor's description: the text after `#! @key` on its declaring line.
+    /// An anchor's description: the text after `#! @key`, or — when the key
+    /// stands alone on its line — the `#!` lines that follow it.
     ///
     /// Anchors need their own reader because [`extract_doc_block`] collects the
-    /// `#!` lines *above* a definition — right for a symbol the comment
-    /// documents, but an anchor's declaration is itself the comment, so that
-    /// walk starts one line too high and returns the wrong block entirely.
+    /// `#!` lines *above* a definition. That is right for a symbol the comment
+    /// documents, but an anchor's declaration *is* the comment, so that walk
+    /// starts one line too high and returns the wrong block entirely.
+    ///
+    /// Both layouts appear in practice — a one-line note reads well inline,
+    /// while a paragraph naturally goes underneath the name it labels.
     fn anchor_description(
         &self,
         project: &Project,
@@ -1104,12 +1111,46 @@ impl ServerState {
         let full = project.rel_to_full(&symbol.file)?;
         let src = self.read_file(full).ok()?;
         let from = (symbol.end_offset as usize).min(src.len());
-        let line_end = src[from..]
+        let mut line_end = src[from..]
             .iter()
             .position(|&b| b == b'\n')
             .map_or(src.len(), |i| from + i);
-        let text = std::str::from_utf8(&src[from..line_end]).ok()?.trim();
-        (!text.is_empty()).then(|| text.to_string())
+        let inline = std::str::from_utf8(&src[from..line_end]).ok()?.trim();
+        if !inline.is_empty() {
+            return Some(inline.to_string());
+        }
+        // Nothing after the key: take the `#!` lines below, stopping at the
+        // first ordinary line or at another declaration (which owns its own).
+        let mut lines: Vec<String> = Vec::new();
+        while line_end < src.len() {
+            let start = line_end + 1;
+            let end = src[start..]
+                .iter()
+                .position(|&b| b == b'\n')
+                .map_or(src.len(), |i| start + i);
+            let line = &src[start..end];
+            let trimmed = line.trim_ascii_start();
+            let Some(rest) = trimmed.strip_prefix(b"#!") else {
+                break;
+            };
+            // `doc_anchor_span` expects a range starting at `#`, as the lexer
+            // hands them over — not the line start, which may be indented.
+            let hash = start + (line.len() - trimmed.len());
+            if pdxl_analysis::doc_anchor_span(&src, hash as u32, end as u32).is_some() {
+                break;
+            }
+            let Ok(text) = std::str::from_utf8(rest) else {
+                break;
+            };
+            lines.push(
+                text.strip_prefix(' ')
+                    .unwrap_or(text)
+                    .trim_end()
+                    .to_string(),
+            );
+            line_end = end;
+        }
+        (!lines.is_empty()).then(|| lines.join("\n"))
     }
 
     /// Renders a doc block to hover markdown, turning each `![Name]` into a
@@ -1626,6 +1667,17 @@ pub(crate) fn doc_ref_cursor(src: &[u8], off: u32, schema: &Schema) -> Option<Do
         return None;
     }
     let typed = std::str::from_utf8(&src[open..hi]).ok()?;
+    // `![@key]` pins the anchor kind. Checked before the alias split, or a
+    // `:`-namespaced key under construction (`![@todo:reb`) would be read as
+    // the alias `@todo` and lose everything typed before the colon.
+    if let Some(key) = typed.strip_prefix('@') {
+        return Some(DocRefCursor {
+            name_start: (open + 1) as u32,
+            name_prefix: key.to_string(),
+            pinned: Some(pdxl_analysis::DOC_ANCHOR),
+            qualified: true,
+        });
+    }
     match typed.split_once(':') {
         Some((alias, name)) => Some(DocRefCursor {
             name_start: (open + alias.len() + 1) as u32,
@@ -1656,16 +1708,20 @@ fn pinned_kind(r: &pdxl_analysis::Ref) -> Option<KindId> {
 /// is why this needs no gap reconstruction and cannot mistake a `#` inside a
 /// string for a comment.
 fn doc_refs<'f>(src: &[u8], facts: &'f pdxl_analysis::FileFacts) -> Vec<&'f pdxl_analysis::Ref> {
-    if facts.calls.is_empty() {
+    if facts.calls.is_empty() && facts.refs.is_empty() {
         return Vec::new();
     }
     let (_, docs) = pdxl_lexer::tokenize_with_docs(src);
     if docs.is_empty() {
         return Vec::new();
     }
+    // Anchor references live in `refs` (they are diagnosable) and every other
+    // doc ref in `calls`, so both streams are searched. Position decides: a
+    // script reference can never fall inside a comment token.
     let mut out: Vec<&pdxl_analysis::Ref> = facts
         .calls
         .iter()
+        .chain(facts.refs.iter())
         .filter(|r| {
             docs.binary_search_by(|d| {
                 if r.start < d.start {

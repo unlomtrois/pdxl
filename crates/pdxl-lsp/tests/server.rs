@@ -3056,6 +3056,21 @@ fn smart_doc_anchors_are_symbols_referenced_across_files() {
         "description missing from:\n{md}"
     );
 
+    // A key alone on its line takes the `#!` lines beneath it instead — the
+    // layout a multi-line note naturally falls into.
+    let below = "#! @regency_system\n\
+                 #! Diarchy, regents, and the removal war.\n\
+                 #! Root is the regent.\n\
+                 rg = { }\n";
+    t.write("common/scripted_effects/c.txt", below);
+    let (server2, _rx2) = server_over(&t);
+    let c = uri_for(&t, "common/scripted_effects/c.txt");
+    let md = hover_md(&server2, &c, pos_of(below, "regency_system"));
+    assert!(
+        md.contains("Diarchy, regents") && md.contains("Root is the regent"),
+        "block description missing from:\n{md}"
+    );
+
     // A reference in another file jumps back to the declaration.
     let b_src = std::fs::read_to_string(t.child("common/scripted_effects/b.txt")).unwrap();
     let loc = server
@@ -3073,6 +3088,48 @@ fn smart_doc_anchors_are_symbols_referenced_across_files() {
             .any(|l| l.uri.to_file_path().unwrap().ends_with("b.txt")),
         "anchor reference not found: {refs:?}"
     );
+}
+
+#[cfg(feature = "ck3")]
+#[test]
+fn unresolved_anchor_reference_is_published_as_a_warning() {
+    let t = TempTree::new();
+    t.write("common/traits/00.txt", "brave = { }\n");
+    t.write(
+        "common/scripted_effects/e.txt",
+        "#! @todo:real\n\
+         #! blocked on ![@todo:typo]\n\
+         e = { add_trait = missing }\n",
+    );
+    let (_server, rx) = server_over(&t);
+
+    // The shared `drain_publishes` keeps only counts; severity is the point here.
+    let mut severities = Vec::new();
+    while let Ok(msg) = rx.try_recv() {
+        if let lsp_server::Message::Notification(n) = msg
+            && n.method == "textDocument/publishDiagnostics"
+        {
+            let p: lsp_types::PublishDiagnosticsParams = serde_json::from_value(n.params).unwrap();
+            for d in p.diagnostics {
+                severities.push((d.severity, d.message));
+            }
+        }
+    }
+    let anchor = severities
+        .iter()
+        .find(|(_, m)| m.contains("doc_anchor"))
+        .expect("anchor diagnostic");
+    assert_eq!(
+        anchor.0,
+        Some(lsp_types::DiagnosticSeverity::WARNING),
+        "a stale doc link must not read as an error: {anchor:?}"
+    );
+    // A genuine script reference in the same file stays an error.
+    let script = severities
+        .iter()
+        .find(|(_, m)| m.contains("missing"))
+        .expect("trait diagnostic");
+    assert_eq!(script.0, Some(lsp_types::DiagnosticSeverity::ERROR));
 }
 
 #[cfg(feature = "ck3")]

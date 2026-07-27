@@ -8,8 +8,32 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::kind::KindId;
 use crate::model::{FileFacts, Ref};
 use crate::table::SymbolTable;
+
+/// How loudly a diagnostic speaks.
+///
+/// `Error` is the default because every reference the schema declares is one
+/// the game itself will read. The exception is a smart-doc anchor: `#!` is
+/// pdxl's own convention, invisible to the game, so a stale `![@key]` is worth
+/// a squiggle but must never fail a build.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Severity {
+    #[default]
+    Error,
+    Warning,
+}
+
+/// The severity an unresolved reference of `kind` is reported at. An engine
+/// rule, not game data — only the engine-owned anchor kind is soft.
+fn ref_severity(kind: KindId) -> Severity {
+    if kind == crate::kind::DOC_ANCHOR {
+        Severity::Warning
+    } else {
+        Severity::Error
+    }
+}
 
 /// An unresolved-reference diagnostic. `file`/`start`/`end` give the on-disk
 /// path and byte range of the offending value (editor ranges). The CLI's
@@ -21,6 +45,7 @@ pub struct RefDiag {
     pub start: u32,
     pub end: u32,
     pub msg: String,
+    pub severity: Severity,
 }
 
 /// Builds the symbol table from the gathered facts (in walk order, so a
@@ -71,6 +96,7 @@ pub fn merge_and_resolve(
                     start: r.start,
                     end: r.end,
                     msg: format!("unknown {} {:?}", r.kind.name(), r.name),
+                    severity: Severity::Error,
                 });
             }
         }
@@ -96,6 +122,7 @@ pub fn resolve_refs<'a>(
                 // Matches Go's `unknown %s %q` for the identifier-shaped names
                 // that reach this point (skip rules filter the rest).
                 msg: format!("unknown {} {:?}", r.kind.name(), r.name),
+                severity: ref_severity(r.kind),
             });
         }
     }

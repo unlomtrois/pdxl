@@ -348,3 +348,28 @@ fn fmt_write_rewrites_in_place_and_parse_errors_refuse() {
     assert_eq!(std::fs::read_to_string(&broken).unwrap(), "a = {\n");
     assert!(String::from_utf8_lossy(&out.stderr).contains("parse errors"));
 }
+
+#[cfg(feature = "ck3")]
+#[test]
+fn unresolved_anchor_warns_without_failing_the_run() {
+    // The whole point of the warning severity: a stale documentation link is
+    // reported, but `#!` is a pdxl convention the game never reads, so it must
+    // not gate a build.
+    let t = TempTree::new();
+    t.write(
+        "common/scripted_effects/a.txt",
+        "#! @todo:real\n#! blocked on ![@todo:typo]\ne = { }\n",
+    );
+    let (stdout, ok) = run_check(
+        &["check", "--mod", t.path.to_string_lossy().as_ref()],
+        &[("<mod>", &t)],
+    );
+    assert!(ok, "a doc-anchor warning must exit zero:\n{stdout}");
+    assert!(
+        stdout.contains("1 warnings:") && stdout.contains(r#"unknown doc_anchor "todo:typo""#),
+        "warning not reported:\n{stdout}"
+    );
+    // The resolved anchor is silent, and the declaration itself is indexed.
+    assert!(!stdout.contains("todo:real\""), "false positive:\n{stdout}");
+    assert!(stdout.contains("doc_anchor              1"), "{stdout}");
+}
