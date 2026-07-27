@@ -1,12 +1,21 @@
 //! Table-driven reference derivation, ported from `pdxl-eu5::derived` (whose
 //! module doc records the measurement that decided the technique's scope).
 //!
-//! Every data-carrying link in the generated `SCOPE_LINKS` table (`title:`,
-//! `accolade_type:`, `struggle:`, …) is a literal-name reference by
-//! construction — `requires_data: yes`, with a typed `output_scopes`. One
-//! curated scope-type → kind map turns them all into `ScopePrefix` rules, so
-//! regenerating the tables after a game patch grows navigation with no schema
-//! edit.
+//! A link in the generated `SCOPE_LINKS` table names a literal key when it
+//! carries data *and needs no input scope* — `requires_data: yes` with an empty
+//! `input_scopes`. One curated scope-type → kind map turns those into
+//! `ScopePrefix` rules, so regenerating the tables after a game patch grows
+//! navigation with no schema edit.
+//!
+//! The empty-`input_scopes` half of that test is load-bearing, and its absence
+//! is what made `character` look unusable at first: four links output a
+//! `character` scope, but only `character:` takes a character key.
+//! `court_position:`, `cp:` and `memory_participant:` navigate *from* an input
+//! scope and their argument is a court-position type or a memory role — which
+//! is why `character:` seemed to produce 2326 unresolved refs when the real
+//! source was three sibling links being attributed to the same kind. Filtering
+//! on input scopes rather than the `global_link` flag also keeps `dynasty:`,
+//! whose data-carrying row is marked non-global yet takes a literal key.
 //!
 //! EU5 also derives **skip words** from the same table (argument-less links and
 //! code-saved scope names). That half does *not* transplant, measured here and
@@ -18,10 +27,10 @@
 //! that is worth having, but as a targeted rule rather than by suppressing
 //! every value that shares a name with a runtime scope.
 //!
-//! Corpus at adoption (game + T4N, `tests/derived_proof.rs`): **+1668 refs, 9
-//! unresolved, 99.5%** — trait 1401, doctrine 130, dynasty 36, religion 34,
-//! decision 34, subject_contract 25, casus_belli 5, government 3. Every miss is
-//! a dynasty and every one is real: T4N overrides
+//! Corpus at adoption (game + T4N, `tests/derived_proof.rs`): **+2753 refs, 9
+//! unresolved, 99.7%** — trait 1401, character 1085, doctrine 130, dynasty 36,
+//! religion 34, decision 34, subject_contract 25, casus_belli 5, government 3.
+//! Every miss is a dynasty and every one is real: T4N overrides
 //! `common/dynasties/05_tgp_dynasties.txt` without carrying over
 //! `japanese_yamato`, `japanese_minamoto_seiwa` or `japanese_taira_kanmu`, yet
 //! still references them, and two numeric ids are defined nowhere.
@@ -46,13 +55,6 @@ use crate::tables;
 /// `subject_contract` (renamed by the game after the tables were named).
 ///
 /// Deliberately absent, and why:
-/// - `character` — measured, then rejected: `character:` is a mixed namespace.
-///   Beside historical ids it carries names the engine saves at runtime
-///   (`character:bookmaker_court_position`, `character:councillor_court_chaplain`
-///   from the activity and council systems), which no script defines. Deriving
-///   it added 2326 unresolved refs on this corpus. It belongs in
-///   `Entity::SOFT_SCOPE_REFS` — navigable and counted, never diagnosed — not
-///   here.
 /// - `value`, `flag` — numbers and runtime flags, not symbols.
 /// - `situation_participant_group`, `situation_sub_region`, `geographical_region`
 ///   — real entities we do not model yet.
@@ -63,6 +65,7 @@ use crate::tables;
 ///   line here the day its kind is modeled, and navigation follows for free.
 const TARGET_KINDS: &[(&str, KindId, &[KindId])] = &[
     ("landed_title", kinds::TITLE, &[]),
+    ("character", kinds::CHARACTER, &[]),
     ("province", kinds::PROVINCE, &[]),
     ("culture", kinds::CULTURE, &[]),
     ("culture_pillar", kinds::CULTURE_PILLAR, &[]),
@@ -95,7 +98,9 @@ pub fn derived_link_rules() -> Vec<KindSpec> {
     for (scope_type, kind, alts) in TARGET_KINDS {
         let rules: Vec<RefRule> = tables::SCOPE_LINKS
             .iter()
-            .filter(|l| l.requires_data && l.output_scopes.contains(scope_type))
+            .filter(|l| {
+                l.requires_data && l.input_scopes.is_empty() && l.output_scopes.contains(scope_type)
+            })
             .map(|l| RefRule {
                 pattern: RefPattern::ScopePrefix(l.name),
                 gate: None,

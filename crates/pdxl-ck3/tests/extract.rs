@@ -2981,3 +2981,26 @@ fn derivation_adds_rules_the_hand_schema_lacks() {
         "hand schema should not already resolve doctrine:"
     );
 }
+
+#[test]
+fn only_links_needing_no_input_scope_name_a_literal_key() {
+    // Four links output a `character` scope, but only `character:` takes a
+    // character key — `court_position:` and `cp:` navigate from a character and
+    // their argument is a court-position type. Deriving on output scope alone
+    // attributed those to the character kind.
+    let f = extract(
+        "e = {\n\
+         \tx = character:Moriya_1\n\
+         \ty = court_position:bookmaker_court_position\n\
+         \tz = cp:councillor_court_chaplain\n\
+         }\n",
+        "common/scripted_effects/x.txt",
+    );
+    let chars: Vec<&str> = f
+        .refs
+        .iter()
+        .filter(|r| r.kind == pdxl_ck3::kinds::CHARACTER)
+        .map(|r| r.name.as_str())
+        .collect();
+    assert_eq!(chars, vec!["Moriya_1"], "only character: names a character");
+}
