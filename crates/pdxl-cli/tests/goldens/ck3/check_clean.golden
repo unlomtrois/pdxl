@@ -69,6 +69,9 @@ subject_contract        0
 subject_contract_group      0
 domicile_type           0
 domicile_building       0
+message                 0
+message_filter_type      0
+message_group_type      0
 loc_key                 0
 doc_anchor              0
 total                   2

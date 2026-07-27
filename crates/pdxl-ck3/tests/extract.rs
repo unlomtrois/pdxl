@@ -2827,3 +2827,111 @@ fn doctrine_groups_define_and_list_their_doctrines() {
             .all(|r| r.kind != pdxl_ck3::kinds::DOCTRINE)
     );
 }
+
+// ── messages, filter types, group types ─────────────────────────────────────
+
+#[test]
+fn message_defs_and_the_filter_group_chain() {
+    let m = extract(
+        "msg_war_won = { title = msg_war_won_title message_filter_type = war_outcome }\n",
+        "common/messages/00.txt",
+    );
+    assert_eq!(m.defs[0].kind, pdxl_ck3::kinds::MESSAGE);
+    // `title` is a loc key carried by the body's own FieldSpec; the filter is a
+    // reference in its own right.
+    let by = |k| {
+        m.refs
+            .iter()
+            .filter(|r| r.kind == k)
+            .map(|r| r.name.as_str())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(by(pdxl_analysis::LOC_KEY), vec!["msg_war_won_title"]);
+    assert_eq!(
+        by(pdxl_ck3::kinds::MESSAGE_FILTER_TYPE),
+        vec!["war_outcome"]
+    );
+
+    // A filter type defines, and names its group — gated, since `group` means
+    // something else in eight other directories.
+    let f = extract(
+        "war_outcome = { display = toast group = war }\n",
+        "common/message_filter_types/00.txt",
+    );
+    assert_eq!(f.defs[0].kind, pdxl_ck3::kinds::MESSAGE_FILTER_TYPE);
+    assert_eq!(ref_names(&f), vec!["war"]);
+    assert_eq!(f.refs[0].kind, pdxl_ck3::kinds::MESSAGE_GROUP_TYPE);
+
+    let g = extract(
+        "war = { sort_order = 100 }\n",
+        "common/message_group_types/00.txt",
+    );
+    assert_eq!(g.defs[0].kind, pdxl_ck3::kinds::MESSAGE_GROUP_TYPE);
+
+    // `group` elsewhere is not a message group.
+    let other = extract(
+        "brave = { group = personality_brave }\n",
+        "common/traits/00.txt",
+    );
+    assert!(
+        other
+            .refs
+            .iter()
+            .all(|r| r.kind != pdxl_ck3::kinds::MESSAGE_GROUP_TYPE)
+    );
+}
+
+#[test]
+fn every_engine_effect_that_raises_a_message_references_it() {
+    // `send_interface_toast` is the common spelling (11k uses) and was the one
+    // easiest to miss — the info documents only the other two.
+    let f = extract(
+        "e = {\n\
+         \tsend_interface_toast = { type = msg_a }\n\
+         \tsend_interface_message = { type = msg_b }\n\
+         \tsend_interface_message_as_toast = { type = msg_c }\n\
+         }\n",
+        "common/scripted_effects/x.txt",
+    );
+    let msgs: Vec<&str> = f
+        .refs
+        .iter()
+        .filter(|r| r.kind == pdxl_ck3::kinds::MESSAGE)
+        .map(|r| r.name.as_str())
+        .collect();
+    assert_eq!(msgs, vec!["msg_a", "msg_b", "msg_c"]);
+
+    // `type` is overloaded everywhere else, so the rule keys on the enclosing
+    // effect rather than the key alone.
+    let other = extract(
+        "e = { start_scheme = { type = murder } }\n",
+        "common/scripted_effects/x.txt",
+    );
+    assert!(
+        other
+            .refs
+            .iter()
+            .all(|r| r.kind != pdxl_ck3::kinds::MESSAGE)
+    );
+}
+
+#[test]
+fn message_kinds_carry_their_implicit_localization() {
+    let schema = pdxl_ck3::schema();
+    let suffixes = |k| {
+        schema
+            .implicit_loc_patterns(k)
+            .iter()
+            .map(|p| p.suffix)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(suffixes(pdxl_ck3::kinds::MESSAGE), vec![""]);
+    assert_eq!(
+        suffixes(pdxl_ck3::kinds::MESSAGE_FILTER_TYPE),
+        vec!["message_filter_{}"]
+    );
+    assert_eq!(
+        suffixes(pdxl_ck3::kinds::MESSAGE_GROUP_TYPE),
+        vec!["message_group_type_{}"]
+    );
+}

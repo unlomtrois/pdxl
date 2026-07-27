@@ -53,6 +53,7 @@ pub(crate) mod holding;
 mod holy_site;
 mod law;
 mod loc;
+mod message;
 mod modifier;
 mod name_list;
 mod named_color;
@@ -162,5 +163,6 @@ registry!(
     holding::Holding,
     subject_contract::SubjectContract,
     domicile::Domicile,
+    message::Message,
     loc::Loc,
 );
