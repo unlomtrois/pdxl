@@ -44,7 +44,8 @@ pub use table::{Duplicate, SymbolTable};
 /// facts cache must embed this in its keys (alongside content hash and
 /// rel_path) and treat mismatches as misses; bump it whenever extraction rules
 /// or the [`FileFacts`] model change meaning.
-pub const ANALYSIS_VERSION: u32 = 125; // 125: FieldSpec::ref_kind — a modeled body's own fields carry their references (scalar(LocKey) implies one), so extraction threads the clause context and reads refs off the shape instead of a gated RefRule per key; refs deduped per file
+pub const ANALYSIS_VERSION: u32 = 126; // 126: pdxl-cache removed — no extraction change; the constant is now release numbering and this changelog only, since nothing reads it
+// 125: FieldSpec::ref_kind — a modeled body's own fields carry their references (scalar(LocKey) implies one), so extraction threads the clause context and reads refs off the shape instead of a gated RefRule per key; refs deduped per file
 // 124: CK3 casus-belli loc keys are now references — war_name/cb_name/on_*_desc and the descs nested in their dynamic-description blocks (1621 new refs in vanilla; 3 unresolved, all genuine dead loc)
 // 123: CK3 character-interaction body reconciled with the corpus — cost currencies (influence/treasury), name/recipient_recieve_cooldown/shows_military_strength, real ai_target_quick_trigger, enum vocabularies (contexts only; extraction unchanged)
 // 122: smart-doc completion — `alias:` qualifiers and kind-narrowed symbol names inside `![…]` (LSP-only; extraction unchanged)

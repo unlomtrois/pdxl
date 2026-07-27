@@ -21,12 +21,11 @@
 //!
 //! Deliberate deviations from Go (per the measured-simplification plan):
 //! - No `FactStore` (see the M5 benchmark; facts re-extract in one cheap walk).
-//! - The AST cache is opt-in via [`analyze_with`]; real-corpus measurement
-//!   (`docs/BASELINE.md`) showed it does NOT pay for one-shot `check` runs
-//!   (warm ≈ cold: both read+hash every file, and decoding stored trees costs
-//!   as much as parsing) — Go's fast warm path was its tiny-entry FactStore.
-//!   The CLI therefore does not use it; it remains available for consumers
-//!   with different access patterns.
+//! - No AST cache either. Real-corpus measurement (`docs/BASELINE.md`) showed
+//!   a warm parse cache does NOT pay: warm ≈ cold, because both read and hash
+//!   every file and decoding a stored tree costs about what parsing it does.
+//!   Go's fast warm path came from its tiny-entry FactStore, not its trees.
+//!   Every file is therefore read and parsed on each gather, in parallel.
 //! - The schema is an explicit parameter (Go links the CK3 registry directly).
 
 pub mod coverage;
@@ -56,25 +55,8 @@ struct FileKey {
 }
 
 /// One-shot analysis: gather facts for every winning file and resolve.
-///
-/// Mirrors Go's `Analyze(fs, nil, nil)` (no caches).
 pub fn analyze(fs: &FileSet, schema: &Schema) -> io::Result<(SymbolTable, Vec<RefDiag>)> {
-    analyze_with(fs, schema, None)
-}
-
-/// Like [`analyze`], but parse results flow through the syntax cache when one
-/// is supplied: an unchanged file's tree is reconstructed from the cache entry
-/// instead of re-parsed, and misses populate the cache for the next run.
-///
-/// Real-corpus measurement (see `docs/BASELINE.md`): this does NOT speed up
-/// one-shot `check`-style runs (warm ≈ cold at CK3 scale). It exists for
-/// consumers whose access pattern differs (e.g. re-analyzing a subset).
-pub fn analyze_with(
-    fs: &FileSet,
-    schema: &Schema,
-    cache: Option<&pdxl_cache::Store>,
-) -> io::Result<(SymbolTable, Vec<RefDiag>)> {
-    let (order, facts, _names, _vocab) = gather_facts(fs, schema, cache)?;
+    let (order, facts, _names, _vocab) = gather_facts(fs, schema)?;
     let rels: Vec<&str> = order.iter().map(|k| k.rel.as_str()).collect();
     Ok(merge_and_resolve(&rels, &facts))
 }
@@ -88,48 +70,13 @@ type Gathered = (
     Option<pdxl_gui::vocab::GuiVocab>,
 );
 
-/// Walks `fs` once, obtaining every winning file's tree (via the cache when
-/// supplied, else by parsing) and extracting its facts.
-fn gather_facts(
-    fs: &FileSet,
-    schema: &Schema,
-    cache: Option<&pdxl_cache::Store>,
-) -> io::Result<Gathered> {
-    // Pass 1: definitions + references (no calls yet).
-    //
-    // Fast path: with no cache, every winning file is independent — read,
-    // parse, and extract are pure per file — so fan them out across cores.
-    // Order is preserved (rayon's indexed collect keeps input order), which
-    // duplicate detection in `merge_and_resolve` depends on. The cached path
-    // stays sequential (the Store is shared mutable state).
-    let (order, mut facts) = if cache.is_none() {
-        gather_facts_parallel(fs, schema)?
-    } else {
-        let mut order = Vec::new();
-        let mut facts = HashMap::new();
-        fs.try_for_each(|entry| -> io::Result<()> {
-            let full = entry.full_path.to_string_lossy().into_owned();
-            let f = if entry.rel_path.ends_with(".yml") {
-                let src = std::fs::read(&entry.full_path)?;
-                loc_facts(&src, &entry.rel_path, schema)
-            } else if entry.rel_path.ends_with(".gui") {
-                gui_defs_for(&entry.full_path, &entry.rel_path, schema)?
-            } else if entry.rel_path.ends_with(".csv") {
-                let src = std::fs::read(&entry.full_path)?;
-                csv_facts(&src, &entry.rel_path, schema)
-            } else {
-                let tree = obtain_tree(&entry.full_path, &full, cache)?;
-                extract_facts(&tree, &entry.rel_path, &full, schema, None)
-            };
-            order.push(FileKey {
-                rel: entry.rel_path.clone(),
-                full: entry.full_path.clone(),
-            });
-            facts.insert(entry.rel_path.clone(), f);
-            Ok(())
-        })?;
-        (order, facts)
-    };
+/// Walks `fs` once, parsing every winning file and extracting its facts.
+fn gather_facts(fs: &FileSet, schema: &Schema) -> io::Result<Gathered> {
+    // Pass 1: definitions + references (no calls yet). Every winning file is
+    // independent — read, parse, and extract are pure per file — so they fan
+    // out across cores. Order is preserved (rayon's indexed collect keeps
+    // input order), which duplicate detection in `merge_and_resolve` needs.
+    let (order, mut facts) = gather_facts_parallel(fs, schema)?;
 
     // The callable-name set — every defined scripted effect/trigger, including
     // inline typed defs harvested from event files — is a whole-project fact,
@@ -142,7 +89,7 @@ fn gather_facts(
     if let Some(names) = &names
         && !names.is_empty()
     {
-        fill_calls(&order, &mut facts, cache, &names.targets())?;
+        fill_calls(&order, &mut facts, &names.targets())?;
     }
     // Interface scripts get their own pass 2 (name-gated template/type refs
     // plus the mined completion vocabulary).
@@ -201,54 +148,36 @@ impl CallNames {
 }
 
 /// Pass 2: re-parse each script file and record its call-by-name references
-/// against the now-complete callable-name set. Cheap relative to pass 1 (`.yml`
-/// files are skipped; the cached path reuses stored trees).
+/// against the now-complete callable-name set. Cheap relative to pass 1
+/// (`.yml`/`.gui`/`.csv` files are skipped).
 fn fill_calls(
     order: &[FileKey],
     facts: &mut HashMap<String, FileFacts>,
-    cache: Option<&pdxl_cache::Store>,
     targets: &CallTargets,
 ) -> io::Result<()> {
-    if cache.is_none() {
-        use rayon::prelude::*;
-        let calls: Vec<(usize, Vec<pdxl_analysis::Ref>)> = order
-            .par_iter()
-            .enumerate()
-            .filter(|(_, key)| {
-                !key.rel.ends_with(".yml")
-                    && !key.rel.ends_with(".gui")
-                    && !key.rel.ends_with(".csv")
-            })
-            .map(|(i, key)| -> io::Result<(usize, Vec<pdxl_analysis::Ref>)> {
-                let full = key.full.to_string_lossy().into_owned();
-                let src = std::fs::read(&key.full)?;
-                let (tree, _) = pdxl_parser::parse(full.clone(), src).into_parts();
-                Ok((i, extract_calls(&tree, &full, targets)))
-            })
-            .collect::<io::Result<Vec<_>>>()?;
-        for (i, file_calls) in calls {
-            if let Some(f) = facts.get_mut(&order[i].rel) {
-                f.calls.extend(file_calls);
-            }
-        }
-        return Ok(());
-    }
-    for key in order {
-        if key.rel.ends_with(".yml") || key.rel.ends_with(".gui") || key.rel.ends_with(".csv") {
-            continue;
-        }
-        let full = key.full.to_string_lossy().into_owned();
-        let tree = obtain_tree(&key.full, &full, cache)?;
-        if let Some(f) = facts.get_mut(&key.rel) {
-            f.calls.extend(extract_calls(&tree, &full, targets));
+    use rayon::prelude::*;
+    let calls: Vec<(usize, Vec<pdxl_analysis::Ref>)> = order
+        .par_iter()
+        .enumerate()
+        .filter(|(_, key)| {
+            !key.rel.ends_with(".yml") && !key.rel.ends_with(".gui") && !key.rel.ends_with(".csv")
+        })
+        .map(|(i, key)| -> io::Result<(usize, Vec<pdxl_analysis::Ref>)> {
+            let full = key.full.to_string_lossy().into_owned();
+            let src = std::fs::read(&key.full)?;
+            let (tree, _) = pdxl_parser::parse(full.clone(), src).into_parts();
+            Ok((i, extract_calls(&tree, &full, targets)))
+        })
+        .collect::<io::Result<Vec<_>>>()?;
+    for (i, file_calls) in calls {
+        if let Some(f) = facts.get_mut(&order[i].rel) {
+            f.calls.extend(file_calls);
         }
     }
     Ok(())
 }
 
 /// Pass-1 `.gui` facts: dialect-parse and harvest template/type definitions.
-/// Trees are not cached (a few hundred small files; the parse cache is keyed
-/// for the script parser).
 fn gui_defs_for(path: &Path, rel_path: &str, schema: &Schema) -> io::Result<FileFacts> {
     let Some(kinds) = schema.gui_kinds() else {
         return Ok(FileFacts::default());
@@ -301,7 +230,7 @@ fn fill_gui_refs(
     Ok(Some(vocab))
 }
 
-/// Data-parallel pass-1 gather for the no-cache path: one rayon task per winning
+/// Data-parallel pass-1 gather: one rayon task per winning
 /// file, each doing the pure read → parse → extract pipeline (no calls — those
 /// need the whole-project name set), then a single sequential fold that rebuilds
 /// `order` (FileSet insertion order) and the facts map.
@@ -580,33 +509,6 @@ fn scan_concept_refs(
     }
 }
 
-/// Returns the syntax tree for a file: a cache hit when possible, otherwise a
-/// fresh parse (which populates the cache). Mirrors Go's `parseEntry`.
-fn obtain_tree(
-    path: &Path,
-    full: &str,
-    cache: Option<&pdxl_cache::Store>,
-) -> io::Result<std::sync::Arc<pdxl_parser::SyntaxTree>> {
-    if let Some(store) = cache {
-        let mtime = pdxl_cache::Store::mtime_nanos(&std::fs::metadata(path)?);
-        if let Some(hit) = store.get(path, mtime) {
-            return Ok(hit.tree);
-        }
-        let src = std::fs::read(path)?;
-        let (tree, diags) = pdxl_parser::parse(full.to_string(), src.clone()).into_parts();
-        let parse = pdxl_cache::CachedParse {
-            tree: std::sync::Arc::new(tree),
-            diagnostics: diags.into(),
-        };
-        // Best-effort: a cache write failure must not fail the analysis.
-        let _ = store.put(path, mtime, &src, parse.clone());
-        return Ok(parse.tree);
-    }
-    let src = std::fs::read(path)?;
-    let (tree, _) = pdxl_parser::parse(full.to_string(), src).into_parts();
-    Ok(std::sync::Arc::new(tree))
-}
-
 /// A whole-project symbol table held in memory, supporting cheap incremental
 /// updates. The foundation for a long-running validator (LSP / watch loop).
 /// Not safe for concurrent use (wrap it yourself; the LSP layer owns exactly
@@ -628,7 +530,7 @@ impl Project {
     /// Gathers facts for every winning file in `fs` and builds the initial
     /// table and diagnostics.
     pub fn new(fs: &FileSet, schema: Schema) -> io::Result<Project> {
-        let (order, facts, call_names, gui_vocab) = gather_facts(fs, &schema, None)?;
+        let (order, facts, call_names, gui_vocab) = gather_facts(fs, &schema)?;
         let mut p = Project {
             schema,
             order,

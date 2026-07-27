@@ -15,7 +15,6 @@ pdxl-yml.workspace = true
 pdxl-ast.workspace = true
 pdxl-parser.workspace = true
 pdxl-path.workspace = true
-pdxl-cache.workspace = true
 rayon.workspace = true
 
 [dev-dependencies]

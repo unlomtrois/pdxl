@@ -80,9 +80,6 @@ enum Command {
         /// path to mod directory or .mod file
         #[arg(long = "mod")]
         mod_: Option<String>,
-        /// disable parse cache
-        #[arg(long = "no-cache")]
-        no_cache: bool,
     },
 }
 
@@ -101,12 +98,9 @@ fn main() -> ExitCode {
             check,
             fields,
         } => fmt::run(&files, write, check, fields),
-        Command::Check {
-            file,
-            game,
-            mod_,
-            no_cache,
-        } => check::run(file.as_deref(), game.as_deref(), mod_.as_deref(), no_cache),
+        Command::Check { file, game, mod_ } => {
+            check::run(file.as_deref(), game.as_deref(), mod_.as_deref())
+        }
         Command::Lsp {
             game,
             stdio: _,

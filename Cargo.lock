@@ -91,15 +91,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
-name = "block-buffer"
-version = "0.10.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3078c7629b62d3f0439517fa394996acacc5cbc91c5a20d8c658e77abd503a71"
-dependencies = [
- "generic-array",
-]
-
-[[package]]
 name = "bumpalo"
 version = "3.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -182,15 +173,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
-name = "cobs"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fa961b519f0b462e3a3b4a34b64d119eeaca1d59af726fe450bbba07a9fc0a1"
-dependencies = [
- "thiserror",
-]
-
-[[package]]
 name = "colorchoice"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -201,15 +183,6 @@ name = "core-foundation-sys"
 version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
-
-[[package]]
-name = "cpufeatures"
-version = "0.2.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59ed5838eebb26a2bb2e58f6d5b5316989ae9d08bab10e0e6d103e656d1b0280"
-dependencies = [
- "libc",
-]
 
 [[package]]
 name = "crossbeam-channel"
@@ -246,16 +219,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61803da095bee82a81bb1a452ecc25d3b2f1416d1897eb86430c6159ef717c17"
 
 [[package]]
-name = "crypto-common"
-version = "0.1.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78c8292055d1c1df0cce5d180393dc8cce0abec0a7102adb6c7b1eef6016d60a"
-dependencies = [
- "generic-array",
- "typenum",
-]
-
-[[package]]
 name = "darling"
 version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -290,16 +253,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "digest"
-version = "0.10.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ed9a281f7bc9b7576e61468ba615a66a5c8cfdff42420a70aa82701a3b1e292"
-dependencies = [
- "block-buffer",
- "crypto-common",
-]
-
-[[package]]
 name = "displaydoc"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -321,18 +274,6 @@ name = "either"
 version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "91622ff5e7162018101f2fea40d6ebf4a78bbe5a49736a2020649edf9693679e"
-
-[[package]]
-name = "embedded-io"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef1a6892d9eef45c8fa6b9e0086428a2cca8491aca8f787c534a3d6d0bcb3ced"
-
-[[package]]
-name = "embedded-io"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
 name = "find-msvc-tools"
@@ -435,16 +376,6 @@ dependencies = [
  "memchr",
  "pin-project-lite",
  "slab",
-]
-
-[[package]]
-name = "generic-array"
-version = "0.14.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85649ca51fd72272d7821adaf274ad91c288277713d9c18820d8499a7ff69e9a"
-dependencies = [
- "typenum",
- "version_check",
 ]
 
 [[package]]
@@ -688,7 +619,7 @@ checksum = "2ee67f1008b1ba2321834326597b8e186293b049a023cdef258527550b9935b4"
 
 [[package]]
 name = "pdxl-analysis"
-version = "0.125.0"
+version = "0.126.0"
 dependencies = [
  "pdxl-ast",
  "pdxl-parser",
@@ -697,28 +628,15 @@ dependencies = [
 
 [[package]]
 name = "pdxl-ast"
-version = "0.125.0"
+version = "0.126.0"
 dependencies = [
  "pdxl-lexer",
  "pdxl-src",
 ]
 
 [[package]]
-name = "pdxl-cache"
-version = "0.125.0"
-dependencies = [
- "pdxl-ast",
- "pdxl-parser",
- "pdxl-path",
- "pdxl-testutil",
- "postcard",
- "serde",
- "sha2",
-]
-
-[[package]]
 name = "pdxl-ck3"
-version = "0.125.0"
+version = "0.126.0"
 dependencies = [
  "pdxl-analysis",
  "pdxl-ast",
@@ -730,7 +648,7 @@ dependencies = [
 
 [[package]]
 name = "pdxl-cli"
-version = "0.125.0"
+version = "0.126.0"
 dependencies = [
  "clap",
  "pdxl-analysis",
@@ -752,7 +670,7 @@ dependencies = [
 
 [[package]]
 name = "pdxl-eu5"
-version = "0.125.0"
+version = "0.126.0"
 dependencies = [
  "pdxl-analysis",
  "pdxl-fileset",
@@ -765,7 +683,7 @@ dependencies = [
 
 [[package]]
 name = "pdxl-fileset"
-version = "0.125.0"
+version = "0.126.0"
 dependencies = [
  "pdxl-moddesc",
  "pdxl-path",
@@ -774,7 +692,7 @@ dependencies = [
 
 [[package]]
 name = "pdxl-fmt"
-version = "0.125.0"
+version = "0.126.0"
 dependencies = [
  "pdxl-analysis",
  "pdxl-ast",
@@ -785,7 +703,7 @@ dependencies = [
 
 [[package]]
 name = "pdxl-game"
-version = "0.125.0"
+version = "0.126.0"
 dependencies = [
  "pdxl-ck3",
  "pdxl-eu5",
@@ -793,11 +711,11 @@ dependencies = [
 
 [[package]]
 name = "pdxl-gamedocs"
-version = "0.125.0"
+version = "0.126.0"
 
 [[package]]
 name = "pdxl-gui"
-version = "0.125.0"
+version = "0.126.0"
 dependencies = [
  "pdxl-analysis",
  "pdxl-ast",
@@ -806,7 +724,7 @@ dependencies = [
 
 [[package]]
 name = "pdxl-lexer"
-version = "0.125.0"
+version = "0.126.0"
 dependencies = [
  "pdxl-src",
  "pdxl-testutil",
@@ -814,7 +732,7 @@ dependencies = [
 
 [[package]]
 name = "pdxl-lsp"
-version = "0.125.0"
+version = "0.126.0"
 dependencies = [
  "crossbeam-channel",
  "lsp-server",
@@ -836,7 +754,7 @@ dependencies = [
 
 [[package]]
 name = "pdxl-mcp"
-version = "0.125.0"
+version = "0.126.0"
 dependencies = [
  "pdxl-game",
  "rmcp",
@@ -847,7 +765,7 @@ dependencies = [
 
 [[package]]
 name = "pdxl-moddesc"
-version = "0.125.0"
+version = "0.126.0"
 dependencies = [
  "pdxl-parser",
  "pdxl-path",
@@ -857,7 +775,7 @@ dependencies = [
 
 [[package]]
 name = "pdxl-parser"
-version = "0.125.0"
+version = "0.126.0"
 dependencies = [
  "pdxl-ast",
  "pdxl-lexer",
@@ -867,15 +785,14 @@ dependencies = [
 
 [[package]]
 name = "pdxl-path"
-version = "0.125.0"
+version = "0.126.0"
 
 [[package]]
 name = "pdxl-project"
-version = "0.125.0"
+version = "0.126.0"
 dependencies = [
  "pdxl-analysis",
  "pdxl-ast",
- "pdxl-cache",
  "pdxl-ck3",
  "pdxl-fileset",
  "pdxl-gui",
@@ -888,11 +805,11 @@ dependencies = [
 
 [[package]]
 name = "pdxl-src"
-version = "0.125.0"
+version = "0.126.0"
 
 [[package]]
 name = "pdxl-testutil"
-version = "0.125.0"
+version = "0.126.0"
 dependencies = [
  "pdxl-analysis",
  "pdxl-parser",
@@ -900,7 +817,7 @@ dependencies = [
 
 [[package]]
 name = "pdxl-yml"
-version = "0.125.0"
+version = "0.126.0"
 
 [[package]]
 name = "percent-encoding"
@@ -913,18 +830,6 @@ name = "pin-project-lite"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
-
-[[package]]
-name = "postcard"
-version = "1.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6764c3b5dd454e283a30e6dfe78e9b31096d9e32036b5d1eaac7a6119ccb9a24"
-dependencies = [
- "cobs",
- "embedded-io 0.4.0",
- "embedded-io 0.6.1",
- "serde",
-]
 
 [[package]]
 name = "potential_utf"
@@ -1126,17 +1031,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sha2"
-version = "0.10.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283"
-dependencies = [
- "cfg-if",
- "cpufeatures",
- "digest",
-]
-
-[[package]]
 name = "shlex"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1285,12 +1179,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "typenum"
-version = "1.20.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
-
-[[package]]
 name = "unicode-ident"
 version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1320,12 +1208,6 @@ name = "utf8parse"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
-
-[[package]]
-name = "version_check"
-version = "0.9.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "wasm-bindgen"

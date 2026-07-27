@@ -88,11 +88,13 @@ crates/pdxl-lsp        the language server over pdxl-project
   for the game you are inspecting before trusting their output; `pdxl-graph`
   prints the active `(schema: …)` in its header, so check it.
 - Bump `pdxl_analysis::ANALYSIS_VERSION` whenever schema/extraction semantics
-  change; `pdxl_ast::SYNTAX_VERSION` for lexer/parser/tree changes (cache
-  keys); leave the old value as a `// <N>: <one-line summary>` comment below
-  it — that stack is the schema changelog. Bump the workspace crate version
-  (`[workspace.package] version` in `Cargo.toml`; all crates inherit) on each
-  new feature; keep it as `0.<ANALYSIS_VERSION>.0`.
+  change; `pdxl_ast::SYNTAX_VERSION` for lexer/parser/tree changes; leave the
+  old value as a `// <N>: <one-line summary>` comment below it — that stack is
+  the schema changelog. Both were cache keys; since `pdxl-cache` was removed
+  no code reads either, so they are now release-numbering and history only —
+  a missed bump misnumbers a release, it no longer serves stale facts. Bump
+  the workspace crate version (`[workspace.package] version` in `Cargo.toml`;
+  all crates inherit) on each new feature; keep it as `0.<ANALYSIS_VERSION>.0`.
   The workspace is **not published to crates.io**
   (binary-only distribution via the `v*`-tag GitHub Release; crates.io's
   newcomer rate limit makes a 16-crate publish impractical) — so path deps

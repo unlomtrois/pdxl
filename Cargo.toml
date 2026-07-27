@@ -11,7 +11,6 @@ members = [
     # project model
     "crates/pdxl-fileset",  # directory scanning + mod-overlay resolution
     "crates/pdxl-moddesc",  # .mod descriptor parsing
-    "crates/pdxl-cache",    # two-level parse cache (in-memory LRU + disk)
     # semantic analysis
     "crates/pdxl-analysis", # per-file fact extraction (game-agnostic engine)
     "crates/pdxl-ck3",      # CK3 schema rows + generated doc tables + structural contexts
@@ -38,7 +37,7 @@ debug = "line-tables-only"
 
 [workspace.package]
 # Bumped on each new feature; tracks ANALYSIS_VERSION (0.<N>.0).
-version = "0.125.0"
+version = "0.126.0"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/unlomtrois/pdxl"
@@ -52,7 +51,6 @@ pdxl-ast = { path = "crates/pdxl-ast" }
 pdxl-parser = { path = "crates/pdxl-parser" }
 pdxl-fileset = { path = "crates/pdxl-fileset" }
 pdxl-moddesc = { path = "crates/pdxl-moddesc" }
-pdxl-cache = { path = "crates/pdxl-cache" }
 pdxl-analysis = { path = "crates/pdxl-analysis" }
 pdxl-fmt = { path = "crates/pdxl-fmt" }
 pdxl-yml = { path = "crates/pdxl-yml" }
@@ -65,10 +63,8 @@ pdxl-project = { path = "crates/pdxl-project" }
 pdxl-lsp = { path = "crates/pdxl-lsp" }
 pdxl-testutil = { path = "crates/pdxl-testutil" }
 
-# external — added for the syntax cache (M4); versions pinned at the workspace
+# external — versions pinned at the workspace
 serde = { version = "1", features = ["derive"] }
-postcard = { version = "1", default-features = false, features = ["alloc"] }
-sha2 = "0.10"
 clap = { version = "4", features = ["derive"] }
 # external — added for the LSP (M8a)
 lsp-server = "0.7"

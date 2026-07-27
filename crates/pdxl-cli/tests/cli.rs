@@ -105,7 +105,7 @@ fn check_matches_goldens() {
     let mod_s = m.path.to_string_lossy().into_owned();
     let roots: &[(&str, &TempTree)] = &[("<mod>", &m)];
 
-    let (stdout, ok) = run_check(&["check", "--mod", &mod_s, "--no-cache"], roots);
+    let (stdout, ok) = run_check(&["check", "--mod", &mod_s], roots);
     assert!(!ok, "unresolved refs must exit non-zero");
     check_golden("check_project", &stdout);
 
@@ -117,12 +117,7 @@ fn check_matches_goldens() {
         "black_death = { can_start = { has_advance = maona_advance } }\n",
     );
     let (stdout, ok) = run_check(
-        &[
-            "check",
-            "--mod",
-            clean.path.to_string_lossy().as_ref(),
-            "--no-cache",
-        ],
+        &["check", "--mod", clean.path.to_string_lossy().as_ref()],
         &[("<mod>", &clean)],
     );
     assert!(ok, "clean project must exit zero:\n{stdout}");
@@ -171,10 +166,7 @@ fn check_matches_goldens() {
     let roots: &[(&str, &TempTree)] = &[("<van>", &van), ("<mod>", &md)];
 
     // Whole-project report: k_x was replaced away, so title:k_x is unresolved.
-    let (stdout, ok) = run_check(
-        &["check", "--game", &van_s, "--mod", &mod_s, "--no-cache"],
-        roots,
-    );
+    let (stdout, ok) = run_check(&["check", "--game", &van_s, "--mod", &mod_s], roots);
     assert!(!ok, "unresolved refs must exit non-zero");
     check_golden("check_project", &stdout);
 
@@ -188,7 +180,6 @@ fn check_matches_goldens() {
             &van_s,
             "--mod",
             &mod_s,
-            "--no-cache",
         ],
         roots,
     );
@@ -203,12 +194,7 @@ fn check_matches_goldens() {
         "e = { add_trait = brave }\n",
     );
     let (stdout, ok) = run_check(
-        &[
-            "check",
-            "--mod",
-            clean.path.to_string_lossy().as_ref(),
-            "--no-cache",
-        ],
+        &["check", "--mod", clean.path.to_string_lossy().as_ref()],
         &[("<mod>", &clean)],
     );
     assert!(ok, "clean project must exit zero:\n{stdout}");
@@ -223,7 +209,7 @@ fn check_runs_are_deterministic() {
     let proj_s = proj.path.to_string_lossy();
     let run = || {
         Command::new(env!("CARGO_BIN_EXE_pdxl"))
-            .args(["check", "--mod", &proj_s, "--no-cache"])
+            .args(["check", "--mod", &proj_s])
             .output()
             .expect("spawn")
     };

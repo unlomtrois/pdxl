@@ -3,13 +3,12 @@
 //! duplicate list, unresolved list, exit 1 on unresolved. With a file
 //! argument, reports only that file's unresolved references.
 //!
-//! Deviation from Go, measurement-backed (see `docs/BASELINE.md`): `check`
-//! does **not** use the AST cache. At real CK3 scale the warm AST-cache run
-//! is no faster than a cold parse (both must read + hash every file; decoding
-//! 212 MB of tree entries costs as much as parsing) — Go's fast warm path was
-//! its FactStore (tiny facts entries), which stays unported. `--no-cache` is
-//! accepted for interface compatibility and has no effect. The `[scan]`
-//! ignore defaults match Go's `config.Default()`.
+//! Deviation from Go, measurement-backed (see `docs/BASELINE.md`): there is no
+//! AST cache. At real CK3 scale a warm cache run was no faster than a cold
+//! parse (both must read + hash every file, and decoding 212 MB of tree entries
+//! costs as much as parsing) — Go's fast warm path was its FactStore, whose
+//! tiny facts entries were never ported. The `[scan]` ignore defaults match
+//! Go's `config.Default()`.
 
 use std::collections::HashMap;
 use std::io::{self, Write};
@@ -41,12 +40,7 @@ const IGNORE_FILES: &[&str] = &[
     "license.txt",
     "ofl.txt",
 ];
-pub fn run(
-    file: Option<&str>,
-    game: Option<&str>,
-    mod_arg: Option<&str>,
-    _no_cache: bool, // accepted for Go interface compatibility; no effect
-) -> io::Result<ExitCode> {
+pub fn run(file: Option<&str>, game: Option<&str>, mod_arg: Option<&str>) -> io::Result<ExitCode> {
     let fs = build_project_fileset(game, mod_arg)?;
     let schema = pdxl_game::schema();
     let (table, diags) = pdxl_project::analyze(&fs, &schema)?;

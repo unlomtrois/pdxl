@@ -30,7 +30,6 @@ crates/
   pdxl-parser     recursive-descent parser (+ .gui dialect entry)
   pdxl-fileset    directory scanning + mod-overlay resolution
   pdxl-moddesc    .mod descriptor parsing
-  pdxl-cache      two-level parse cache
   pdxl-analysis   fact extraction engine (game-agnostic)
   pdxl-ck3        the CK3 schema: kinds, entities, doc tables, contexts
   pdxl-yml        Paradox localization .yml parser
