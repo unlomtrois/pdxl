@@ -44,7 +44,8 @@ pub use table::{Duplicate, SymbolTable};
 /// facts cache must embed this in its keys (alongside content hash and
 /// rel_path) and treat mismatches as misses; bump it whenever extraction rules
 /// or the [`FileFacts`] model change meaning.
-pub const ANALYSIS_VERSION: u32 = 131; // 131: CK3 adopts EU5's table-driven scope-link derivation — 20 curated scope-type → kind entries yield the ScopePrefix rules (+1668 refs, 99.5% resolve); the skip-word half was measured and rejected
+pub const ANALYSIS_VERSION: u32 = 132; // 132: engine-intrinsic marking — Entity::INTRINSICS names symbols the game raises itself, so hover explains a zero reference count instead of it reading as dead content (CK3 messages first; presentation only)
+// 131: CK3 adopts EU5's table-driven scope-link derivation — 20 curated scope-type → kind entries yield the ScopePrefix rules (+1668 refs, 99.5% resolve); the skip-word half was measured and rejected
 // 130: CK3 messages, message filter types and message group types — defs, the send_interface_toast/message `type` refs, the filter/group chain, and all three implicit localization conventions
 // 129: smart-doc anchor declarations get their own semantic token type (decorator), so `#! @key` no longer reads as plain comment (LSP-only; extraction unchanged)
 // 128: smart-doc anchors — `#! @key description` defines an engine-owned DOC_ANCHOR symbol in `defs`; `![key]` resolves to it ahead of entities; Schema::new registers the kind and its `anchor:` alias for every game

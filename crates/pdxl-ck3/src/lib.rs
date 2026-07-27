@@ -164,6 +164,9 @@ fn schema_from_rows(rows: &[pdxl_analysis::KindSpec]) -> Schema {
         Some(kinds::GAME_CONCEPT),
     );
     schema.set_implicit_loc_patterns(&entities::implicit_loc_patterns());
+    // Names the engine uses itself, so hover can explain a zero reference count
+    // instead of leaving it to look like dead content.
+    schema.set_intrinsics(&entities::intrinsics());
     // Hands extraction the modeled bodies, so a `FieldSpec` carrying a
     // `ref_kind` is itself a reference — no `RefRule` restating the same key.
     schema.set_contexts(contexts::context_schema());

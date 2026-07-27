@@ -333,6 +333,10 @@ pub struct Schema {
     /// The kind that bare `[concept|E]` encyclopedia links in localization text
     /// resolve to (CK3: game concepts). `None` disables loc-layer concept refs.
     loc_concept_kind: Option<KindId>,
+    /// kind → names the engine itself uses, which script therefore never
+    /// references. Presentation only: it explains a zero reference count
+    /// rather than changing what is extracted or diagnosed.
+    intrinsics: HashMap<KindId, HashSet<&'static str>>,
     /// The structural contexts, when the game models definition bodies. Lets
     /// extraction thread the clause context through its walk and read
     /// references straight off the [`FieldSpec`](crate::context::FieldSpec)
@@ -493,6 +497,24 @@ impl Schema {
     /// engine still works — it just stays purely rule-driven.
     pub fn set_contexts(&mut self, contexts: &'static crate::context::ContextSchema) {
         self.contexts = Some(contexts);
+    }
+
+    /// Registers names the engine uses directly (see [`Schema::is_intrinsic`]).
+    pub fn set_intrinsics(&mut self, intrinsics: &[(KindId, &'static [&'static str])]) {
+        for (kind, names) in intrinsics {
+            self.intrinsics
+                .entry(*kind)
+                .or_default()
+                .extend(names.iter().copied());
+        }
+    }
+
+    /// Whether the engine raises or consumes this symbol itself, so having no
+    /// reference in script is expected rather than a sign of dead content.
+    pub fn is_intrinsic(&self, kind: KindId, name: &str) -> bool {
+        self.intrinsics
+            .get(&kind)
+            .is_some_and(|names| names.contains(name))
     }
 
     pub(crate) fn contexts(&self) -> Option<&'static crate::context::ContextSchema> {

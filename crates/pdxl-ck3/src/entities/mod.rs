@@ -15,6 +15,7 @@
 //! [`ContextSchema`]: pdxl_analysis::context::ContextSchema
 //! [`StructSpec`]: pdxl_analysis::context::StructSpec
 
+use pdxl_analysis::KindId;
 use pdxl_analysis::context::ClauseKind;
 use pdxl_analysis::{ImplicitLocPattern, KindSpec};
 
@@ -86,6 +87,16 @@ pub(crate) trait Entity {
     /// power the hover links from an entity to its text, and the reverse
     /// edge that makes a loc key's references include the entities using it.
     const IMPLICIT_LOC: &'static [ImplicitLocPattern] = &[];
+    /// Names the *engine* uses directly, so script never references them.
+    ///
+    /// A definition here is live content whose call site is compiled into the
+    /// game — `msg_siege_won` is raised by the siege code, not by any
+    /// `send_interface_toast`. Without this, such a symbol reports zero
+    /// references and reads as dead, which is exactly the wrong conclusion.
+    ///
+    /// Verified by `strings` over the game binary; see the entity's module doc
+    /// for the extraction used, so a list can be rebuilt after a patch.
+    const INTRINSICS: &'static [(KindId, &'static [&'static str])] = &[];
 }
 
 /// Assembles the registered entities into the flat rows the engine consumes.
@@ -109,6 +120,12 @@ macro_rules! registry {
         pub(crate) fn implicit_loc_patterns() -> Vec<ImplicitLocPattern> {
             let mut v = Vec::new();
             $( v.extend_from_slice(<$e as Entity>::IMPLICIT_LOC); )+
+            v
+        }
+        /// Every concept's engine-owned names.
+        pub(crate) fn intrinsics() -> Vec<(KindId, &'static [&'static str])> {
+            let mut v = Vec::new();
+            $( v.extend_from_slice(<$e as Entity>::INTRINSICS); )+
             v
         }
     };

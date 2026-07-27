@@ -3310,3 +3310,29 @@ fn smart_doc_completion_offers_prefixes_then_narrows_by_kind() {
     let l = labels(&server, &uri, src, "![bra");
     assert!(!l.contains(&"brave".to_string()), "plain comment: {l:?}");
 }
+
+#[cfg(feature = "ck3")]
+#[test]
+fn engine_intrinsic_message_explains_its_empty_reference_list() {
+    let t = TempTree::new();
+    // `msg_siege_won` is raised by the siege code — a string in the game
+    // binary — so nothing in script ever names it.
+    let src = "msg_siege_won = { icon = \"siege\" style = good }\n\
+               msg_scripted = { icon = \"x\" style = good }\n";
+    t.write("common/messages/00.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/messages/00.txt");
+
+    let md = hover_md(&server, &uri, pos_of(src, "msg_siege_won"));
+    assert!(
+        md.contains("Engine intrinsic"),
+        "intrinsic marking missing from:\n{md}"
+    );
+    // An ordinary message with no references says nothing extra — the marking
+    // must distinguish the two cases, not label every message.
+    let md = hover_md(&server, &uri, pos_of(src, "msg_scripted"));
+    assert!(
+        !md.contains("Engine intrinsic"),
+        "ordinary message must not be marked:\n{md}"
+    );
+}

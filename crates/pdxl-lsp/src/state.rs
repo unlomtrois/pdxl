@@ -1046,6 +1046,14 @@ impl ServerState {
                     text.push_str("\n\n**Localization:** ");
                     text.push_str(&implicit_loc.join(", "));
                 }
+                // A symbol the engine uses itself has no call site in script.
+                // Say so, or its empty reference list reads as dead content.
+                if project.schema().is_intrinsic(kind, name) {
+                    text.push_str(
+                        "\n\n*Engine intrinsic — raised by the game itself, \
+                         so it has no reference in script.*",
+                    );
+                }
                 text.push_str(&format!("\n\nDefined in `{}`", symbol.file));
                 if !symbol.params.is_empty() {
                     text.push_str("\n\nParameters: ");
