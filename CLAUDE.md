@@ -177,7 +177,8 @@ crates/pdxl-lsp        the language server over pdxl-project
   datafunction typing stops at `[unregistered]` return types.
 - Corpus-gated tests are `#[ignore]`d and read a game path from the
   environment — `PDXL_EU5_GAME` (`pdxl-eu5/tests/derived_proof.rs`,
-  `pdxl-lsp/src/color.rs` benchmark), `PDXL_BENCH_GAME`
+  `pdxl-lsp/src/color.rs` benchmark), `PDXL_CK3_GAME`/`PDXL_CK3_MOD`
+  (`pdxl-ck3/tests/derived_proof.rs`), `PDXL_BENCH_GAME`
   (`pdxl-lsp/tests/refbench.rs`). A plain `cargo test` skips them silently;
   run with `-- --ignored` and the var set after schema/perf work.
 - Golden tests pin behavior that was originally byte-verified against the
