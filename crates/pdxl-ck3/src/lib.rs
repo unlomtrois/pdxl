@@ -96,6 +96,7 @@ const DOC_REF_ALIASES: &[(&str, KindId)] = &[
     ("interaction", kinds::CHARACTER_INTERACTION),
     ("activity", kinds::ACTIVITY_TYPE),
     ("intent", kinds::ACTIVITY_INTENT),
+    ("task_contract", kinds::TASK_CONTRACT_TYPE),
     ("namespace", kinds::NAMESPACE),
     ("loc", kinds::LOC_KEY),
 ];

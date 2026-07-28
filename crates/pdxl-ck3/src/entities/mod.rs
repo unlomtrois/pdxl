@@ -72,6 +72,7 @@ mod scripted_gui;
 mod secret_type;
 mod situation;
 mod subject_contract;
+mod task_contract;
 mod terrain;
 mod title;
 mod traits;
@@ -184,6 +185,7 @@ registry!(
     domicile::Domicile,
     great_project::GreatProject,
     activity::Activity,
+    task_contract::TaskContract,
     message::Message,
     loc::Loc,
 );

@@ -78,6 +78,8 @@ activity_pulse_action      0
 activity_locale         0
 guest_invite_rule       0
 activity_group_type      0
+task_contract_type      0
+task_contract_reward      0
 message                 0
 message_filter_type      0
 message_group_type      0

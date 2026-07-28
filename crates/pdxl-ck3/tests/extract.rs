@@ -3256,6 +3256,109 @@ fn activity_list_keys_are_gated_to_activity_types() {
     }
 }
 
+// ── task contracts ──────────────────────────────────────────────────────────
+
+#[test]
+fn task_contract_defs_rewards_and_refs() {
+    let f = extract(
+        "laamp_base_0001 = {\n\
+         \tgroup = laamp_contracts_diplomacy_group\n\
+         \ttask_contract_reward = {\n\
+         \t\tsuccess_standard = { effect = { } }\n\
+         \t\tfailure_standard = { visible = no positive = no effect = { } }\n\
+         \t}\n\
+         \ton_completed = {\n\
+         \t\tcomplete_task_contract = success_standard\n\
+         \t}\n\
+         }\n",
+        "common/task_contracts/00.txt",
+    );
+    assert_eq!(f.defs[0].kind, pdxl_ck3::kinds::TASK_CONTRACT_TYPE);
+    assert_eq!(f.defs[0].name, "laamp_base_0001");
+
+    // Rewards are scoped: `success_standard` recurs under nearly every
+    // contract, so they gap-fill as aliases rather than being
+    // duplicate-tracked.
+    let mut rewards: Vec<&str> = f
+        .aliases
+        .iter()
+        .filter(|a| a.kind == pdxl_ck3::kinds::TASK_CONTRACT_REWARD)
+        .map(|a| a.name.as_str())
+        .collect();
+    rewards.sort_unstable();
+    assert_eq!(rewards, vec!["failure_standard", "success_standard"]);
+
+    // The group tag is deliberately not a reference (no defining site).
+    assert!(
+        f.refs
+            .iter()
+            .all(|r| r.name != "laamp_contracts_diplomacy_group"),
+        "{:?}",
+        f.refs
+    );
+    assert!(
+        f.refs.iter().any(
+            |r| r.kind == pdxl_ck3::kinds::TASK_CONTRACT_REWARD && r.name == "success_standard"
+        )
+    );
+}
+
+#[test]
+fn task_contract_engine_keys_reference_from_anywhere() {
+    let f = extract(
+        "ns.1 = {\n\
+         \ttrigger = {\n\
+         \t\tcan_create_task_contract = laamp_base_0001\n\
+         \t\tcan_create_task_contract = { type_name = laamp_raid_contract employer = scope:e }\n\
+         \t\tscope:contract = { has_task_contract_type = laamp_join_war_contract }\n\
+         \t\tany_character_task_contract = { task_contract_type = laamp_heist_contract }\n\
+         \t}\n\
+         \timmediate = {\n\
+         \t\tcreate_task_contract = {\n\
+         \t\t\ttask_contract_type = laamp_base_0011\n\
+         \t\t\tlocation = scope:province\n\
+         \t\t}\n\
+         \t}\n\
+         }\n",
+        "events/laamp_events.txt",
+    );
+    let mut types: Vec<&str> = f
+        .refs
+        .iter()
+        .filter(|r| r.kind == pdxl_ck3::kinds::TASK_CONTRACT_TYPE)
+        .map(|r| r.name.as_str())
+        .collect();
+    types.sort_unstable();
+    assert_eq!(
+        types,
+        vec![
+            "laamp_base_0001",
+            "laamp_base_0011",
+            "laamp_heist_contract",
+            "laamp_join_war_contract",
+            "laamp_raid_contract",
+        ]
+    );
+}
+
+#[test]
+fn task_contract_kinds_carry_their_implicit_localization() {
+    let schema = pdxl_ck3::schema();
+    let suffixes: Vec<&str> = schema
+        .implicit_loc_patterns(pdxl_ck3::kinds::TASK_CONTRACT_TYPE)
+        .iter()
+        .map(|p| p.suffix)
+        .collect();
+    // Bare `<key>` (41/159) is deliberately absent; `_desc_title` is the
+    // corpus-only display-name convention.
+    assert_eq!(suffixes, vec!["_desc", "_desc_title", "_request"]);
+    assert!(
+        schema
+            .implicit_loc_patterns(pdxl_ck3::kinds::TASK_CONTRACT_REWARD)
+            .is_empty()
+    );
+}
+
 #[test]
 fn activity_kinds_carry_their_implicit_localization() {
     let schema = pdxl_ck3::schema();

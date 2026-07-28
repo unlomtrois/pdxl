@@ -60,9 +60,9 @@ use crate::tables;
 ///   — real entities we do not model yet.
 /// - `accolade_type` (627 corpus uses), `struggle` (330), `legend_type` (76),
 ///   plus `confederation_type`, `council_task`, `court_position_type`,
-///   `epidemic_type`, `house_aspiration`, `house_relation_type`/`_level`,
-///   `task_contract_type` — each becomes one line here the day its kind is
-///   modeled, and navigation follows for free.
+///   `epidemic_type`, `house_aspiration`, `house_relation_type`/`_level` —
+///   each becomes one line here the day its kind is modeled, and navigation
+///   follows for free.
 const TARGET_KINDS: &[(&str, KindId, &[KindId])] = &[
     ("landed_title", kinds::TITLE, &[]),
     ("character", kinds::CHARACTER, &[]),
@@ -84,6 +84,7 @@ const TARGET_KINDS: &[(&str, KindId, &[KindId])] = &[
     ("situation", kinds::SITUATION_TYPE, &[]),
     ("great_project_type", kinds::GREAT_PROJECT_TYPE, &[]),
     ("activity_type", kinds::ACTIVITY_TYPE, &[]),
+    ("task_contract_type", kinds::TASK_CONTRACT_TYPE, &[]),
     ("vassal_contract", kinds::SUBJECT_CONTRACT, &[]),
     (
         "vassal_contract_obligation_level",
