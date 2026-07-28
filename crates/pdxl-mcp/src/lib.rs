@@ -1,6 +1,8 @@
 //! Agent-facing semantic queries over documentation for the game selected by
 //! the `ck3` or `eu5` Cargo feature through the `pdxl-game` facade.
 
+pub mod docs;
+
 use std::collections::HashSet;
 
 use pdxl_game::tables::{EFFECTS, MODIFIERS, SCOPE_LINKS, TRIGGERS};
