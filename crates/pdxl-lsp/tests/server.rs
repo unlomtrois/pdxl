@@ -3396,3 +3396,31 @@ fn engine_called_on_actions_are_marked_intrinsic() {
     let first = server.code_lens_resolve(lenses[0].clone());
     assert_eq!(first.command.expect("resolved").title, "engine intrinsic");
 }
+
+#[cfg(feature = "ck3")]
+#[test]
+fn interaction_fields_with_a_documented_root_get_scope_hints() {
+    let t = TempTree::new();
+    // `is_available` and `ai_potential` are documented as actor-rooted, and
+    // `can_be_picked` runs with the tested character as root.
+    let src = "my_interaction = {\n\
+               \tis_available = { is_adult = yes }\n\
+               \tcan_be_picked = { is_adult = yes }\n\
+               \tis_shown = { always = yes }\n\
+               }\n";
+    t.write("common/character_interactions/00.txt", src);
+    let (server, _rx) = server_over(&t);
+    let uri = uri_for(&t, "common/character_interactions/00.txt");
+    let hints = server.inlay_hints(&uri, Range::new(Position::new(0, 0), Position::new(99, 0)));
+    let labels: Vec<String> = hints
+        .iter()
+        .map(|h| match &h.label {
+            lsp_types::InlayHintLabel::String(s) => s.clone(),
+            other => format!("{other:?}"),
+        })
+        .collect();
+    assert!(
+        labels.iter().filter(|l| l.contains("character")).count() >= 2,
+        "is_available and can_be_picked should pin a character root: {labels:?}"
+    );
+}

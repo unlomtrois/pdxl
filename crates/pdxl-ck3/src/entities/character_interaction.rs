@@ -28,7 +28,7 @@
 
 use pdxl_analysis::context::ClauseKind::{self, DynamicDesc, Effect, ScriptValue, Struct, Trigger};
 use pdxl_analysis::context::ScalarKind::{LocKey, Setting};
-use pdxl_analysis::context::{Fallback, StructSpec, block, scalar, scalar_or_block};
+use pdxl_analysis::context::{Fallback, StructSpec, block, block_scoped, scalar, scalar_or_block};
 use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 use crate::kinds;
@@ -42,7 +42,10 @@ static SEND_OPTION: StructSpec = StructSpec {
     fields: &[
         ("is_shown", block(Trigger).doc("Is this option shown?")),
         ("is_valid", block(Trigger).doc("Is this option selectable?")),
-        ("current_description", scalar_or_block(LocKey, DynamicDesc)),
+        (
+            "current_description",
+            scalar_or_block(LocKey, DynamicDesc).doc("Tooltip for this option."),
+        ),
         (
             "flag",
             scalar(Setting).doc("If selected, sets `scope:<flag>` to yes."),
@@ -55,8 +58,20 @@ static SEND_OPTION: StructSpec = StructSpec {
             "starts_enabled",
             block(Trigger).doc("On by default when the window opens?"),
         ),
-        ("can_be_changed", block(Trigger)),
-        ("can_invalidate_interaction", scalar(Setting)),
+        (
+            "can_be_changed",
+            block(Trigger).doc("May the author move this option off its default?"),
+        ),
+        (
+            "can_invalidate_interaction",
+            scalar(Setting)
+                .doc(
+                    "Re-run the *whole* can-send check when the AI picks this option, instead \
+                     of only the cheap refusal and `ai_will_do` checks. Use sparingly and \
+                     profile it — options are assumed not to block sending.",
+                )
+                .values(&["yes", "no"]),
+        ),
     ],
     fallback: Fallback::Deny,
 };
@@ -167,7 +182,13 @@ static AI_TARGETS: StructSpec = StructSpec {
             "chance",
             scalar(Setting).doc("0–1; randomly skips that fraction of targets (perf)."),
         ),
-        ("parameter", scalar(Setting)),
+        (
+            "parameter",
+            scalar(Setting).doc(
+                "Detail for a target list that needs one — only \
+                 `situation_participant_group`, where it names the situation. Empty by default.",
+            ),
+        ),
     ],
     fallback: Fallback::Deny,
 };
@@ -227,7 +248,11 @@ static OVERRIDE_BACKGROUND: StructSpec = StructSpec {
     name: "override_background",
     fields: &[
         ("reference", scalar(Setting).doc("An event-background key.")),
-        ("trigger", block(Trigger)),
+        (
+            "trigger",
+            block_scoped(Trigger, "character")
+                .doc("Root is `scope:actor`. The first entry that passes wins."),
+        ),
     ],
     fallback: Fallback::Deny,
 };
@@ -258,10 +283,29 @@ static INTERACTION: StructSpec = StructSpec {
             ),
         ),
         ("icon", scalar(Setting).doc("Icon key under gfx/interface/icons/character_interactions/.")),
-        ("icon_small", scalar(Setting)),
-        ("alert_icon", scalar(Setting)),
-        ("extra_icon", scalar(Setting)),
-        ("should_use_extra_icon", block(Trigger)),
+        (
+            "icon_small",
+            scalar(Setting).doc(
+                "Small icon. Defaults to \
+                 `gfx/interface/icons/character_interactions/<key>_small.dds`.",
+            ),
+        ),
+        (
+            "alert_icon",
+            scalar(Setting).doc(
+                "Alert icon. Defaults to \
+                 `gfx/interface/icons/character_interactions/<key>_alert.dds`.",
+            ),
+        ),
+        (
+            "extra_icon",
+            scalar(Setting)
+                .doc("Icon shown when `should_use_extra_icon` passes; its tooltip is `<key>_extra_icon`."),
+        ),
+        (
+            "should_use_extra_icon",
+            block(Trigger).doc("When to show `extra_icon`."),
+        ),
         (
             "override_background",
             block(Struct(&OVERRIDE_BACKGROUND))
@@ -303,13 +347,52 @@ static INTERACTION: StructSpec = StructSpec {
                 .doc("Identifies the interaction to specialized AI code (e.g. recruit_courtier)."),
         ),
         ("scheme", scalar(Setting).doc("The scheme type this interaction starts.")),
-        ("hidden", scalar(Setting)),
-        ("diarch_interaction", scalar(Setting)),
-        ("popup_on_receive", scalar(Setting)),
-        ("pause_on_receive", scalar(Setting)),
-        ("force_notification", scalar(Setting)),
-        ("needs_recipient_to_open", scalar(Setting)),
-        ("show_effects_in_notification", scalar(Setting)),
+        (
+            "hidden",
+            scalar(Setting)
+                .doc("Hide the interaction entirely.")
+                .values(&["yes", "no"]),
+        ),
+        (
+            "diarch_interaction",
+            scalar(Setting)
+                .doc("Available to a diarch, including a non-ruler one.")
+                .values(&["yes", "no"]),
+        ),
+        (
+            "popup_on_receive",
+            scalar(Setting)
+                .doc("Pop up for the recipient when received.")
+                .values(&["yes", "no"]),
+        ),
+        (
+            "pause_on_receive",
+            scalar(Setting)
+                .doc("Pause the game on receipt — usually paired with `popup_on_receive`.")
+                .values(&["yes", "no"]),
+        ),
+        (
+            "force_notification",
+            scalar(Setting)
+                .doc("Force a diplomacy item even when the interaction auto-accepts.")
+                .values(&["yes", "no"]),
+        ),
+        (
+            "needs_recipient_to_open",
+            scalar(Setting)
+                .doc(
+                    "Require a recipient before the window opens. Default `yes`; set `no` only \
+                     with code support, for interactions opened from somewhere other than the \
+                     right-click menu, where a `redirect` supplies the recipient later.",
+                )
+                .values(&["yes", "no"]),
+        ),
+        (
+            "show_effects_in_notification",
+            scalar(Setting)
+                .doc("Show the interaction's effects in the send notification. Default `yes`.")
+                .values(&["yes", "no"]),
+        ),
         (
             "shows_military_strength",
             scalar(Setting)
@@ -342,12 +425,39 @@ static INTERACTION: StructSpec = StructSpec {
                  `obedience`, `merit`.",
             ),
         ),
-        ("secondary_actor", scalar(Setting)),
-        ("secondary_recipient", scalar(Setting)),
-        ("secondary_scopes_optional", scalar(Setting)),
-        ("send_options_exclusive", scalar(Setting)),
+        (
+            "secondary_actor",
+            scalar(Setting).doc(
+                "Declares a secondary participant on the actor's side and what the pick list \
+                 is built from. `marriage` also redirects to the matchmaker and auto-handles \
+                 betrothal, alliances and prestige; `marry_off` builds the list from all \
+                 marriageable characters instead (see the info's FAQ).",
+            ),
+        ),
+        (
+            "secondary_recipient",
+            scalar(Setting).doc("The recipient-side counterpart of `secondary_actor`."),
+        ),
+        (
+            "secondary_scopes_optional",
+            scalar(Setting)
+                .doc("May the interaction send without the secondary participants chosen?")
+                .values(&["yes", "no"]),
+        ),
+        (
+            "send_options_exclusive",
+            scalar(Setting)
+                .doc(
+                    "Are the send options mutually exclusive? Non-exclusive options cost AI \
+                     performance — keep to four or five visible at once.",
+                )
+                .values(&["yes", "no"]),
+        ),
         ("send_option", block(Struct(&SEND_OPTION))),
-        ("options_heading", scalar(LocKey)),
+        (
+            "options_heading",
+            scalar(LocKey).doc("Text above the options block, describing them collectively."),
+        ),
         // ── triggers ─────────────────────────────────────────────────────
         (
             "is_shown",
@@ -357,28 +467,82 @@ static INTERACTION: StructSpec = StructSpec {
             "is_valid",
             block(Trigger).doc("Is the interaction selectable (enabled)?"),
         ),
-        ("is_valid_showing_failures_only", block(Trigger)),
+        (
+            "is_valid_showing_failures_only",
+            block(Trigger).doc(
+                "Same gate as `is_valid`, but only its *failures* are printed. Scopes: \
+                 `scope:actor`, `scope:recipient`.",
+            ),
+        ),
         (
             "is_available",
-            block(Trigger)
-                .doc("Available for the actor (AI + player). Root is the actor; prefer this over is_shown for actor-only checks."),
+            block_scoped(Trigger, "character").doc(
+                "Available for the actor, AI and player alike. Root is the actor — which is \
+                 why actor-only checks belong here rather than in `is_shown`, where they cost \
+                 the AI a full evaluation per candidate recipient.",
+            ),
         ),
         ("is_highlighted", block(Trigger).doc("Highlight the interaction in the menu?")),
-        ("has_valid_target", block(Trigger)),
-        ("has_valid_target_showing_failures_only", block(Trigger)),
-        ("can_be_picked", block(Trigger).doc("Can this character be picked as a target?")),
-        ("can_be_picked_title", block(Trigger)),
-        ("can_be_picked_artifact", block(Trigger)),
-        ("can_be_picked_regiment", block(Trigger)),
+        (
+            "has_valid_target",
+            block(Trigger).doc("Is the selected target valid?"),
+        ),
+        (
+            "has_valid_target_showing_failures_only",
+            block(Trigger).doc("Same as `has_valid_target`, printing only its failures."),
+        ),
+        (
+            // The info's FAQ: checked "with the tested character set as root",
+            // so the block's root is that candidate rather than the actor.
+            "can_be_picked",
+            block_scoped(Trigger, "character").doc(
+                "Can this character be picked from the list? Root is the tested character. \
+                 A filter for the *first* pick only — it is not part of the can-send checks, \
+                 so keep it cheap.",
+            ),
+        ),
+        (
+            "can_be_picked_title",
+            block(Trigger).doc(
+                "Can this title be picked? The candidate arrives as `scope:target`, and this \
+                 runs only while building the list — never on send.",
+            ),
+        ),
+        (
+            "can_be_picked_artifact",
+            block(Trigger).doc("Can this artifact be picked? The candidate is `scope:target`."),
+        ),
+        (
+            "can_be_picked_regiment",
+            block(Trigger).doc("Can this regiment be picked? The candidate is `scope:target`."),
+        ),
         ("can_send", block(Trigger).doc("Can the interaction be sent?")),
-        ("can_be_blocked", block(Trigger)),
-        ("needs_confirmation", block(Trigger)),
-        ("ignore_recipient_recieve_cooldown", block(Trigger)),
+        (
+            "can_be_blocked",
+            block(Trigger)
+                .doc("Can the recipient block it — for instance with a hook on the actor?"),
+        ),
+        (
+            "needs_confirmation",
+            block(Trigger).doc(
+                "Open a confirmation window at all; true when unset. **Deprecated** — it can \
+                 run gamestate-changing effects with no warning to the player.",
+            ),
+        ),
+        (
+            "ignore_recipient_recieve_cooldown",
+            block(Trigger)
+                .doc("When this passes, `recipient_recieve_cooldown` is bypassed."),
+        ),
         (
             "auto_accept",
             scalar_or_block(Setting, Trigger).doc("`yes`/`no` or a trigger — is it auto-accepted?"),
         ),
-        ("use_diplomatic_range", scalar_or_block(Setting, Trigger)),
+        (
+            "use_diplomatic_range",
+            scalar_or_block(Setting, Trigger)
+                .doc("Does the interaction respect diplomatic range? `yes` by default."),
+        ),
         // ── cooldowns / cost ─────────────────────────────────────────────
         ("cooldown", block(Struct(&DURATION)).doc("Reuse cooldown (`{ years = x }`).")),
         ("cooldown_against_recipient", block(Struct(&DURATION))),
@@ -399,40 +563,154 @@ static INTERACTION: StructSpec = StructSpec {
         ("on_send", block(Effect).doc("Runs immediately when the interaction is sent.")),
         ("on_accept", block(Effect).doc("Runs when the recipient accepts.")),
         ("on_decline", block(Effect).doc("Runs when the recipient declines.")),
-        ("on_blocked_effect", block(Effect)),
-        ("pre_auto_accept", block(Effect)),
-        ("on_auto_accept", block(Effect)),
-        ("on_intermediary_accept", block(Effect)),
-        ("on_intermediary_decline", block(Effect)),
-        ("on_decline_summary", scalar_or_block(LocKey, DynamicDesc)),
-        ("redirect", block(Effect).doc("Reassign actor/recipient/intermediary scopes.")),
-        ("populate_actor_list", block(Effect).doc("Fill the `characters` list of pickable actors.")),
-        ("populate_recipient_list", block(Effect)),
-        ("localization_values", block(Effect)),
+        (
+            "on_blocked_effect",
+            block(Effect).doc("Runs when the recipient blocks it — only if the intermediary accepted."),
+        ),
+        (
+            "pre_auto_accept",
+            block(Effect).doc(
+                "Auto-accepted interactions only, and before any hard-coded side effect such \
+                 as the marriage itself.",
+            ),
+        ),
+        (
+            "on_auto_accept",
+            block(Effect).doc("Auto-accepted interactions only, after the built-in effects."),
+        ),
+        (
+            "on_intermediary_accept",
+            block(Effect)
+                .doc("The intermediary let it through; the recipient's decision comes next."),
+        ),
+        (
+            "on_intermediary_decline",
+            block(Effect)
+                .doc("The intermediary refused, so nothing reaches the recipient."),
+        ),
+        (
+            "on_decline_summary",
+            scalar_or_block(LocKey, DynamicDesc).doc(
+                "Flavour under the acceptance widget — for drawing attention to what \
+                 declining costs.",
+            ),
+        ),
+        (
+            "redirect",
+            block(Effect).doc(
+                "Reassigns the participants: any of `scope:actor`, `scope:secondary_actor`, \
+                 `scope:recipient`, `scope:secondary_recipient` and `scope:intermediary` may \
+                 be replaced with another character.",
+            ),
+        ),
+        (
+            "populate_actor_list",
+            block(Effect).doc(
+                "Everyone sorted into the `characters` list becomes selectable. Uses the \
+                 actor, recipient and secondary scopes.",
+            ),
+        ),
+        (
+            "populate_recipient_list",
+            block(Effect).doc("As `populate_actor_list`, for the recipient side."),
+        ),
+        (
+            "localization_values",
+            block(Effect).doc(
+                "Saves values for the text to interpolate — \
+                 `RANSOM_COST = scope:secondary_recipient.ransom_cost_value` then lets loc \
+                 write `$RANSOM_COST|0$`.",
+            ),
+        ),
         // ── AI ───────────────────────────────────────────────────────────
         ("ai_accept", block(ScriptValue).doc("MTTH: will the AI accept this interaction?")),
-        ("ai_intermediary_accept", block(ScriptValue)),
+        (
+            "ai_intermediary_accept",
+            block(ScriptValue)
+                .doc("MTTH: will the intermediary AI forward this to the recipient?"),
+        ),
         ("ai_will_do", block(ScriptValue).doc("MTTH: how interested the AI is in sending it (0–100).")),
-        ("ai_potential", block(Trigger).doc("Deprecated — use is_available.")),
-        ("ai_set_target", block(Effect)),
+        (
+            "ai_potential",
+            block_scoped(Trigger, "character").doc(
+                "Will the AI consider this at all? Root is the actor, and no event targets \
+                 are available. **Deprecated** — use `is_available`.",
+            ),
+        ),
+        (
+            "ai_set_target",
+            block(Effect).doc(
+                "Set `scope:target` to aim the AI at something specific. Title-targeting \
+                 interactions do not need it.",
+            ),
+        ),
         ("ai_targets", block(Struct(&AI_TARGETS))),
         (
             "ai_target_quick_trigger",
             block(Struct(&AI_TARGET_QUICK_TRIGGER))
                 .doc("Cheap engine prefilters applied to `ai_targets` before scripted triggers."),
         ),
-        ("ai_frequency", scalar(Setting)),
+        (
+            "ai_frequency",
+            scalar(Setting).doc("Months between AI considerations of this interaction."),
+        ),
         ("ai_frequency_by_tier", block(Struct(&AI_FREQUENCY_BY_TIER))),
-        ("ai_instant_response", scalar(Setting)),
-        ("ai_accept_negotiation", scalar(Setting)),
-        ("ai_maybe", scalar(Setting)),
-        ("ai_intermediary_maybe", scalar(Setting)),
-        ("ai_min_reply_days", scalar(Setting)),
-        ("ai_max_reply_days", scalar(Setting)),
-        ("can_send_despite_rejection", scalar(Setting)),
-        ("ignores_pending_interaction_block", scalar(Setting)),
+        (
+            "ai_instant_response",
+            scalar(Setting)
+                .doc("Reply at once instead of feigning N days of deliberation.")
+                .values(&["yes", "no"]),
+        ),
+        (
+            "ai_accept_negotiation",
+            scalar(Setting)
+                .doc(
+                    "A decline opens negotiations, so the interface stops saying \"won't \
+                     accept\" — the event chain may still end in acceptance.",
+                )
+                .values(&["yes", "no"]),
+        ),
+        (
+            "ai_maybe",
+            scalar(Setting)
+                .doc("Randomize the AI's answer.")
+                .values(&["yes", "no"]),
+        ),
+        (
+            "ai_intermediary_maybe",
+            scalar(Setting)
+                .doc("Randomize the intermediary's answer.")
+                .values(&["yes", "no"]),
+        ),
+        (
+            "ai_min_reply_days",
+            scalar(Setting).doc("Minimum days before the AI replies."),
+        ),
+        (
+            "ai_max_reply_days",
+            scalar(Setting).doc("Maximum days before the AI replies."),
+        ),
+        (
+            "can_send_despite_rejection",
+            scalar(Setting)
+                .doc("Allow sending even when the AI is known to refuse.")
+                .values(&["yes", "no"]),
+        ),
+        (
+            "ignores_pending_interaction_block",
+            scalar(Setting)
+                .doc(
+                    "Send even while the recipient still owes this player an answer. \
+                     Default `no`.",
+                )
+                .values(&["yes", "no"]),
+        ),
         // ── text (loc keys) ──────────────────────────────────────────────
-        ("desc", scalar_or_block(LocKey, DynamicDesc)),
+        (
+            "desc",
+            scalar_or_block(LocKey, DynamicDesc)
+                .doc("Short description of the interaction."),
+        ),
         (
             "name",
             scalar_or_block(LocKey, DynamicDesc)
@@ -444,27 +722,101 @@ static INTERACTION: StructSpec = StructSpec {
                 .doc("Tone of the request text.")
                 .values(&["positive", "negative"]),
         ),
-        ("highlighted_reason", scalar_or_block(LocKey, DynamicDesc)),
-        ("send_name", scalar(LocKey)),
-        ("prompt", scalar(LocKey)),
-        ("notification_text", scalar(LocKey)),
-        ("intermediary_notification_text", scalar(LocKey)),
-        ("reply_item_key", scalar(LocKey)),
-        ("pre_answer_yes_key", scalar(LocKey)),
-        ("pre_answer_no_key", scalar(LocKey)),
-        ("pre_answer_maybe_key", scalar(LocKey)),
-        ("pre_answer_yes_breakdown_key", scalar(LocKey)),
-        ("pre_answer_no_breakdown_key", scalar(LocKey)),
-        ("pre_answer_maybe_breakdown_key", scalar(LocKey)),
-        ("intermediary_breakdown_yes", scalar(LocKey)),
-        ("intermediary_breakdown_no", scalar(LocKey)),
-        ("intermediary_breakdown_maybe", scalar(LocKey)),
-        ("intermediary_answer_accept_key", scalar(LocKey)),
-        ("intermediary_answer_reject_key", scalar(LocKey)),
-        ("answer_block_key", scalar(LocKey)),
-        ("answer_accept_key", scalar(LocKey)),
-        ("answer_reject_key", scalar(LocKey)),
-        ("answer_acknowledge_key", scalar(LocKey)),
+        (
+            "highlighted_reason",
+            scalar_or_block(LocKey, DynamicDesc)
+                .doc("Tooltip explaining why the interaction is highlighted."),
+        ),
+        (
+            "send_name",
+            scalar(LocKey)
+                .doc("Name once sent, as seen in the diplomacy item. Defaults to the key."),
+        ),
+        (
+            "prompt",
+            scalar(LocKey).doc("Text under the portrait — \"Pick a Guardian\"."),
+        ),
+        (
+            "notification_text",
+            scalar(LocKey).doc("The request as the recipient reads it."),
+        ),
+        (
+            "intermediary_notification_text",
+            scalar(LocKey).doc("The request as the intermediary reads it."),
+        ),
+        (
+            "reply_item_key",
+            scalar(LocKey).doc(
+                "Tooltip on the sent-interaction item; receives the interaction name in \
+                 `$INTERACTION$`. Default `INTERACTION_REPLY_ITEM`.",
+            ),
+        ),
+        // Shown to the *sender* while composing: what the target is going to say.
+        (
+            "pre_answer_yes_key",
+            scalar(LocKey).doc("It will be accepted. Default `ANSWER_YES`."),
+        ),
+        (
+            "pre_answer_no_key",
+            scalar(LocKey).doc("It will not be accepted. Default `ANSWER_NO`."),
+        ),
+        (
+            "pre_answer_maybe_key",
+            scalar(LocKey)
+                .doc("It might be accepted; receives the value in `$VALUE$`. Default `ANSWER_MAYBE`."),
+        ),
+        (
+            "pre_answer_yes_breakdown_key",
+            scalar(LocKey).doc("Header for the recipient's acceptance breakdown when accepting."),
+        ),
+        (
+            "pre_answer_no_breakdown_key",
+            scalar(LocKey).doc("Header for that breakdown when declining."),
+        ),
+        (
+            "pre_answer_maybe_breakdown_key",
+            scalar(LocKey).doc("Header for that breakdown when the answer is randomized."),
+        ),
+        (
+            "intermediary_breakdown_yes",
+            scalar(LocKey).doc("The same header, for the intermediary, when accepting."),
+        ),
+        (
+            "intermediary_breakdown_no",
+            scalar(LocKey).doc("The same, when declining."),
+        ),
+        (
+            "intermediary_breakdown_maybe",
+            scalar(LocKey).doc("The same, when randomized."),
+        ),
+        // Shown to whoever is *answering* — button labels.
+        (
+            "intermediary_answer_accept_key",
+            scalar(LocKey).doc("Intermediary's accept button. Default `ANSWER_YES`."),
+        ),
+        (
+            "intermediary_answer_reject_key",
+            scalar(LocKey).doc("Intermediary's decline button. Default `ANSWER_NO`."),
+        ),
+        (
+            "answer_block_key",
+            scalar(LocKey).doc("Recipient's block text. Default `ANSWER_BLOCK`."),
+        ),
+        (
+            "answer_accept_key",
+            scalar(LocKey).doc("Recipient's accept button. Default `ANSWER_YES`."),
+        ),
+        (
+            "answer_reject_key",
+            scalar(LocKey).doc("Recipient's decline button. Default `ANSWER_NO`."),
+        ),
+        (
+            "answer_acknowledge_key",
+            scalar(LocKey).doc(
+                "Acknowledge button, for notifications about something that already \
+                 happened. Default `ANSWER_ACKNOWLEDGE`.",
+            ),
+        ),
     ],
     fallback: Fallback::Deny,
 };
