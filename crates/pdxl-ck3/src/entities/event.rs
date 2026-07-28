@@ -29,7 +29,9 @@ const SKILLS: &[&str] = &[
     "prowess",
 ];
 
-static TRIGGERED_ANIMATION: StructSpec = StructSpec {
+/// Shared with activities, whose `window_characters` carry the same inline
+/// scripted-animation blocks.
+pub(crate) static TRIGGERED_ANIMATION: StructSpec = StructSpec {
     name: "triggered_animation",
     fields: &[
         (

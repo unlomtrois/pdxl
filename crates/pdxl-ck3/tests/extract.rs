@@ -3062,3 +3062,227 @@ fn great_project_keys_are_gated_to_their_directory() {
         f.refs
     );
 }
+
+// ── activities ──────────────────────────────────────────────────────────────
+
+#[test]
+fn activity_type_defs_phases_and_satellite_refs() {
+    let f = extract(
+        "activity_feast = {\n\
+         \tactivity_group_type = grand\n\
+         \tphases = {\n\
+         \t\tfeast_phase_meal = { is_predefined = yes order = 1 }\n\
+         \t\tfeast_phase_toast = { is_predefined = yes order = 2 }\n\
+         \t}\n\
+         \toptions = {\n\
+         \t\tfeast_option_food = {\n\
+         \t\t\tfeast_food_bad = { blocked_intents = { murder_intent } }\n\
+         \t\t}\n\
+         \t}\n\
+         \thost_intents = {\n\
+         \t\tintents = { befriend_intent murder_intent }\n\
+         \t\tdefault = befriend_intent\n\
+         \t\tplayer_defaults = { murder_intent }\n\
+         \t}\n\
+         \tguest_invite_rules = {\n\
+         \t\trules = { 1 = friends 2 = rivals }\n\
+         \t\tdefaults = { 3 = vassals }\n\
+         \t}\n\
+         \tlocales = {\n\
+         \t\ttown = { locales = { feast_locale_tavern } }\n\
+         \t}\n\
+         \tpulse_actions = {\n\
+         \t\tentries = { guest_brawl excellent_food }\n\
+         \t\tchance_of_no_event = 5\n\
+         \t}\n\
+         }\n",
+        "common/activities/activity_types/00.txt",
+    );
+    assert_eq!(f.defs[0].kind, pdxl_ck3::kinds::ACTIVITY_TYPE);
+    assert_eq!(f.defs[0].name, "activity_feast");
+
+    // Phases are scoped: the same key recurs under other activity types, so
+    // they gap-fill as aliases rather than being duplicate-tracked.
+    let mut phases: Vec<&str> = f
+        .aliases
+        .iter()
+        .filter(|a| a.kind == pdxl_ck3::kinds::ACTIVITY_PHASE)
+        .map(|a| a.name.as_str())
+        .collect();
+    phases.sort_unstable();
+    assert_eq!(phases, vec!["feast_phase_meal", "feast_phase_toast"]);
+
+    let by = |k| {
+        let mut v = f
+            .refs
+            .iter()
+            .filter(|r| r.kind == k)
+            .map(|r| r.name.as_str())
+            .collect::<Vec<_>>();
+        v.sort_unstable();
+        v.dedup();
+        v
+    };
+    assert_eq!(by(pdxl_ck3::kinds::ACTIVITY_GROUP_TYPE), vec!["grand"]);
+    // `intents` + `default` + `player_defaults` + an option's
+    // `blocked_intents`, deduped by name.
+    assert_eq!(
+        by(pdxl_ck3::kinds::ACTIVITY_INTENT),
+        vec!["befriend_intent", "murder_intent"]
+    );
+    assert_eq!(
+        by(pdxl_ck3::kinds::GUEST_INVITE_RULE),
+        vec!["friends", "rivals", "vassals"]
+    );
+    assert_eq!(
+        by(pdxl_ck3::kinds::ACTIVITY_LOCALE),
+        vec!["feast_locale_tavern"]
+    );
+    assert_eq!(
+        by(pdxl_ck3::kinds::ACTIVITY_PULSE_ACTION),
+        vec!["excellent_food", "guest_brawl"]
+    );
+}
+
+#[test]
+fn activity_satellites_define_from_their_directories() {
+    for (src, dir, kind) in [
+        (
+            "befriend_intent = { auto_complete = yes }\n",
+            "common/activities/intents/00.txt",
+            pdxl_ck3::kinds::ACTIVITY_INTENT,
+        ),
+        (
+            "guest_brawl = { weight = { value = 1 } }\n",
+            "common/activities/pulse_actions/00.txt",
+            pdxl_ck3::kinds::ACTIVITY_PULSE_ACTION,
+        ),
+        (
+            "feast_locale_tavern = { cooldown = { days = 7 } }\n",
+            "common/activities/activity_locales/00.txt",
+            pdxl_ck3::kinds::ACTIVITY_LOCALE,
+        ),
+        (
+            "friends = { effect = { } }\n",
+            "common/activities/guest_invite_rules/00.txt",
+            pdxl_ck3::kinds::GUEST_INVITE_RULE,
+        ),
+        (
+            "grand = { sort_order = 200 }\n",
+            "common/activities/activity_group_types/00.txt",
+            pdxl_ck3::kinds::ACTIVITY_GROUP_TYPE,
+        ),
+    ] {
+        let f = extract(src, dir);
+        assert_eq!(f.defs.len(), 1, "{dir}");
+        assert_eq!(f.defs[0].kind, kind, "{dir}");
+    }
+}
+
+#[test]
+fn activity_engine_keys_reference_from_anywhere() {
+    let f = extract(
+        "ns.1 = {\n\
+         \ttrigger = {\n\
+         \t\thas_activity_type = activity_feast\n\
+         \t\thas_activity_intent = murder_intent\n\
+         \t\thas_completed_activity_intent = { type = woo_intent }\n\
+         \t\tscope:activity = {\n\
+         \t\t\thas_current_phase = feast_phase_meal\n\
+         \t\t\thas_phase = feast_phase_toast\n\
+         \t\t\thas_phase_past = { type = feast_phase_arrival }\n\
+         \t\t\thas_active_locale = feast_locale_tavern\n\
+         \t\t}\n\
+         \t}\n\
+         \timmediate = {\n\
+         \t\tadd_to_guest_subset = { name = revelers phase = feast_phase_meal }\n\
+         \t\tset_activity_intent = { intent = charm_intent target = scope:guest }\n\
+         \t}\n\
+         }\n",
+        "events/feast_events.txt",
+    );
+    let by = |k| {
+        let mut v = f
+            .refs
+            .iter()
+            .filter(|r| r.kind == k)
+            .map(|r| r.name.as_str())
+            .collect::<Vec<_>>();
+        v.sort_unstable();
+        v.dedup();
+        v
+    };
+    assert_eq!(by(pdxl_ck3::kinds::ACTIVITY_TYPE), vec!["activity_feast"]);
+    // `charm_intent` comes from set_activity_intent's block form.
+    assert_eq!(
+        by(pdxl_ck3::kinds::ACTIVITY_INTENT),
+        vec!["charm_intent", "murder_intent", "woo_intent"]
+    );
+    assert_eq!(
+        by(pdxl_ck3::kinds::ACTIVITY_PHASE),
+        vec![
+            "feast_phase_arrival",
+            "feast_phase_meal",
+            "feast_phase_toast"
+        ]
+    );
+    assert_eq!(
+        by(pdxl_ck3::kinds::ACTIVITY_LOCALE),
+        vec!["feast_locale_tavern"]
+    );
+    // The subset *name* is a runtime construct, never a reference.
+    assert!(f.refs.iter().all(|r| r.name != "revelers"), "{:?}", f.refs);
+}
+
+#[test]
+fn activity_list_keys_are_gated_to_activity_types() {
+    // `intents`, `entries`, `locales`, `rules`/`defaults` mean other things
+    // outside common/activities/activity_types/.
+    let f = extract(
+        "x = {\n\
+         \tintents = { a }\n\
+         \tentries = { b }\n\
+         \tlocales = { c }\n\
+         \trules = { 1 = d }\n\
+         \tdefaults = { 2 = e }\n\
+         \tblocked_intents = { g }\n\
+         \tblocked_phases = { h }\n\
+         }\n",
+        "common/scripted_effects/x.txt",
+    );
+    let named: Vec<&str> = f.refs.iter().map(|r| r.name.as_str()).collect();
+    for name in ["a", "b", "c", "d", "e", "g", "h"] {
+        assert!(!named.contains(&name), "{name} leaked: {named:?}");
+    }
+}
+
+#[test]
+fn activity_kinds_carry_their_implicit_localization() {
+    let schema = pdxl_ck3::schema();
+    let suffixes = |k| {
+        schema
+            .implicit_loc_patterns(k)
+            .iter()
+            .map(|p| p.suffix)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        suffixes(pdxl_ck3::kinds::ACTIVITY_TYPE),
+        vec![
+            "",
+            "_desc",
+            "_host_desc",
+            "_guest_desc",
+            "_province_desc",
+            "_conclusion_desc"
+        ]
+    );
+    assert_eq!(suffixes(pdxl_ck3::kinds::ACTIVITY_PHASE), vec!["", "_desc"]);
+    assert_eq!(
+        suffixes(pdxl_ck3::kinds::ACTIVITY_GROUP_TYPE),
+        vec!["activity_group_type_{}"]
+    );
+    // Pulse actions deliberately have none: their text hangs off the
+    // add_activity_log_entry key, which only conventionally matches.
+    assert!(suffixes(pdxl_ck3::kinds::ACTIVITY_PULSE_ACTION).is_empty());
+}

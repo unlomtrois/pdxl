@@ -50,6 +50,22 @@ pub(crate) static TRIGGERED_ASSET: StructSpec = StructSpec {
     fallback: Fallback::Deny,
 };
 
+/// `ai_check_interval_by_tier = { barony = 0 … }` — how often the AI considers
+/// the action, per primary-title tier; `0` means never. Every tier is required.
+/// Shared by great projects and activity types.
+pub(crate) static CHECK_INTERVAL_BY_TIER: StructSpec = StructSpec {
+    name: "ai_check_interval_by_tier",
+    fields: &[
+        ("barony", scalar(Setting)),
+        ("county", scalar(Setting)),
+        ("duchy", scalar(Setting)),
+        ("kingdom", scalar(Setting)),
+        ("empire", scalar(Setting)),
+        ("hegemony", scalar(Setting)),
+    ],
+    fallback: Fallback::Deny,
+};
+
 /// `days/weeks/months/years = <script value>` (cooldowns, delays).
 pub(crate) static DURATION: StructSpec = StructSpec {
     name: "duration",

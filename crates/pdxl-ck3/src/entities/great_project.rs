@@ -44,7 +44,7 @@ use pdxl_analysis::{
 use crate::kinds;
 
 use super::Entity;
-use super::common::{COST, OPAQUE, TRIGGERED_ASSET};
+use super::common::{CHECK_INTERVAL_BY_TIER, COST, OPAQUE, TRIGGERED_ASSET};
 
 const TYPES_DIR: &str = "common/great_projects/types/";
 
@@ -67,20 +67,6 @@ static CONTRIBUTOR_FILTER: StructSpec = StructSpec {
                 )
                 .values(&["yes", "no"]),
         ),
-    ],
-    fallback: Fallback::Deny,
-};
-
-/// `ai_check_interval_by_tier = { barony = 0 … }`. Every tier is required.
-static CHECK_INTERVAL_BY_TIER: StructSpec = StructSpec {
-    name: "ai_check_interval_by_tier",
-    fields: &[
-        ("barony", scalar(Setting)),
-        ("county", scalar(Setting)),
-        ("duchy", scalar(Setting)),
-        ("kingdom", scalar(Setting)),
-        ("empire", scalar(Setting)),
-        ("hegemony", scalar(Setting)),
     ],
     fallback: Fallback::Deny,
 };

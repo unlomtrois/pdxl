@@ -21,11 +21,12 @@ use pdxl_analysis::{ImplicitLocPattern, KindSpec};
 
 pub(crate) mod common;
 
+mod activity;
 pub(crate) mod artifact;
 mod building;
 mod casus_belli;
 mod character;
-mod character_interaction;
+pub(crate) mod character_interaction;
 mod character_template;
 pub(crate) mod create_character;
 mod culture;
@@ -42,7 +43,7 @@ mod doctrine;
 mod domicile;
 mod dynasty;
 mod effect_localization;
-mod event;
+pub(crate) mod event;
 mod event_background;
 mod event_theme;
 mod faith;
@@ -182,6 +183,7 @@ registry!(
     subject_contract::SubjectContract,
     domicile::Domicile,
     great_project::GreatProject,
+    activity::Activity,
     message::Message,
     loc::Loc,
 );

@@ -161,8 +161,10 @@ static TARGET_FILTERS: &[&str] = &[
     "count",
 ];
 
-/// `ai_targets = { ai_recipients = … max = … chance = … }`.
-static AI_TARGETS: StructSpec = StructSpec {
+/// `ai_targets = { ai_recipients = … max = … chance = … }`. Shared with
+/// activity intents, whose info defers here ("same as in
+/// character_interaction.info").
+pub(crate) static AI_TARGETS: StructSpec = StructSpec {
     name: "ai_targets",
     fields: &[
         (
@@ -195,8 +197,8 @@ static AI_TARGETS: StructSpec = StructSpec {
 
 /// `ai_target_quick_trigger = { adult = yes … }` — cheap engine-side prefilters
 /// applied to `ai_targets` before any scripted trigger runs. The corpus uses
-/// exactly the four keys the info documents.
-static AI_TARGET_QUICK_TRIGGER: StructSpec = StructSpec {
+/// exactly the four keys the info documents. Shared with activity intents.
+pub(crate) static AI_TARGET_QUICK_TRIGGER: StructSpec = StructSpec {
     name: "ai_target_quick_trigger",
     fields: &[
         (
