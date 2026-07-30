@@ -34,7 +34,7 @@ use pdxl_analysis::context::{Fallback, StructSpec, block, scalar};
 use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
-use super::common::{OPAQUE, anywhere};
+use super::common::{OPAQUE, anywhere, toggle};
 
 pub(crate) const HOLDINGS_DIR: &str = "common/holdings/";
 
@@ -68,18 +68,14 @@ static HOLDING: StructSpec = StructSpec {
         ),
         (
             "can_be_inherited",
-            scalar(Setting)
-                .doc("Whether a barony with this holding can be inherited. Default `yes`.")
-                .values(&["yes", "no"]),
+            toggle("Whether a barony with this holding can be inherited. Default `yes`."),
         ),
         (
             "counts_toward_domain_limit_if_disabled",
-            scalar(Setting)
-                .doc(
-                    "Whether a barony with this holding counts toward the domain limit while \
-                     the holding is disabled. Default `yes`.",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "Whether a barony with this holding counts toward the domain limit while \
+                 the holding is disabled. Default `yes`.",
+            ),
         ),
         (
             "required_heir_government_types",

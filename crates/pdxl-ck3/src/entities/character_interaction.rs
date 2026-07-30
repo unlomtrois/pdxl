@@ -34,7 +34,7 @@ use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule
 use crate::kinds;
 
 use super::Entity;
-use super::common::{COST, DURATION, OPAQUE, anywhere};
+use super::common::{COST, DURATION, OPAQUE, anywhere, toggle};
 
 /// A `send_option = { … }` block: an extra toggle shown when sending.
 static SEND_OPTION: StructSpec = StructSpec {
@@ -64,13 +64,11 @@ static SEND_OPTION: StructSpec = StructSpec {
         ),
         (
             "can_invalidate_interaction",
-            scalar(Setting)
-                .doc(
-                    "Re-run the *whole* can-send check when the AI picks this option, instead \
-                     of only the cheap refusal and `ai_will_do` checks. Use sparingly and \
-                     profile it — options are assumed not to block sending.",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "Re-run the *whole* can-send check when the AI picks this option, instead \
+                 of only the cheap refusal and `ai_will_do` checks. Use sparingly and \
+                 profile it — options are assumed not to block sending.",
+            ),
         ),
     ],
     fallback: Fallback::Deny,
@@ -201,30 +199,16 @@ pub(crate) static AI_TARGETS: StructSpec = StructSpec {
 pub(crate) static AI_TARGET_QUICK_TRIGGER: StructSpec = StructSpec {
     name: "ai_target_quick_trigger",
     fields: &[
-        (
-            "adult",
-            scalar(Setting)
-                .doc("The target must be an adult.")
-                .values(&["yes", "no"]),
-        ),
+        ("adult", toggle("The target must be an adult.")),
         (
             "attracted_to_owner",
-            scalar(Setting)
-                .doc("The target must be attracted to the actor.")
-                .values(&["yes", "no"]),
+            toggle("The target must be attracted to the actor."),
         ),
         (
             "owner_attracted",
-            scalar(Setting)
-                .doc("The actor must be attracted to the target.")
-                .values(&["yes", "no"]),
+            toggle("The actor must be attracted to the target."),
         ),
-        (
-            "prison",
-            scalar(Setting)
-                .doc("The target must be imprisoned.")
-                .values(&["yes", "no"]),
-        ),
+        ("prison", toggle("The target must be imprisoned.")),
     ],
     fallback: Fallback::Deny,
 };
@@ -349,57 +333,38 @@ static INTERACTION: StructSpec = StructSpec {
                 .doc("Identifies the interaction to specialized AI code (e.g. recruit_courtier)."),
         ),
         ("scheme", scalar(Setting).doc("The scheme type this interaction starts.")),
-        (
-            "hidden",
-            scalar(Setting)
-                .doc("Hide the interaction entirely.")
-                .values(&["yes", "no"]),
-        ),
+        ("hidden", toggle("Hide the interaction entirely.")),
         (
             "diarch_interaction",
-            scalar(Setting)
-                .doc("Available to a diarch, including a non-ruler one.")
-                .values(&["yes", "no"]),
+            toggle("Available to a diarch, including a non-ruler one."),
         ),
         (
             "popup_on_receive",
-            scalar(Setting)
-                .doc("Pop up for the recipient when received.")
-                .values(&["yes", "no"]),
+            toggle("Pop up for the recipient when received."),
         ),
         (
             "pause_on_receive",
-            scalar(Setting)
-                .doc("Pause the game on receipt — usually paired with `popup_on_receive`.")
-                .values(&["yes", "no"]),
+            toggle("Pause the game on receipt — usually paired with `popup_on_receive`."),
         ),
         (
             "force_notification",
-            scalar(Setting)
-                .doc("Force a diplomacy item even when the interaction auto-accepts.")
-                .values(&["yes", "no"]),
+            toggle("Force a diplomacy item even when the interaction auto-accepts."),
         ),
         (
             "needs_recipient_to_open",
-            scalar(Setting)
-                .doc(
-                    "Require a recipient before the window opens. Default `yes`; set `no` only \
-                     with code support, for interactions opened from somewhere other than the \
-                     right-click menu, where a `redirect` supplies the recipient later.",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "Require a recipient before the window opens. Default `yes`; set `no` only \
+                 with code support, for interactions opened from somewhere other than the \
+                 right-click menu, where a `redirect` supplies the recipient later.",
+            ),
         ),
         (
             "show_effects_in_notification",
-            scalar(Setting)
-                .doc("Show the interaction's effects in the send notification. Default `yes`.")
-                .values(&["yes", "no"]),
+            toggle("Show the interaction's effects in the send notification. Default `yes`."),
         ),
         (
             "shows_military_strength",
-            scalar(Setting)
-                .doc("Show both parties' military strength in the window *(corpus)*.")
-                .values(&["yes", "no"]),
+            toggle("Show both parties' military strength in the window *(corpus)*."),
         ),
         (
             "target_type",
@@ -442,18 +407,14 @@ static INTERACTION: StructSpec = StructSpec {
         ),
         (
             "secondary_scopes_optional",
-            scalar(Setting)
-                .doc("May the interaction send without the secondary participants chosen?")
-                .values(&["yes", "no"]),
+            toggle("May the interaction send without the secondary participants chosen?"),
         ),
         (
             "send_options_exclusive",
-            scalar(Setting)
-                .doc(
-                    "Are the send options mutually exclusive? Non-exclusive options cost AI \
-                     performance — keep to four or five visible at once.",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "Are the send options mutually exclusive? Non-exclusive options cost AI \
+                 performance — keep to four or five visible at once.",
+            ),
         ),
         ("send_option", block(Struct(&SEND_OPTION))),
         (
@@ -659,30 +620,19 @@ static INTERACTION: StructSpec = StructSpec {
         ("ai_frequency_by_tier", block(Struct(&AI_FREQUENCY_BY_TIER))),
         (
             "ai_instant_response",
-            scalar(Setting)
-                .doc("Reply at once instead of feigning N days of deliberation.")
-                .values(&["yes", "no"]),
+            toggle("Reply at once instead of feigning N days of deliberation."),
         ),
         (
             "ai_accept_negotiation",
-            scalar(Setting)
-                .doc(
-                    "A decline opens negotiations, so the interface stops saying \"won't \
-                     accept\" — the event chain may still end in acceptance.",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "A decline opens negotiations, so the interface stops saying \"won't \
+                 accept\" — the event chain may still end in acceptance.",
+            ),
         ),
-        (
-            "ai_maybe",
-            scalar(Setting)
-                .doc("Randomize the AI's answer.")
-                .values(&["yes", "no"]),
-        ),
+        ("ai_maybe", toggle("Randomize the AI's answer.")),
         (
             "ai_intermediary_maybe",
-            scalar(Setting)
-                .doc("Randomize the intermediary's answer.")
-                .values(&["yes", "no"]),
+            toggle("Randomize the intermediary's answer."),
         ),
         (
             "ai_min_reply_days",
@@ -694,18 +644,14 @@ static INTERACTION: StructSpec = StructSpec {
         ),
         (
             "can_send_despite_rejection",
-            scalar(Setting)
-                .doc("Allow sending even when the AI is known to refuse.")
-                .values(&["yes", "no"]),
+            toggle("Allow sending even when the AI is known to refuse."),
         ),
         (
             "ignores_pending_interaction_block",
-            scalar(Setting)
-                .doc(
-                    "Send even while the recipient still owes this player an answer. \
-                     Default `no`.",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "Send even while the recipient still owes this player an answer. \
+                 Default `no`.",
+            ),
         ),
         // ── text (loc keys) ──────────────────────────────────────────────
         (

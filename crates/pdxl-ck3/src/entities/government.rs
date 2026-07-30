@@ -42,7 +42,7 @@ use pdxl_analysis::context::{Fallback, StructSpec, block, block_scoped, color, s
 use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
-use super::common::anywhere;
+use super::common::{anywhere, toggle};
 
 pub(crate) const GOVERNMENTS_DIR: &str = "common/governments/";
 
@@ -66,359 +66,232 @@ static GOVERNMENT_RULES: StructSpec = StructSpec {
     fields: &[
         (
             "create_cadet_branches",
-            scalar(Setting)
-                .doc("Rulers can create cadet branches. Default `no`.")
-                .values(&["yes", "no"]),
+            toggle("Rulers can create cadet branches. Default `no`."),
         ),
         (
             "religious",
-            scalar(Setting)
-                .doc("Rulers are considered clergy. Default `no`.")
-                .values(&["yes", "no"]),
+            toggle("Rulers are considered clergy. Default `no`."),
         ),
         (
             "court_generate_spouses",
-            scalar(Setting)
-                .doc("A new realm gets suitable spouses as courtiers. Default `yes`.")
-                .values(&["yes", "no"]),
+            toggle("A new realm gets suitable spouses as courtiers. Default `yes`."),
         ),
         (
             "council",
-            scalar(Setting)
-                .doc("The council is available. Default `yes`.")
-                .values(&["yes", "no"]),
+            toggle("The council is available. Default `yes`."),
         ),
         (
             "rulers_should_have_dynasty",
-            scalar(Setting)
-                .doc("Rulers generate a dynasty. Default `no`.")
-                .values(&["yes", "no"]),
+            toggle("Rulers generate a dynasty. Default `no`."),
         ),
         (
             "regiments_prestige_as_gold",
-            scalar(Setting)
-                .doc(
-                    "Men-at-arms regiments are bought and reinforced with prestige \
-                     (maintenance still costs gold). Default `no`.",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "Men-at-arms regiments are bought and reinforced with prestige \
+                 (maintenance still costs gold). Default `no`.",
+            ),
         ),
         (
             "dynasty_named_realms",
-            scalar(Setting)
-                .doc(
-                    "The realm map name derives from dynasty and culture: culture head → \
-                     \"The Mongols\", else dynasty head → \"The Borjigin Mongols\". Default `no`.",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "The realm map name derives from dynasty and culture: culture head → \
+                 \"The Mongols\", else dynasty head → \"The Borjigin Mongols\". Default `no`.",
+            ),
         ),
         (
             "legitimacy",
-            scalar(Setting)
-                .doc("Rulers can have legitimacy where one is valid. Default `yes`.")
-                .values(&["yes", "no"]),
+            toggle("Rulers can have legitimacy where one is valid. Default `yes`."),
         ),
         (
             "administrative",
-            scalar(Setting)
-                .doc(
-                    "Enables the administrative mechanics — landless house-head vassals and \
-                     title-owned men-at-arms. Requires the `admin_gov` dlc flag. Default `no`.",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "Enables the administrative mechanics — landless house-head vassals and \
+                 title-owned men-at-arms. Requires the `admin_gov` dlc flag. Default `no`.",
+            ),
         ),
         (
             "admin_allows_holding_multiple_primary_tier_titles",
-            scalar(Setting)
-                .doc(
-                    "Administrative rulers may hold multiple primary-tier titles. Only valid \
-                     with `administrative = yes`, and only checked on appointment, \
-                     appointment succession and stepping down. Default `no`.",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "Administrative rulers may hold multiple primary-tier titles. Only valid \
+                 with `administrative = yes`, and only checked on appointment, \
+                 appointment succession and stepping down. Default `no`.",
+            ),
         ),
         (
             "landless_playable",
-            scalar(Setting)
-                .doc(
-                    "Rulers stay playable without a county. Requires the `landless_playable` \
-                     dlc flag. Default `no`.",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "Rulers stay playable without a county. Requires the `landless_playable` \
+                 dlc flag. Default `no`.",
+            ),
         ),
-        (
-            "allow_out_of_realm_inheritance",
-            scalar(Setting)
-                .doc("Default `no`.")
-                .values(&["yes", "no"]),
-        ),
+        ("allow_out_of_realm_inheritance", toggle("Default `no`.")),
         (
             "use_as_base_on_landed",
-            scalar(Setting)
-                .doc(
-                    "Switch to this government on gaining a first title, if the old holder \
-                     used it. Default `no`.",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "Switch to this government on gaining a first title, if the old holder \
+                 used it. Default `no`.",
+            ),
         ),
         (
             "use_as_base_on_rank_up",
-            scalar(Setting)
-                .doc(
-                    "Switch to this government when an independent ruler gains a higher top \
-                     tier title from an independent ruler of this government. Default `no`.",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "Switch to this government when an independent ruler gains a higher top \
+                 tier title from an independent ruler of this government. Default `no`.",
+            ),
         ),
         (
             "conditional_maa_refill",
-            scalar(Setting)
-                .doc(
-                    "Men-at-arms reinforce only when their type trigger passes, and pay no \
-                     upkeep. Costly to evaluate — use sparingly. Default `no`.",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "Men-at-arms reinforce only when their type trigger passes, and pay no \
+                 upkeep. Costly to evaluate — use sparingly. Default `no`.",
+            ),
         ),
         (
             "mercenary",
-            scalar(Setting)
-                .doc(
-                    "Unlanded rulers may offer themselves as mercenaries. Distinct from the \
-                     `government_is_mercenary` flag, which names the mercenary company \
-                     government specifically — that one does not use this rule. Default `no`.",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "Unlanded rulers may offer themselves as mercenaries. Distinct from the \
+                 `government_is_mercenary` flag, which names the mercenary company \
+                 government specifically — that one does not use this rule. Default `no`.",
+            ),
         ),
-        (
-            "state_faith",
-            scalar(Setting)
-                .doc("Uses a state faith. Default `no`.")
-                .values(&["yes", "no"]),
-        ),
+        ("state_faith", toggle("Uses a state faith. Default `no`.")),
         (
             "treasury",
-            scalar(Setting)
-                .doc("Uses the Imperial Treasury resource. Default `no`.")
-                .values(&["yes", "no"]),
+            toggle("Uses the Imperial Treasury resource. Default `no`."),
         ),
-        (
-            "merit",
-            scalar(Setting)
-                .doc("Uses the Merit resource. Default `no`.")
-                .values(&["yes", "no"]),
-        ),
-        (
-            "uses_county_fertility",
-            scalar(Setting)
-                .doc("Default `no`.")
-                .values(&["yes", "no"]),
-        ),
-        (
-            "replenishes_county_fertility",
-            scalar(Setting)
-                .doc("Default `no`.")
-                .values(&["yes", "no"]),
-        ),
-        (
-            "obedience",
-            scalar(Setting)
-                .doc("Uses obedience. Default `no`.")
-                .values(&["yes", "no"]),
-        ),
+        ("merit", toggle("Uses the Merit resource. Default `no`.")),
+        ("uses_county_fertility", toggle("Default `no`.")),
+        ("replenishes_county_fertility", toggle("Default `no`.")),
+        ("obedience", toggle("Uses obedience. Default `no`.")),
         (
             "uses_culture_and_house_head_named_realms",
-            scalar(Setting)
-                .doc("Default `no`.")
-                .values(&["yes", "no"]),
+            toggle("Default `no`."),
         ),
-        (
-            "sticky_government",
-            scalar(Setting)
-                .doc("Default `no`.")
-                .values(&["yes", "no"]),
-        ),
-        (
-            "subject_men_at_arms",
-            scalar(Setting)
-                .doc("Default `no`.")
-                .values(&["yes", "no"]),
-        ),
+        ("sticky_government", toggle("Default `no`.")),
+        ("subject_men_at_arms", toggle("Default `no`.")),
         (
             "use_title_tier_modifiers",
-            scalar(Setting)
-                .doc(
-                    "Passive prestige gain from held titles, and title tier modifiers. \
-                     Default `yes`.",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "Passive prestige gain from held titles, and title tier modifiers. \
+                 Default `yes`.",
+            ),
         ),
         (
             "inherit_from_dynastic_government",
-            scalar(Setting)
-                .doc(
-                    "Marks this government dynastic. Dynastic governments inherit freely from \
-                     one another; a non-dynastic ruler cannot inherit from a dynastic one, \
-                     which keeps unplayable governments from ending the game and stops \
-                     inferior governments stealing land by inheritance. Default `yes`.",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "Marks this government dynastic. Dynastic governments inherit freely from \
+                 one another; a non-dynastic ruler cannot inherit from a dynastic one, \
+                 which keeps unplayable governments from ending the game and stops \
+                 inferior governments stealing land by inheritance. Default `yes`.",
+            ),
         ),
         (
             "deny_powerful_vassal",
-            scalar(Setting)
-                .doc("Characters never become powerful vassals. Default `no`.")
-                .values(&["yes", "no"]),
+            toggle("Characters never become powerful vassals. Default `no`."),
         ),
         (
             "use_maa_maintenance",
-            scalar(Setting)
-                .doc("Characters always pay men-at-arms maintenance. Default `yes`.")
-                .values(&["yes", "no"]),
+            toggle("Characters always pay men-at-arms maintenance. Default `yes`."),
         ),
-        (
-            "no_capital_movement_cooldown",
-            scalar(Setting)
-                .doc("Default `no`.")
-                .values(&["yes", "no"]),
-        ),
+        ("no_capital_movement_cooldown", toggle("Default `no`.")),
         (
             "redirects_wars_to_overlord",
-            scalar(Setting).doc("Undocumented in the readme.").values(&["yes", "no"]),
+            toggle("Undocumented in the readme."),
         ),
         (
             "noble_families",
-            scalar(Setting)
-                .doc("Allows Noble Family titles to exist. Default `no`.")
-                .values(&["yes", "no"]),
+            toggle("Allows Noble Family titles to exist. Default `no`."),
         ),
         (
             "house_aspirations",
-            scalar(Setting)
-                .doc("Use house aspirations rather than family attributes. Default `no`.")
-                .values(&["yes", "no"]),
+            toggle("Use house aspirations rather than family attributes. Default `no`."),
         ),
         (
             "replace_gold_cost_by_treasury",
-            scalar(Setting)
-                .doc(
-                    "State expenses (title creation, holding buildings, mercenaries, title \
-                     regiments) are paid from the treasury instead of gold. Requires \
-                     `treasury = yes`. Default `no`.",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "State expenses (title creation, holding buildings, mercenaries, title \
+                 regiments) are paid from the treasury instead of gold. Requires \
+                 `treasury = yes`. Default `no`.",
+            ),
         ),
         (
             "block_alliance_child_marriage",
-            scalar(Setting)
-                .doc("Children's weddings form no alliances. Default `no`.")
-                .values(&["yes", "no"]),
+            toggle("Children's weddings form no alliances. Default `no`."),
         ),
         (
             "block_alliance_non_dominant_gender_child_marriage",
-            scalar(Setting)
-                .doc(
-                    "Non-dominant-gender children's weddings form no alliances. Default `no`.",
-                )
-                .values(&["yes", "no"]),
+            toggle("Non-dominant-gender children's weddings form no alliances. Default `no`."),
         ),
         (
             "always_use_patronym",
-            scalar(Setting)
-                .doc(
-                    "Patronyms display when either the culture or the government sets this. \
-                     Default `no`.",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "Patronyms display when either the culture or the government sets this. \
+                 Default `no`.",
+            ),
         ),
         (
             "affected_by_development",
-            scalar(Setting)
-                .doc("Counties held under this government are affected by development.")
-                .values(&["yes", "no"]),
+            toggle("Counties held under this government are affected by development."),
         ),
         (
             "considers_piety_for_title_creation",
-            scalar(Setting)
-                .doc("Piety counts toward title creation. Default `no`.")
-                .values(&["yes", "no"]),
+            toggle("Piety counts toward title creation. Default `no`."),
         ),
         (
             "ask_for_tribute",
-            scalar(Setting)
-                .doc(
-                    "Can ask others to become tributary — shows the tributarization_chance map \
-                     mode and uses `offer_tributary_status_interaction`. Default `no`.",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "Can ask others to become tributary — shows the tributarization_chance map \
+                 mode and uses `offer_tributary_status_interaction`. Default `no`.",
+            ),
         ),
         (
             "barter",
-            scalar(Setting)
-                .doc("Enables the bartering system. Default `no`.")
-                .values(&["yes", "no"]),
+            toggle("Enables the bartering system. Default `no`."),
         ),
         (
             "buildings",
-            scalar(Setting)
-                .doc("Characters can build in their holdings. Default `yes`.")
-                .values(&["yes", "no"]),
+            toggle("Characters can build in their holdings. Default `yes`."),
         ),
         (
             "count_tributaries_for_title_requirements",
-            scalar(Setting)
-                .doc(
-                    "Tributaries' land counts toward title creation and usurpation \
-                     requirements. At least one de jure county is still required. Default `no`.",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "Tributaries' land counts toward title creation and usurpation \
+                 requirements. At least one de jure county is still required. Default `no`.",
+            ),
         ),
         (
             "radiance",
-            scalar(Setting)
-                .doc("Grants access to the Radiance mechanics. Default `no`.")
-                .values(&["yes", "no"]),
+            toggle("Grants access to the Radiance mechanics. Default `no`."),
         ),
         (
             "disable_regnal_numbers",
-            scalar(Setting)
-                .doc("Disables regnal numbers for same-named title holders. Default `no`.")
-                .values(&["yes", "no"]),
+            toggle("Disables regnal numbers for same-named title holders. Default `no`."),
         ),
         (
             "allow_accolades",
-            scalar(Setting)
-                .doc("Rulers can grant accolades. *(corpus)*")
-                .values(&["yes", "no"]),
+            toggle("Rulers can grant accolades. *(corpus)*"),
         ),
         (
             "allow_as_base_for_baronies",
-            scalar(Setting)
-                .doc("Usable as the base government for baronies. *(corpus)*")
-                .values(&["yes", "no"]),
+            toggle("Usable as the base government for baronies. *(corpus)*"),
         ),
         (
             "dynasty_named_non_independent_landed_rulers",
-            scalar(Setting)
-                .doc("Dynasty-based realm naming extends to non-independent landed rulers. *(corpus)*")
-                .values(&["yes", "no"]),
+            toggle(
+                "Dynasty-based realm naming extends to non-independent landed rulers. *(corpus)*",
+            ),
         ),
         (
             "gain_legitimacy_becoming_tributary",
-            scalar(Setting)
-                .doc("Becoming a tributary grants legitimacy. *(corpus)*")
-                .values(&["yes", "no"]),
+            toggle("Becoming a tributary grants legitimacy. *(corpus)*"),
         ),
         (
             "government_ignores_rightful_liege_penalties",
-            scalar(Setting)
-                .doc("Rightful-liege opinion penalties do not apply. *(corpus)*")
-                .values(&["yes", "no"]),
+            toggle("Rightful-liege opinion penalties do not apply. *(corpus)*"),
         ),
         (
             "regiments_use_barter_goods_as_gold",
-            scalar(Setting)
-                .doc("Regiments are paid for with barter goods instead of gold. *(corpus)*")
-                .values(&["yes", "no"]),
+            toggle("Regiments are paid for with barter goods instead of gold. *(corpus)*"),
         ),
     ],
     fallback: Fallback::Deny,
@@ -429,53 +302,25 @@ static GOVERNMENT_RULES: StructSpec = StructSpec {
 static GOVERNMENT_AI: StructSpec = StructSpec {
     name: "government ai",
     fields: &[
-        (
-            "use_lifestyle",
-            scalar(Setting)
-                .doc("The AI checks for lifestyles.")
-                .values(&["yes", "no"]),
-        ),
+        ("use_lifestyle", toggle("The AI checks for lifestyles.")),
         (
             "arrange_marriage",
-            scalar(Setting)
-                .doc("Actively arrange marriages. Requests can still be received when off.")
-                .values(&["yes", "no"]),
+            toggle("Actively arrange marriages. Requests can still be received when off."),
         ),
         (
             "use_goals",
-            scalar(Setting)
-                .doc("Use long-term goals — build holdings, take major decisions.")
-                .values(&["yes", "no"]),
+            toggle("Use long-term goals — build holdings, take major decisions."),
         ),
-        (
-            "use_decisions",
-            scalar(Setting)
-                .doc("Use minor decisions.")
-                .values(&["yes", "no"]),
-        ),
-        (
-            "use_scripted_guis",
-            scalar(Setting)
-                .doc("Evaluate scripted GUIs.")
-                .values(&["yes", "no"]),
-        ),
-        (
-            "use_legends",
-            scalar(Setting)
-                .doc("Create and promote legends.")
-                .values(&["yes", "no"]),
-        ),
+        ("use_decisions", toggle("Use minor decisions.")),
+        ("use_scripted_guis", toggle("Evaluate scripted GUIs.")),
+        ("use_legends", toggle("Create and promote legends.")),
         (
             "perform_religious_reformation",
-            scalar(Setting)
-                .doc("Attempt religious reformation.")
-                .values(&["yes", "no"]),
+            toggle("Attempt religious reformation."),
         ),
         (
             "use_great_projects",
-            scalar(Setting)
-                .doc("Found and contribute to Great Projects. Default `no`.")
-                .values(&["yes", "no"]),
+            toggle("Found and contribute to Great Projects. Default `no`."),
         ),
     ],
     fallback: Fallback::Deny,
@@ -526,12 +371,10 @@ static GOVERNMENT: StructSpec = StructSpec {
         ),
         (
             "is_mechanic_type_default",
-            scalar(Setting)
-                .doc(
-                    "This is the default government of its `mechanic_type`, used when spawning \
-                     characters or changing government. Exactly one per type. Default `no`.",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "This is the default government of its `mechanic_type`, used when spawning \
+                 characters or changing government. Exactly one per type. Default `no`.",
+            ),
         ),
         (
             "fallback",

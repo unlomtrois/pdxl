@@ -61,7 +61,7 @@ use pdxl_analysis::{
 };
 
 use super::Entity;
-use super::common::{OPAQUE, anywhere};
+use super::common::{OPAQUE, anywhere, toggle};
 
 pub(crate) const CONTRACTS_DIR: &str = "common/subject_contracts/contracts/";
 pub(crate) const GROUPS_DIR: &str = "common/subject_contracts/groups/";
@@ -245,9 +245,7 @@ static OBLIGATION_LEVEL: StructSpec = StructSpec {
         ),
         (
             "default",
-            scalar(Setting)
-                .doc("Marks this the default level; otherwise the first one is.")
-                .values(&["yes", "no"]),
+            toggle("Marks this the default level; otherwise the first one is."),
         ),
         (
             "parent",
@@ -309,26 +307,22 @@ static SUBJECT_CONTRACT: StructSpec = StructSpec {
         ),
         (
             "defaults_to_highest_valid_level",
-            scalar(Setting)
-                .doc("Default to the highest-scoring valid level rather than a fixed one. Default `no`.")
-                .values(&["yes", "no"]),
+            toggle(
+                "Default to the highest-scoring valid level rather than a fixed one. Default `no`.",
+            ),
         ),
         (
             "uses_opinion_of_liege",
-            scalar(Setting)
-                .doc(
-                    "Makes `scope:opinion_of_liege` available in the levies and tax script \
-                     math. Updated daily for player contracts, on \
-                     `NSubjectContract::OPINION_OF_LIEGE_UPDATE_INTERVAL` for the AI. Default \
-                     `no`, for performance.",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "Makes `scope:opinion_of_liege` available in the levies and tax script \
+                 math. Updated daily for player contracts, on \
+                 `NSubjectContract::OPINION_OF_LIEGE_UPDATE_INTERVAL` for the AI. Default \
+                 `no`, for performance.",
+            ),
         ),
         (
             "joins_suzerain_wars",
-            scalar(Setting)
-                .doc("Whether a tributary joins their suzerain's wars automatically. Default `no`.")
-                .values(&["yes", "no"]),
+            toggle("Whether a tributary joins their suzerain's wars automatically. Default `no`."),
         ),
         (
             "icon",
@@ -362,9 +356,7 @@ static CONTRACT_GROUP: StructSpec = StructSpec {
         ),
         (
             "is_tributary",
-            scalar(Setting)
-                .doc("Whether this group is specifically for tributaries.")
-                .values(&["yes", "no"]),
+            toggle("Whether this group is specifically for tributaries."),
         ),
         (
             "is_valid_tributary_contract",
@@ -391,30 +383,22 @@ static CONTRACT_GROUP: StructSpec = StructSpec {
         ),
         (
             "should_show_as_suzerain_realm_name",
-            scalar(Setting)
-                .doc("Draw the tributary's realm under the suzerain's realm name. Default `no`.")
-                .values(&["yes", "no"]),
+            toggle("Draw the tributary's realm under the suzerain's realm name. Default `no`."),
         ),
         (
             "should_show_as_suzerain_realm_color",
-            scalar(Setting)
-                .doc(
-                    "Draw the tributary's realm in the suzerain's realm color — actually an \
-                     interpolation at `TRIBUTARY_REALM_COLOR_FACTOR`. Default `no`.",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "Draw the tributary's realm in the suzerain's realm color — actually an \
+                 interpolation at `TRIBUTARY_REALM_COLOR_FACTOR`. Default `no`.",
+            ),
         ),
         (
             "tributary_heir_succession",
-            scalar(Setting)
-                .doc("Whether the tributary's heirs stay tributaries on succession. Default `yes`.")
-                .values(&["yes", "no"]),
+            toggle("Whether the tributary's heirs stay tributaries on succession. Default `yes`."),
         ),
         (
             "suzerain_heir_succession",
-            scalar(Setting)
-                .doc("Whether the suzerain's primary heir takes over as suzerain. Default `yes`.")
-                .values(&["yes", "no"]),
+            toggle("Whether the suzerain's primary heir takes over as suzerain. Default `yes`."),
         ),
     ],
     fallback: Fallback::Deny,

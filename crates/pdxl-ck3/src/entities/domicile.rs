@@ -40,7 +40,7 @@ use pdxl_analysis::context::{Fallback, StructSpec, block, scalar, scalar_or_bloc
 use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
-use super::common::{COST, DURATION, OPAQUE, TRIGGERED_ASSET, anywhere};
+use super::common::{COST, DURATION, OPAQUE, TRIGGERED_ASSET, anywhere, toggle};
 
 pub(crate) const TYPES_DIR: &str = "common/domiciles/types/";
 pub(crate) const BUILDINGS_DIR: &str = "common/domiciles/buildings/";
@@ -131,48 +131,31 @@ static DOMICILE_TYPE: StructSpec = StructSpec {
         ),
         (
             "map_pin_lobby",
-            scalar(Setting)
-                .doc("Whether this domicile appears in the game lobby.")
-                .values(&["yes", "no"]),
+            toggle("Whether this domicile appears in the game lobby."),
         ),
         (
             "provisions",
-            scalar(Setting)
-                .doc(
-                    "Whether the domicile manages provisions. Those that do travel to a new \
-                     location; the rest move instantly.",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "Whether the domicile manages provisions. Those that do travel to a new \
+                 location; the rest move instantly.",
+            ),
         ),
-        (
-            "travel",
-            scalar(Setting)
-                .doc("Whether the domicile may travel.")
-                .values(&["yes", "no"]),
-        ),
+        ("travel", toggle("Whether the domicile may travel.")),
         (
             "herd",
-            scalar(Setting)
-                .doc("Whether the domicile manages the herd resource.")
-                .values(&["yes", "no"]),
+            toggle("Whether the domicile manages the herd resource."),
         ),
         (
             "culture_and_faith",
-            scalar(Setting)
-                .doc("Whether the domicile stores a culture and faith. Default `no`.")
-                .values(&["yes", "no"]),
+            toggle("Whether the domicile stores a culture and faith. Default `no`."),
         ),
         (
             "move_with_realm_capital",
-            scalar(Setting)
-                .doc("Whether it relocates when the realm capital moves. Default `no`.")
-                .values(&["yes", "no"]),
+            toggle("Whether it relocates when the realm capital moves. Default `no`."),
         ),
         (
             "can_move_manually",
-            scalar(Setting)
-                .doc("Whether it can be moved without a bespoke feature.")
-                .values(&["yes", "no"]),
+            toggle("Whether it can be moved without a bespoke feature."),
         ),
         (
             "move_cooldown",

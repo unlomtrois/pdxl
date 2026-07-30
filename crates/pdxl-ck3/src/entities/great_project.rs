@@ -44,7 +44,7 @@ use pdxl_analysis::{
 use crate::kinds;
 
 use super::Entity;
-use super::common::{CHECK_INTERVAL_BY_TIER, COST, OPAQUE, TRIGGERED_ASSET};
+use super::common::{CHECK_INTERVAL_BY_TIER, COST, OPAQUE, TRIGGERED_ASSET, toggle};
 
 const TYPES_DIR: &str = "common/great_projects/types/";
 
@@ -60,12 +60,10 @@ static CONTRIBUTOR_FILTER: StructSpec = StructSpec {
         ("owner", scalar(Setting).values(&["yes", "no"])),
         (
             "allies",
-            scalar(Setting)
-                .doc(
-                    "Allies of the owner. Also grantable from a house aspiration via \
-                     `can_request_great_project_contributions_from_allies`.",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "Allies of the owner. Also grantable from a house aspiration via \
+                 `can_request_great_project_contributions_from_allies`.",
+            ),
         ),
     ],
     fallback: Fallback::Deny,
@@ -76,12 +74,7 @@ static CONTRIBUTOR_FILTER: StructSpec = StructSpec {
 static AI_TARGET_QUICK_TRIGGER: StructSpec = StructSpec {
     name: "ai_target_quick_trigger",
     fields: &[
-        (
-            "adult",
-            scalar(Setting)
-                .doc("The founder must be an adult.")
-                .values(&["yes", "no"]),
-        ),
+        ("adult", toggle("The founder must be an adult.")),
         (
             "rank",
             scalar(Setting)
@@ -107,9 +100,7 @@ static CONTRIBUTION: StructSpec = StructSpec {
         ),
         (
             "show_in_planning_phase",
-            scalar(Setting)
-                .doc("Show during planning. Only optional contributions may hide. Default `yes`.")
-                .values(&["yes", "no"]),
+            toggle("Show during planning. Only optional contributions may hide. Default `yes`."),
         ),
         (
             "contributor_is_valid",
@@ -136,9 +127,7 @@ static CONTRIBUTION: StructSpec = StructSpec {
         ),
         (
             "is_required",
-            scalar(Setting)
-                .doc("Required to finish the project, or optional. Default `yes`.")
-                .values(&["yes", "no"]),
+            toggle("Required to finish the project, or optional. Default `yes`."),
         ),
         (
             "on_contribution_funded",
@@ -322,15 +311,11 @@ static GREAT_PROJECT: StructSpec = StructSpec {
         ),
         (
             "show_in_list",
-            scalar(Setting)
-                .doc("Show in the Great Projects list. Default `yes`.")
-                .values(&["yes", "no"]),
+            toggle("Show in the Great Projects list. Default `yes`."),
         ),
         (
             "is_important",
-            scalar(Setting)
-                .doc("Warrant special notifications. Default `no`.")
-                .values(&["yes", "no"]),
+            toggle("Warrant special notifications. Default `no`."),
         ),
         (
             "target_title_tier",

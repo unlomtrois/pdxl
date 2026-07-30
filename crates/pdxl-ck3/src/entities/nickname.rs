@@ -6,12 +6,11 @@
 
 use crate::kinds;
 use pdxl_analysis::context::ClauseKind;
-use pdxl_analysis::context::ScalarKind::Setting;
-use pdxl_analysis::context::{Fallback, StructSpec, scalar};
+use pdxl_analysis::context::{Fallback, StructSpec};
 use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern};
 
 use super::Entity;
-use super::common::anywhere;
+use super::common::{anywhere, toggle};
 
 const NICKNAMES_DIR: &str = "common/nicknames/";
 
@@ -21,16 +20,9 @@ static NICKNAME: StructSpec = StructSpec {
     fields: &[
         (
             "is_prefix",
-            scalar(Setting)
-                .doc("Is the nickname a prefixed nickname? (default `no`)")
-                .values(&["yes", "no"]),
+            toggle("Is the nickname a prefixed nickname? (default `no`)"),
         ),
-        (
-            "is_bad",
-            scalar(Setting)
-                .doc("Is the nickname bad? (default `no`)")
-                .values(&["yes", "no"]),
-        ),
+        ("is_bad", toggle("Is the nickname bad? (default `no`)")),
     ],
     fallback: Fallback::Deny,
 };

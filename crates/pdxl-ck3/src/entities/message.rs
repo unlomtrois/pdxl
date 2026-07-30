@@ -47,7 +47,7 @@ use pdxl_analysis::{
 use crate::kinds;
 
 use super::Entity;
-use super::common::anywhere;
+use super::common::{anywhere, toggle};
 
 const MESSAGES_DIR: &str = "common/messages/";
 const FILTER_DIR: &str = "common/message_filter_types/";
@@ -110,12 +110,10 @@ static MESSAGE: StructSpec = StructSpec {
         ),
         (
             "combine_into_one",
-            scalar(Setting)
-                .doc(
-                    "Merge into an existing message of this type rather than \
-                     animating a new one — for high-frequency messages.",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "Merge into an existing message of this type rather than \
+                 animating a new one — for high-frequency messages.",
+            ),
         ),
     ],
     fallback: Fallback::Deny,
@@ -137,15 +135,11 @@ static FILTER_TYPE: StructSpec = StructSpec {
         ),
         (
             "always_show",
-            scalar(Setting)
-                .doc("Stop the player hiding messages of this filter. Default `no`.")
-                .values(&["yes", "no"]),
+            toggle("Stop the player hiding messages of this filter. Default `no`."),
         ),
         (
             "auto_pause",
-            scalar(Setting)
-                .doc("Pause the game when one of these appears. Default `no`.")
-                .values(&["yes", "no"]),
+            toggle("Pause the game when one of these appears. Default `no`."),
         ),
         (
             "sort_order",

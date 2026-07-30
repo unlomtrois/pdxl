@@ -17,7 +17,7 @@ use pdxl_analysis::context::{Fallback, StructSpec, block, scalar, scalar_or_bloc
 use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec};
 
 use super::Entity;
-use super::common::OPAQUE;
+use super::common::{OPAQUE, toggle};
 
 const AESTHETICS_BUNDLES_DIR: &str = "common/culture/aesthetics_bundles/";
 const CREATION_NAMES_DIR: &str = "common/culture/creation_names/";
@@ -100,9 +100,7 @@ static CULTURE_CREATION_NAME: StructSpec = StructSpec {
         ),
         (
             "hybrid",
-            scalar(Setting)
-                .doc("Is this name for hybridization? Defaults to `no`.")
-                .values(&["yes", "no"]),
+            toggle("Is this name for hybridization? Defaults to `no`."),
         ),
     ],
     fallback: Fallback::Deny,

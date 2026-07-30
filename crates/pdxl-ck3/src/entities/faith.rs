@@ -22,7 +22,7 @@ use pdxl_analysis::context::{Fallback, StructSpec, block, color, scalar};
 use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
-use super::common::{OPAQUE, anywhere};
+use super::common::{OPAQUE, anywhere, toggle};
 
 pub(crate) const RELIGION_DIR: &str = "common/religion/religion_types/";
 
@@ -222,12 +222,10 @@ static RELIGION_FIELDS: [(&str, pdxl_analysis::context::FieldSpec); 15] = {
         ),
         (
             "pagan_roots",
-            scalar(Setting)
-                .doc(
-                    "If yes, faiths without the unreformed doctrine are considered reformed \
+            toggle(
+                "If yes, faiths without the unreformed doctrine are considered reformed \
                      by the interface.",
-                )
-                .values(&["yes", "no"]),
+            ),
         ),
         (
             "traits",

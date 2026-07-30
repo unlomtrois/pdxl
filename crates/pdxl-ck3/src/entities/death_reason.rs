@@ -14,7 +14,7 @@ use pdxl_analysis::context::{Fallback, StructSpec, block_scoped, scalar};
 use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern};
 
 use super::Entity;
-use super::common::anywhere;
+use super::common::{anywhere, toggle};
 
 const DEATHREASONS_DIR: &str = "common/deathreasons/";
 
@@ -24,9 +24,7 @@ static DEATH_REASON: StructSpec = StructSpec {
     fields: &[
         (
             "public_knowledge",
-            scalar(Setting)
-                .doc("If `yes`, everybody knows the killer (default `no`).")
-                .values(&["yes", "no"]),
+            toggle("If `yes`, everybody knows the killer (default `no`)."),
         ),
         (
             "icon",
@@ -51,12 +49,10 @@ static DEATH_REASON: StructSpec = StructSpec {
         ),
         (
             "default",
-            scalar(Setting)
-                .doc(
-                    "When no natural death reason passes, one of the `default` reasons is \
-                     picked randomly (default `no`).",
-                )
-                .values(&["yes", "no"]),
+            toggle(
+                "When no natural death reason passes, one of the `default` reasons is \
+                 picked randomly (default `no`).",
+            ),
         ),
         (
             "use_equipped_artifact_in_slot",

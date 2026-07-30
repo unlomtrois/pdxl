@@ -24,7 +24,7 @@ use pdxl_analysis::context::{Fallback, FieldSpec, StructSpec, block, scalar, sca
 use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
-use super::common::OPAQUE;
+use super::common::{OPAQUE, toggle};
 
 const CHARACTERS_DIR: &str = "history/characters/";
 
@@ -161,9 +161,7 @@ static CHARACTER: StructSpec = StructSpec {
         ("dna", scalar(Setting).doc("A portrait DNA string ID.")),
         (
             "female",
-            scalar(Setting)
-                .doc("Whether the character is female (default `no`).")
-                .values(&["yes", "no"]),
+            toggle("Whether the character is female (default `no`)."),
         ),
         ("martial", skill("Base martial skill.")),
         ("prowess", skill("Base prowess skill.")),
@@ -179,9 +177,7 @@ static CHARACTER: StructSpec = StructSpec {
         ("mother", scalar(Setting).doc("The mother's character ID.")),
         (
             "disallow_random_traits",
-            scalar(Setting)
-                .doc("Don't fill missing traits randomly at game start.")
-                .values(&["yes", "no"]),
+            toggle("Don't fill missing traits randomly at game start."),
         ),
         (
             "religion",

@@ -34,6 +34,7 @@ use pdxl_analysis::context::{Fallback, StructSpec, block, scalar};
 use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
+use super::common::toggle;
 
 const GAME_CONCEPTS_DIR: &str = "common/game_concepts/";
 
@@ -76,9 +77,7 @@ static GAME_CONCEPT: StructSpec = StructSpec {
         ),
         (
             "shown_in_encyclopedia",
-            scalar(Setting)
-                .doc("Set `no` to hide the concept from the in-game encyclopedia (default `yes`).")
-                .values(&["yes", "no"]),
+            toggle("Set `no` to hide the concept from the in-game encyclopedia (default `yes`)."),
         ),
     ],
     fallback: Fallback::Deny,
