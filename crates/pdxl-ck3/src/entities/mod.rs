@@ -48,6 +48,7 @@ pub(crate) mod event;
 mod event_background;
 mod event_theme;
 mod faith;
+mod flavorization;
 mod game_concept;
 mod game_rule;
 pub(crate) mod government;
@@ -190,6 +191,7 @@ registry!(
     task_contract::TaskContract,
     bookmark::Bookmark,
     title_history::TitleHistory,
+    flavorization::Flavorization,
     message::Message,
     loc::Loc,
 );

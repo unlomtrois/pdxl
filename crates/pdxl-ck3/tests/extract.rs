@@ -3359,6 +3359,79 @@ fn task_contract_kinds_carry_their_implicit_localization() {
     );
 }
 
+// ── flavorization ───────────────────────────────────────────────────────────
+
+#[test]
+fn flavorization_defs_and_condition_list_refs() {
+    let f = extract(
+        "petty_king = {\n\
+         \ttype = character\n\
+         \tgender = male\n\
+         \ttier = kingdom\n\
+         \tpriority = 100\n\
+         \tgovernments = { tribal_government clan_government }\n\
+         \theritages = { heritage_north_germanic }\n\
+         \tname_lists = { name_list_norse }\n\
+         \treligions = { christianity_religion }\n\
+         \tfaiths = { catholic }\n\
+         \tfaith = orthodox\n\
+         \ttitles = { k_norway }\n\
+         \tde_jure_liege = { e_scandinavia }\n\
+         \tdomicile_type = camp\n\
+         \tholding = castle_holding\n\
+         \tflavourization_rules = { only_independent = yes }\n\
+         }\n",
+        "common/flavorization/00.txt",
+    );
+    assert_eq!(f.defs[0].kind, pdxl_ck3::kinds::FLAVORIZATION);
+    assert_eq!(f.defs[0].name, "petty_king");
+
+    let by = |k| {
+        let mut v = f
+            .refs
+            .iter()
+            .filter(|r| r.kind == k)
+            .map(|r| r.name.as_str())
+            .collect::<Vec<_>>();
+        v.sort_unstable();
+        v
+    };
+    assert_eq!(
+        by(pdxl_ck3::kinds::GOVERNMENT),
+        vec!["clan_government", "tribal_government"]
+    );
+    assert_eq!(
+        by(pdxl_ck3::kinds::CULTURE_PILLAR),
+        vec!["heritage_north_germanic"]
+    );
+    assert_eq!(by(pdxl_ck3::kinds::NAME_LIST), vec!["name_list_norse"]);
+    assert_eq!(by(pdxl_ck3::kinds::RELIGION), vec!["christianity_religion"]);
+    // The `faiths` list and the corpus-only singular `faith`.
+    assert_eq!(by(pdxl_ck3::kinds::FAITH), vec!["catholic", "orthodox"]);
+    assert_eq!(
+        by(pdxl_ck3::kinds::TITLE),
+        vec!["e_scandinavia", "k_norway"]
+    );
+    assert_eq!(by(pdxl_ck3::kinds::DOMICILE_TYPE), vec!["camp"]);
+    assert_eq!(by(pdxl_ck3::kinds::HOLDING), vec!["castle_holding"]);
+}
+
+#[test]
+fn flavorization_lists_are_gated_to_their_directory() {
+    // `governments` / `titles` / `heritages` lists mean nothing elsewhere.
+    let f = extract(
+        "x = { governments = { a } titles = { b } heritages = { c } }\n",
+        "common/scripted_effects/x.txt",
+    );
+    assert!(
+        f.refs
+            .iter()
+            .all(|r| !["a", "b", "c"].contains(&r.name.as_str())),
+        "{:?}",
+        f.refs
+    );
+}
+
 // ── title history ───────────────────────────────────────────────────────────
 
 #[test]

@@ -87,6 +87,7 @@ pub const ACTIVITY_LOCALE: KindId = KindId::new("activity_locale");
 pub const ACTIVITY_GROUP_TYPE: KindId = KindId::new("activity_group_type");
 pub const GUEST_INVITE_RULE: KindId = KindId::new("guest_invite_rule");
 pub const TASK_CONTRACT_TYPE: KindId = KindId::new("task_contract_type");
+pub const FLAVORIZATION: KindId = KindId::new("flavorization");
 pub const BOOKMARK: KindId = KindId::new("bookmark");
 pub const BOOKMARK_GROUP: KindId = KindId::new("bookmark_group");
 pub const CHALLENGE_CHARACTER: KindId = KindId::new("challenge_character");

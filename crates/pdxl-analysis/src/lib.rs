@@ -44,7 +44,8 @@ pub use table::{Duplicate, SymbolTable};
 /// facts cache must embed this in its keys (alongside content hash and
 /// rel_path) and treat mismatches as misses; bump it whenever extraction rules
 /// or the [`FileFacts`] model change meaning.
-pub const ANALYSIS_VERSION: u32 = 140; // 140: CK3 title history — history/titles defines nothing, but its top-level keys reference titles and its date blocks carry holder/liege/government/law/loc refs; `0` joins the skip words as the vacate sentinel
+pub const ANALYSIS_VERSION: u32 = 141; // 141: CK3 flavorization — the contextual naming layer: one kind whose key localizes itself, plus gated condition-list refs to governments/pillars/name lists/religions/faiths/titles
+// 140: CK3 title history — history/titles defines nothing, but its top-level keys reference titles and its date blocks carry holder/liege/government/law/loc refs; `0` joins the skip words as the vacate sentinel
 // 139: CK3 casus-belli body reordered to the corpus-canonical field order (format_fields follows spec order), plus the corpus-only should_show_war_goal_subview / is_holy_war toggles
 // 138: CK3 bookmarks, bookmark groups and challenge characters — all references structure-carried (the FieldSpec::ref_kind showcase: character/dynasty/house/title/government/culture/faith/loc off one recursive character block)
 // 137: CK3 task contracts — contract types and their scoped rewards, the create/accept/filter/complete refs, the corpus-only _desc_title loc convention, and the derived task_contract_type: scope link
