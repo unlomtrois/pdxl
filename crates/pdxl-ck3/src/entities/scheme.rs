@@ -33,13 +33,7 @@ use pdxl_analysis::context::{Fallback, StructSpec, block, block_scoped, scalar, 
 use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern};
 
 use super::Entity;
-use super::common::{DURATION, OPAQUE, anywhere};
-use pdxl_analysis::context::FieldSpec;
-
-/// A `yes`/`no` toggle field.
-const fn toggle(doc: &'static str) -> FieldSpec {
-    scalar(Setting).doc(doc).values(&["yes", "no"])
-}
+use super::common::{DURATION, OPAQUE, anywhere, toggle};
 
 /// `pulse_actions = { entries = { a b } chance_of_no_event = 0 }`.
 static PULSE_ACTIONS: StructSpec = StructSpec {

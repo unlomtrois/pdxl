@@ -41,21 +41,17 @@
 
 use pdxl_analysis::context::ClauseKind::{self, Config, ScriptValue, Struct};
 use pdxl_analysis::context::ScalarKind::{LocKey, Setting};
-use pdxl_analysis::context::{Fallback, FieldSpec, StructSpec, block, scalar};
+use pdxl_analysis::context::{Fallback, StructSpec, block, scalar};
 use pdxl_analysis::{DefShape, DefSource, IconHint, ImplicitLocPattern, KindSpec};
 
 use crate::kinds;
 
 use super::Entity;
+use super::common::toggle;
 
 const BOOKMARKS_DIR: &str = "common/bookmarks/bookmarks/";
 const GROUPS_DIR: &str = "common/bookmarks/groups/";
 const CHALLENGE_DIR: &str = "common/bookmarks/challenge_characters/";
-
-/// A `yes`/`no` toggle field.
-const fn toggle(doc: &'static str) -> FieldSpec {
-    scalar(Setting).doc(doc).values(&["yes", "no"])
-}
 
 /// A bookmark character — the block is shared by bookmarks and challenge
 /// characters, and nests recursively for the alternate characters shown

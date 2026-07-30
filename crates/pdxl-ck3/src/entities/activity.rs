@@ -62,9 +62,7 @@ use pdxl_analysis::context::ClauseKind::{
     self, Config, DynamicDesc, Effect, ScriptValue, ScriptedModifier, Struct, Trigger,
 };
 use pdxl_analysis::context::ScalarKind::Setting;
-use pdxl_analysis::context::{
-    Fallback, FieldSpec, StructSpec, block, block_scoped, scalar, scalar_or_block,
-};
+use pdxl_analysis::context::{Fallback, StructSpec, block, block_scoped, scalar, scalar_or_block};
 use pdxl_analysis::{
     DefShape, DefSource, IconHint, ImplicitLocPattern, KindSpec, RefPattern, RefRule,
 };
@@ -72,7 +70,9 @@ use pdxl_analysis::{
 use crate::kinds;
 
 use super::Entity;
-use super::common::{CHECK_INTERVAL_BY_TIER, COST, DURATION, OPAQUE, TRIGGERED_ASSET, anywhere};
+use super::common::{
+    CHECK_INTERVAL_BY_TIER, COST, DURATION, OPAQUE, TRIGGERED_ASSET, anywhere, toggle,
+};
 
 const TYPES_DIR: &str = "common/activities/activity_types/";
 const INTENTS_DIR: &str = "common/activities/intents/";
@@ -88,11 +88,6 @@ const fn in_types(pattern: RefPattern) -> RefRule {
         gate: Some(TYPES_DIR),
         alt: &[],
     }
-}
-
-/// A `yes`/`no` toggle field.
-const fn toggle(doc: &'static str) -> FieldSpec {
-    scalar(Setting).doc(doc).values(&["yes", "no"])
 }
 
 /// The `province_filter` / `ai_province_filter` vocabulary.

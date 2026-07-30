@@ -30,22 +30,15 @@
 use crate::kinds;
 use pdxl_analysis::context::ClauseKind::{self, Config, Effect, Struct, Trigger};
 use pdxl_analysis::context::ScalarKind::Setting;
-use pdxl_analysis::context::{
-    Fallback, FieldSpec, StructSpec, block, color, scalar, scalar_or_block,
-};
+use pdxl_analysis::context::{Fallback, StructSpec, block, color, scalar, scalar_or_block};
 use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
-use super::common::{DURATION, OPAQUE, TRIGGERED_ASSET, anywhere};
+use super::common::{DURATION, OPAQUE, TRIGGERED_ASSET, anywhere, toggle};
 
 const SITUATIONS_DIR: &str = "common/situation/situations/";
 const CATALYSTS_DIR: &str = "common/situation/catalysts/";
 const GROUP_TYPES_DIR: &str = "common/situation/situation_group_types/";
-
-/// A `yes`/`no` toggle field.
-const fn toggle(doc: &'static str) -> FieldSpec {
-    scalar(Setting).doc(doc).values(&["yes", "no"])
-}
 
 /// A reference rule gated to the situations directory (attribute keys reused
 /// elsewhere in script (`icon`, `catalysts`) mean situation things only here).

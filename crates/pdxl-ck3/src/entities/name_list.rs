@@ -14,13 +14,8 @@ use pdxl_analysis::context::{Fallback, FieldSpec, StructSpec, block, scalar};
 use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern};
 
 use super::Entity;
-use super::common::{OPAQUE, anywhere};
+use super::common::{OPAQUE, anywhere, toggle};
 use super::culture_shared::NAME_LISTS_DIR;
-
-/// A `yes`/`no` toggle field.
-const fn toggle(doc: &'static str) -> FieldSpec {
-    scalar(Setting).doc(doc).values(&["yes", "no"])
-}
 
 /// A name-after-relative percent chance.
 const fn name_chance(doc: &'static str) -> FieldSpec {

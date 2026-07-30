@@ -52,16 +52,11 @@ use pdxl_analysis::{
 };
 
 use super::Entity;
-use super::common::{COST, DURATION, anywhere};
+use super::common::{COST, DURATION, anywhere, toggle};
 use super::culture_shared::in_innovations;
 
 const TYPES_DIR: &str = "common/casus_belli_types/";
 const GROUPS_DIR: &str = "common/casus_belli_groups/";
-
-/// A `yes`/`no` toggle field.
-const fn toggle(doc: &'static str) -> FieldSpec {
-    scalar(Setting).doc(doc).values(&["yes", "no"])
-}
 
 /// A numeric war-score tuning knob (defines-based when unset).
 const fn knob(doc: &'static str) -> FieldSpec {

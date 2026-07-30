@@ -21,17 +21,13 @@
 use crate::kinds;
 use pdxl_analysis::context::ClauseKind::{self, Effect, Struct, Trigger};
 use pdxl_analysis::context::ScalarKind::{LocKey, Setting};
-use pdxl_analysis::context::{Fallback, FieldSpec, StructSpec, block, scalar};
+use pdxl_analysis::context::{Fallback, StructSpec, block, scalar};
 use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
+use super::common::toggle;
 
 const CUSTOM_LOC_DIR: &str = "common/customizable_localization/";
-
-/// A `yes`/`no` toggle field.
-const fn toggle(doc: &'static str) -> FieldSpec {
-    scalar(Setting).doc(doc).values(&["yes", "no"])
-}
 
 /// One `text = { … }` entry: the first entry whose trigger passes supplies
 /// the localization key.

@@ -25,18 +25,13 @@
 use crate::kinds;
 use pdxl_analysis::context::ClauseKind::{self, DynamicDesc, Struct, Trigger};
 use pdxl_analysis::context::ScalarKind::{LocKey, Setting};
-use pdxl_analysis::context::{Fallback, FieldSpec, StructSpec, block, scalar, scalar_or_block};
+use pdxl_analysis::context::{Fallback, StructSpec, block, scalar, scalar_or_block};
 use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
-use super::common::{OPAQUE, anywhere};
+use super::common::{OPAQUE, anywhere, toggle};
 
 const TRAITS_DIR: &str = "common/traits/";
-
-/// A `yes`/`no` toggle field.
-const fn toggle(doc: &'static str) -> FieldSpec {
-    scalar(Setting).doc(doc).values(&["yes", "no"])
-}
 
 /// A reference rule gated to the traits directory.
 /// A reference rule gated to the religion tree (virtue/sin lists).

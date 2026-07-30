@@ -30,15 +30,10 @@ use pdxl_analysis::context::{
 use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern, RefRule};
 
 use super::Entity;
-use super::common::{COST, anywhere};
+use super::common::{COST, anywhere, toggle};
 
 const BUILDINGS_DIR: &str = "common/buildings/";
 const PROVINCE_HISTORY_DIR: &str = "history/provinces/";
-
-/// A `yes`/`no` toggle field.
-const fn toggle(doc: &'static str) -> FieldSpec {
-    scalar(Setting).doc(doc).values(&["yes", "no"])
-}
 
 /// A conditional static-modifier collection entry (`parameter`-gated bodies
 /// carry the gate key alongside modifier tags — StaticModifier context is a

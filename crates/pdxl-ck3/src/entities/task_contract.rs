@@ -43,24 +43,15 @@
 
 use pdxl_analysis::context::ClauseKind::{self, DynamicDesc, Effect, ScriptValue, Struct, Trigger};
 use pdxl_analysis::context::ScalarKind::{LocKey, Setting};
-use pdxl_analysis::context::{
-    Fallback, FieldSpec, StructSpec, block, block_scoped, scalar_or_block,
-};
+use pdxl_analysis::context::{Fallback, StructSpec, block, block_scoped, scalar_or_block};
 use pdxl_analysis::{DefShape, DefSource, IconHint, ImplicitLocPattern, KindSpec, RefPattern};
 
 use crate::kinds;
 
 use super::Entity;
-use super::common::anywhere;
+use super::common::{anywhere, toggle};
 
 const DIR: &str = "common/task_contracts/";
-
-/// A `yes`/`no` toggle field.
-const fn toggle(doc: &'static str) -> FieldSpec {
-    pdxl_analysis::context::scalar(Setting)
-        .doc(doc)
-        .values(&["yes", "no"])
-}
 
 /// One `task_contract_reward = { <name> = { … } }` entry.
 static REWARD: StructSpec = StructSpec {

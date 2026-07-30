@@ -3,7 +3,7 @@
 //! (cost, duration, opaque payloads, triggered assets).
 
 use pdxl_analysis::context::{
-    ClauseKind, Fallback, ScalarKind, StructSpec, block, scalar, scalar_or_block,
+    ClauseKind, Fallback, FieldSpec, ScalarKind, StructSpec, block, scalar, scalar_or_block,
 };
 use pdxl_analysis::{RefPattern, RefRule};
 
@@ -30,6 +30,11 @@ pub(crate) const fn in_on_action(pattern: RefPattern) -> RefRule {
         gate: Some(ON_ACTION_DIR),
         alt: &[],
     }
+}
+
+/// A `yes`/`no` toggle field — the most common field shape in the game's docs.
+pub(crate) const fn toggle(doc: &'static str) -> FieldSpec {
+    scalar(Setting).doc(doc).values(&["yes", "no"])
 }
 
 /// A block whose contents we don't model (controller payloads, role maps).

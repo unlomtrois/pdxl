@@ -8,16 +8,11 @@ use pdxl_analysis::context::ClauseKind::{
     self, DynamicDesc, Effect, ScriptValue, ScriptedModifier, Trigger,
 };
 use pdxl_analysis::context::ScalarKind::{LocKey, Setting, Target};
-use pdxl_analysis::context::{Fallback, FieldSpec, StructSpec, block, scalar, scalar_or_block};
+use pdxl_analysis::context::{Fallback, StructSpec, block, scalar, scalar_or_block};
 use pdxl_analysis::{DefShape, DefSource, IconHint, KindSpec, RefPattern};
 
 use super::Entity;
-use super::common::{DURATION, OPAQUE, TRIGGERED_ASSET, anywhere, in_on_action};
-
-/// A `yes`/`no` toggle field.
-const fn toggle(doc: &'static str) -> FieldSpec {
-    scalar(Setting).doc(doc).values(&["yes", "no"])
-}
+use super::common::{DURATION, OPAQUE, TRIGGERED_ASSET, anywhere, in_on_action, toggle};
 
 /// The six character skills, for an option's `skill` marker.
 const SKILLS: &[&str] = &[
