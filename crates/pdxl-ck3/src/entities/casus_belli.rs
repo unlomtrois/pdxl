@@ -16,6 +16,22 @@
 //! All effects and triggers in a CB body are in CB scope unless the `.info`
 //! says otherwise.
 //!
+//! **Field order is corpus-canonical**, not info order: `format_fields`
+//! reorders a body to the spec's declaration order, so the spec follows the
+//! dominant layout measured over the 231 CB definitions in game + T4N (mean
+//! normalized position per key, pairwise-precedence corrected; twins like
+//! attacker/defender pairs and `_display_regardless` variants are kept
+//! adjacent, anchored by the higher-count member). Notable conventions the
+//! measurement surfaced: `on_victory_desc` precedes `on_victory` (225 vs 6
+//! pairwise — desc-before-effect for the three peace outcomes, but
+//! effect-before-desc for `on_invalidated`), the `max_*_score_from_occupation`
+//! twins run defender-first (215 vs 3), and names/war-score tuning/AI knobs
+//! trail the body while availability triggers and targeting lead it.
+//!
+//! Corpus-only fields the info misses: `should_show_war_goal_subview`
+//! (157/231 uses!) and `is_holy_war` (6) — both plain toggles, both absent
+//! from `_casus_belli.info`.
+//!
 //! Text fields are loc-key references. The named ones — the four war/CB name
 //! keys and the four `on_*_desc` outcome fields — carry that themselves, via
 //! the `scalar(LocKey)` in their own `FieldSpec` (see `FieldSpec::refs`); only
@@ -63,190 +79,59 @@ const fn knob(doc: &'static str) -> FieldSpec {
     scalar(Setting).doc(doc)
 }
 
-/// The body of one CB type definition (`_casus_belli.info`).
+/// The body of one CB type definition (`_casus_belli.info`), in the
+/// corpus-canonical field order (see the module doc).
 static CASUS_BELLI: StructSpec = StructSpec {
     name: "casus_belli",
     fields: &[
+        // Header.
+        (
+            "icon",
+            scalar(Setting).doc("The icon to use (defaults to the CB key)."),
+        ),
         (
             "group",
             scalar(Setting)
                 .doc("The CB group this belongs to; the group can define extra restrictions."),
         ),
+        // Interface and behavior flags.
         (
-            "icon",
-            scalar(Setting).doc("The icon to use (defaults to the CB key)."),
-        ),
-        // War-score tuning (defines-based when unset).
-        (
-            "attacker_ticking_warscore_delay",
-            block(ClauseKind::Struct(&DURATION))
-                .doc("Delay before ticking war score starts increasing for the attacker."),
-        ),
-        (
-            "defender_ticking_warscore_delay",
-            block(ClauseKind::Struct(&DURATION))
-                .doc("Delay before ticking war score starts increasing for the defender."),
-        ),
-        (
-            "attacker_ticking_warscore",
-            knob("How much ticking war score increases every day for the attacker."),
-        ),
-        (
-            "defender_ticking_warscore",
-            knob("How much ticking war score increases every day for the defender."),
-        ),
-        (
-            "attacker_wargoal_percentage",
-            knob(
-                "How much of the wargoal the attacker must occupy to gain ticking war score \
-                 (`0.0` = at least one occupation).",
-            ),
-        ),
-        (
-            "defender_wargoal_percentage",
-            knob(
-                "How much of the wargoal the defender must occupy to gain ticking war score \
-                 (`0.0` = at least one occupation).",
-            ),
-        ),
-        (
-            "attacker_score_from_occupation_scale",
-            knob("War score from occupation by the attacker is modified by this value."),
-        ),
-        (
-            "defender_score_from_occupation_scale",
-            knob("War score from occupation by the defender is modified by this value."),
-        ),
-        (
-            "attacker_score_from_battles_scale",
-            knob("War score from battles won by the attacker is modified by this value."),
-        ),
-        (
-            "defender_score_from_battles_scale",
-            knob("War score from battles won by the defender is modified by this value."),
-        ),
-        (
-            "max_attacker_score_from_battles",
-            knob("Total war score the attacker can gain from battles."),
-        ),
-        (
-            "max_defender_score_from_battles",
-            knob("Total war score the defender can gain from battles."),
-        ),
-        (
-            "max_attacker_score_from_occupation",
-            knob("Total war score the attacker can gain from occupation."),
-        ),
-        (
-            "max_defender_score_from_occupation",
-            knob("Total war score the defender can gain from occupation."),
-        ),
-        (
-            "full_occupation_by_defender_gives_victory",
-            toggle("Whether full occupation by the defender automatically gives 100% war score."),
-        ),
-        (
-            "full_occupation_by_attacker_gives_victory",
-            toggle("Whether full occupation by the attacker automatically gives 100% war score."),
-        ),
-        (
-            "landless_attacker_needs_armies",
+            "defender_faith_can_join",
             toggle(
-                "If `no`, being landless with no armies doesn't automatically give the other \
-                 side 100% war score.",
+                "If set, same-faith defenders join when they fulfill the \
+                 `can_defensively_join_holy_war` script rule with a positive join value.",
             ),
         ),
         (
-            "allow_hostages",
-            toggle("Whether hostages can be used in peace negotiations (default `yes`)."),
-        ),
-        (
-            "occupation_participation_mult",
-            knob("Multiplier on occupation participation scoring (default 1)."),
-        ),
-        (
-            "siege_participation_mult",
-            knob("Multiplier on siege participation scoring (default 1)."),
-        ),
-        (
-            "battle_participation_mult",
-            knob("Multiplier on battle participation scoring (default 1)."),
-        ),
-        (
-            "cost",
-            block(ClauseKind::Struct(&COST)).doc(
-                "Cost to declare the war. Add a `CB_BASE_COST` desc key to the value if you \
-                 have no conditions.",
+            "should_check_for_interface_availability",
+            toggle(
+                "If `no`, this CB is skipped when checking CB availability (e.g. the \
+                 `has_any_cb_on` trigger).",
             ),
         ),
-        (
-            "attacker_capital_gives_war_score",
-            toggle("Whether the attacker's capital gives war score."),
-        ),
-        (
-            "defender_capital_gives_war_score",
-            toggle("Whether the defender's capital gives war score."),
-        ),
-        (
-            "imprisonment_by_attacker_give_war_score",
-            toggle("Whether imprisonments by the attacker give war score."),
-        ),
-        (
-            "imprisonment_by_defender_give_war_score",
-            toggle("Whether imprisonments by the defender give war score."),
-        ),
-        // War lifecycle effects (CB scope).
-        (
-            "on_declaration",
-            block(Effect).doc("Effect on declaration."),
-        ),
-        ("on_victory", block(Effect).doc("Effect on victory.")),
-        (
-            "on_white_peace",
-            block(Effect).doc("Effect on white peace."),
-        ),
-        ("on_defeat", block(Effect).doc("Effect on defeat.")),
-        (
-            "on_invalidated",
-            block(Effect).doc("Effect when the war is invalidated."),
-        ),
-        // Outcome descriptions. Each takes a bare loc key or a dynamic-description
-        // block; the corpus uses the block form for the three peace outcomes and
-        // overwhelmingly the scalar form for `on_invalidated_desc` (91 vs 30).
-        (
-            "on_victory_desc",
-            scalar_or_block(LocKey, DynamicDesc)
-                .doc("Description of the victory outcome (same scopes as the effect)."),
-        ),
-        (
-            "on_defeat_desc",
-            scalar_or_block(LocKey, DynamicDesc)
-                .doc("Description of the defeat outcome (same scopes as the effect)."),
-        ),
-        (
-            "on_white_peace_desc",
-            scalar_or_block(LocKey, DynamicDesc)
-                .doc("Description of the white-peace outcome (same scopes as the effect)."),
-        ),
-        (
-            "on_invalidated_desc",
-            scalar_or_block(LocKey, DynamicDesc)
-                .doc("Description shown when the war is invalidated."),
-        ),
-        (
-            "should_invalidate",
-            block(Trigger).doc("When this passes, the war is invalidated."),
-        ),
-        (
-            "mutually_exclusive_titles",
-            block(Trigger).doc("If this evaluates to true, only one title can be targeted."),
-        ),
+        ("ai", toggle("If `no`, the AI ignores this CB entirely.")),
         (
             "combine_into_one",
             toggle(
                 "Show all instances of this CB (Holy War for X/Y/Z) as a single entry that \
                  lets you select between the targets.",
             ),
+        ),
+        (
+            "mutually_exclusive_titles",
+            block(Trigger).doc("If this evaluates to true, only one title can be targeted."),
+        ),
+        (
+            "allow_hostages",
+            toggle("Whether hostages can be used in peace negotiations (default `yes`)."),
+        ),
+        (
+            "check_all_defenders_for_ticking_war_score",
+            toggle("If `yes`, land held by all defenders within the wargoal is checked."),
+        ),
+        (
+            "should_show_war_goal_subview",
+            toggle("Show the war-goal subview in the declare-war window *(corpus)*."),
         ),
         // Availability triggers. Attacker/defender scopes per the `.info`.
         (
@@ -271,23 +156,19 @@ static CASUS_BELLI: StructSpec = StructSpec {
                 .doc("Like `allowed_against_character`, but failing it still displays the CB."),
         ),
         (
-            "valid_to_start",
-            block(Trigger).doc(
-                "`scope:attacker`, `scope:defender`, and `scope:target` (if there's a target \
-                 title); `root` is the attacker.",
-            ),
-        ),
-        (
-            "valid_to_start_display_regardless",
-            block(Trigger).doc("Like `valid_to_start`, but failing it still displays the CB."),
-        ),
-        (
             "is_allowed_claim_title",
             block(Trigger).doc(
                 "`scope:attacker`, `scope:defender`, and `scope:claimant`; `root` is the title.",
             ),
         ),
         // Targeting.
+        (
+            "target_top_liege_if_outside_realm",
+            toggle(
+                "Bypass the outside-realm top-liege-only targeting check. Only for scripted \
+                 wars (Peasant Revolts); does not work in the UI.",
+            ),
+        ),
         (
             "target_titles",
             scalar(Setting)
@@ -321,12 +202,207 @@ static CASUS_BELLI: StructSpec = StructSpec {
             ),
         ),
         (
-            "use_de_jure_wargoal_only",
-            toggle(
-                "If set, everything de jure under the target title counts as wargoal for \
-                 ticking score; otherwise everything de facto under it that isn't de jure \
-                 under another title the defender personally holds.",
+            "ignore_effect",
+            scalar(Setting).doc(
+                "This kind of effect is skipped in the effects desc (repeatable; e.g. \
+                 `ignore_effect = change_title_holder`).",
             ),
+        ),
+        (
+            "ai_only_against_liege",
+            toggle("If set, the AI only checks this CB against its liege."),
+        ),
+        (
+            "ai_only_against_neighbors",
+            toggle("If set, the AI only checks this CB against its land and sea neighbors."),
+        ),
+        (
+            "ai_can_target_all_titles",
+            block(Trigger).doc(
+                "Character-scope trigger: when it succeeds the AI uses the scripted title \
+                 target, otherwise `neighbor_land_or_water`.",
+            ),
+        ),
+        // War-nature flags.
+        (
+            "white_peace_possible",
+            toggle("If `no`, only victory, defeat, or invalidation can end the war."),
+        ),
+        (
+            "is_holy_war",
+            toggle("Marks the CB as a holy war *(corpus)*."),
+        ),
+        ("is_great_holy_war", toggle("Is this a Great Holy War?")),
+        // War-score sources.
+        (
+            "full_occupation_by_defender_gives_victory",
+            toggle("Whether full occupation by the defender automatically gives 100% war score."),
+        ),
+        (
+            "full_occupation_by_attacker_gives_victory",
+            toggle("Whether full occupation by the attacker automatically gives 100% war score."),
+        ),
+        (
+            "attacker_capital_gives_war_score",
+            toggle("Whether the attacker's capital gives war score."),
+        ),
+        (
+            "defender_capital_gives_war_score",
+            toggle("Whether the defender's capital gives war score."),
+        ),
+        (
+            "imprisonment_by_defender_give_war_score",
+            toggle("Whether imprisonments by the defender give war score."),
+        ),
+        (
+            "imprisonment_by_attacker_give_war_score",
+            toggle("Whether imprisonments by the attacker give war score."),
+        ),
+        (
+            "attacker_score_from_occupation_scale",
+            knob("War score from occupation by the attacker is modified by this value."),
+        ),
+        (
+            "defender_score_from_occupation_scale",
+            knob("War score from occupation by the defender is modified by this value."),
+        ),
+        (
+            "attacker_score_from_battles_scale",
+            knob("War score from battles won by the attacker is modified by this value."),
+        ),
+        (
+            "defender_score_from_battles_scale",
+            knob("War score from battles won by the defender is modified by this value."),
+        ),
+        (
+            "occupation_participation_mult",
+            knob("Multiplier on occupation participation scoring (default 1)."),
+        ),
+        (
+            "siege_participation_mult",
+            knob("Multiplier on siege participation scoring (default 1)."),
+        ),
+        (
+            "battle_participation_mult",
+            knob("Multiplier on battle participation scoring (default 1)."),
+        ),
+        // Validity, cost, and the war lifecycle (CB scope).
+        (
+            "valid_to_start",
+            block(Trigger).doc(
+                "`scope:attacker`, `scope:defender`, and `scope:target` (if there's a target \
+                 title); `root` is the attacker.",
+            ),
+        ),
+        (
+            "valid_to_start_display_regardless",
+            block(Trigger).doc("Like `valid_to_start`, but failing it still displays the CB."),
+        ),
+        (
+            "should_invalidate",
+            block(Trigger).doc("When this passes, the war is invalidated."),
+        ),
+        (
+            "cost",
+            block(ClauseKind::Struct(&COST)).doc(
+                "Cost to declare the war. Add a `CB_BASE_COST` desc key to the value if you \
+                 have no conditions.",
+            ),
+        ),
+        (
+            "on_declaration",
+            block(Effect).doc("Effect on declaration."),
+        ),
+        (
+            "on_invalidated",
+            block(Effect).doc("Effect when the war is invalidated."),
+        ),
+        (
+            "on_invalidated_desc",
+            scalar_or_block(LocKey, DynamicDesc)
+                .doc("Description shown when the war is invalidated."),
+        ),
+        // Outcomes: the corpus writes each description immediately before its
+        // effect. Each desc takes a bare loc key or a dynamic-description
+        // block; the corpus uses the block form for the three peace outcomes
+        // and overwhelmingly the scalar form for `on_invalidated_desc`
+        // (91 vs 30).
+        (
+            "on_victory_desc",
+            scalar_or_block(LocKey, DynamicDesc)
+                .doc("Description of the victory outcome (same scopes as the effect)."),
+        ),
+        ("on_victory", block(Effect).doc("Effect on victory.")),
+        (
+            "on_white_peace_desc",
+            scalar_or_block(LocKey, DynamicDesc)
+                .doc("Description of the white-peace outcome (same scopes as the effect)."),
+        ),
+        (
+            "on_white_peace",
+            block(Effect).doc("Effect on white peace."),
+        ),
+        (
+            "on_defeat_desc",
+            scalar_or_block(LocKey, DynamicDesc)
+                .doc("Description of the defeat outcome (same scopes as the effect)."),
+        ),
+        ("on_defeat", block(Effect).doc("Effect on defeat.")),
+        (
+            "landless_attacker_needs_armies",
+            toggle(
+                "If `no`, being landless with no armies doesn't automatically give the other \
+                 side 100% war score.",
+            ),
+        ),
+        (
+            "gui_attacker_faith_might_join",
+            toggle(
+                "Show a warning that others of the attacker's faith might join (no gameplay \
+                 effect).",
+            ),
+        ),
+        (
+            "gui_defender_faith_might_join",
+            toggle(
+                "Show a warning that others of the defender's faith might join (no gameplay \
+                 effect).",
+            ),
+        ),
+        // Death / inheritance behavior.
+        (
+            "transfer_behavior",
+            scalar(Setting)
+                .doc("What happens to the war when the target is transferred.")
+                .values(&["invalidate", "transfer"]),
+        ),
+        (
+            "on_primary_attacker_death",
+            scalar(Setting)
+                .doc("What happens to the war when the primary attacker dies.")
+                .values(&["invalidate", "inherit", "inherit_faction"]),
+        ),
+        (
+            "on_primary_defender_death",
+            scalar(Setting)
+                .doc("What happens to the war when the primary defender dies.")
+                .values(&["invalidate", "inherit", "inherit_faction"]),
+        ),
+        (
+            "check_attacker_inheritance_validity",
+            toggle("If `no`, we don't check if the replacement is valid before doing it."),
+        ),
+        (
+            "check_defender_inheritance_validity",
+            toggle("If `no`, we don't check if the replacement is valid before doing it."),
+        ),
+        (
+            "attacker_allies_inherit",
+            toggle("Should allies in war inherit being in the war?"),
+        ),
+        (
+            "defender_allies_inherit",
+            toggle("Should allies in war inherit being in the war?"),
         ),
         // Naming (loc keys with war-name substitutions).
         ("war_name", scalar(LocKey).doc("The war name.")),
@@ -347,49 +423,6 @@ static CASUS_BELLI: StructSpec = StructSpec {
             "cb_name_no_target",
             scalar(LocKey).doc("The CB name used when no target title is selected."),
         ),
-        ("truce_days", knob("Days of truce after the war.")),
-        (
-            "ignore_effect",
-            scalar(Setting).doc(
-                "This kind of effect is skipped in the effects desc (repeatable; e.g. \
-                 `ignore_effect = change_title_holder`).",
-            ),
-        ),
-        // Death / inheritance behavior.
-        (
-            "on_primary_attacker_death",
-            scalar(Setting)
-                .doc("What happens to the war when the primary attacker dies.")
-                .values(&["invalidate", "inherit", "inherit_faction"]),
-        ),
-        (
-            "on_primary_defender_death",
-            scalar(Setting)
-                .doc("What happens to the war when the primary defender dies.")
-                .values(&["invalidate", "inherit", "inherit_faction"]),
-        ),
-        (
-            "transfer_behavior",
-            scalar(Setting)
-                .doc("What happens to the war when the target is transferred.")
-                .values(&["invalidate", "transfer"]),
-        ),
-        (
-            "check_attacker_inheritance_validity",
-            toggle("If `no`, we don't check if the replacement is valid before doing it."),
-        ),
-        (
-            "check_defender_inheritance_validity",
-            toggle("If `no`, we don't check if the replacement is valid before doing it."),
-        ),
-        (
-            "attacker_allies_inherit",
-            toggle("Should allies in war inherit being in the war?"),
-        ),
-        (
-            "defender_allies_inherit",
-            toggle("Should allies in war inherit being in the war?"),
-        ),
         (
             "interface_priority",
             knob(
@@ -397,84 +430,70 @@ static CASUS_BELLI: StructSpec = StructSpec {
                  order.",
             ),
         ),
-        // AI.
+        // War-score tuning tail (defines-based when unset). The corpus writes
+        // the ticking twins defender-first, the occupation maxima
+        // defender-first, and everything else attacker-first.
         (
-            "max_ai_diplo_distance_to_title",
-            knob("The AI never considers titles further away than this."),
+            "defender_ticking_warscore",
+            knob("How much ticking war score increases every day for the defender."),
         ),
         (
-            "ai_only_against_liege",
-            toggle("If set, the AI only checks this CB against its liege."),
+            "attacker_ticking_warscore",
+            knob("How much ticking war score increases every day for the attacker."),
         ),
         (
-            "ai_only_against_neighbors",
-            toggle("If set, the AI only checks this CB against its land and sea neighbors."),
+            "defender_ticking_warscore_delay",
+            block(ClauseKind::Struct(&DURATION))
+                .doc("Delay before ticking war score starts increasing for the defender."),
         ),
         (
-            "ai_can_target_all_titles",
-            block(Trigger).doc(
-                "Character-scope trigger: when it succeeds the AI uses the scripted title \
-                 target, otherwise `neighbor_land_or_water`.",
-            ),
-        ),
-        ("ai", toggle("If `no`, the AI ignores this CB entirely.")),
-        (
-            "ai_overlord_defensive_power_impact",
-            block(ScriptValue).doc(
-                "Overlord join chance, 0–1: the weight of the overlord's power when the AI \
-                 evaluates attacking an unprotected subject. Scopes: `root`/`attacker` = the \
-                 evaluating character, `defender` = the subject, `overlord` = the defender's \
-                 overlord.",
-            ),
-        ),
-        (
-            "white_peace_possible",
-            toggle("If `no`, only victory, defeat, or invalidation can end the war."),
-        ),
-        (
-            "check_all_defenders_for_ticking_war_score",
-            toggle("If `yes`, land held by all defenders within the wargoal is checked."),
+            "attacker_ticking_warscore_delay",
+            block(ClauseKind::Struct(&DURATION))
+                .doc("Delay before ticking war score starts increasing for the attacker."),
         ),
         (
             "ticking_war_score_targets_entire_realm",
             toggle("If `yes`, the whole realm is checked instead of the wargoal."),
         ),
         (
-            "gui_attacker_faith_might_join",
+            "use_de_jure_wargoal_only",
             toggle(
-                "Show a warning that others of the attacker's faith might join (no gameplay \
-                 effect).",
+                "If set, everything de jure under the target title counts as wargoal for \
+                 ticking score; otherwise everything de facto under it that isn't de jure \
+                 under another title the defender personally holds.",
             ),
         ),
         (
-            "gui_defender_faith_might_join",
-            toggle(
-                "Show a warning that others of the defender's faith might join (no gameplay \
-                 effect).",
+            "attacker_wargoal_percentage",
+            knob(
+                "How much of the wargoal the attacker must occupy to gain ticking war score \
+                 (`0.0` = at least one occupation).",
             ),
         ),
         (
-            "defender_faith_can_join",
-            toggle(
-                "If set, same-faith defenders join when they fulfill the \
-                 `can_defensively_join_holy_war` script rule with a positive join value.",
-            ),
-        ),
-        ("is_great_holy_war", toggle("Is this a Great Holy War?")),
-        (
-            "target_top_liege_if_outside_realm",
-            toggle(
-                "Bypass the outside-realm top-liege-only targeting check. Only for scripted \
-                 wars (Peasant Revolts); does not work in the UI.",
+            "defender_wargoal_percentage",
+            knob(
+                "How much of the wargoal the defender must occupy to gain ticking war score \
+                 (`0.0` = at least one occupation).",
             ),
         ),
         (
-            "should_check_for_interface_availability",
-            toggle(
-                "If `no`, this CB is skipped when checking CB availability (e.g. the \
-                 `has_any_cb_on` trigger).",
-            ),
+            "max_attacker_score_from_battles",
+            knob("Total war score the attacker can gain from battles."),
         ),
+        (
+            "max_defender_score_from_battles",
+            knob("Total war score the defender can gain from battles."),
+        ),
+        (
+            "max_defender_score_from_occupation",
+            knob("Total war score the defender can gain from occupation."),
+        ),
+        (
+            "max_attacker_score_from_occupation",
+            knob("Total war score the attacker can gain from occupation."),
+        ),
+        // AI scoring tail.
         (
             "ai_score",
             scalar_or_block(Setting, ScriptValue)
@@ -485,6 +504,20 @@ static CASUS_BELLI: StructSpec = StructSpec {
             scalar_or_block(Setting, ScriptValue)
                 .doc("Script value, standard war scopes — multiplied with the title scoring."),
         ),
+        (
+            "max_ai_diplo_distance_to_title",
+            knob("The AI never considers titles further away than this."),
+        ),
+        (
+            "ai_overlord_defensive_power_impact",
+            block(ScriptValue).doc(
+                "Overlord join chance, 0–1: the weight of the overlord's power when the AI \
+                 evaluates attacking an unprotected subject. Scopes: `root`/`attacker` = the \
+                 evaluating character, `defender` = the subject, `overlord` = the defender's \
+                 overlord.",
+            ),
+        ),
+        ("truce_days", knob("Days of truce after the war.")),
     ],
     fallback: Fallback::Deny,
 };
