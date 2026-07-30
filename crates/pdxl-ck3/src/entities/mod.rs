@@ -76,6 +76,7 @@ mod subject_contract;
 mod task_contract;
 mod terrain;
 mod title;
+mod title_history;
 mod traits;
 
 /// The uniform surface every game concept declares. Both consts default to
@@ -188,6 +189,7 @@ registry!(
     activity::Activity,
     task_contract::TaskContract,
     bookmark::Bookmark,
+    title_history::TitleHistory,
     message::Message,
     loc::Loc,
 );

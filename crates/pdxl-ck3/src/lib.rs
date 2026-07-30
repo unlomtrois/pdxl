@@ -38,6 +38,10 @@ const SCOPE_KEYWORDS: &[&str] = &[
     // history is ~4900 of its uses. Nothing in the corpus is ever *named*
     // `none`, so skipping it game-wide costs no resolution.
     "none",
+    // Title history's vacate sentinel — `holder = 0` (1439) and `liege = 0`
+    // (1182). No symbol is ever named `0`: province ids start at 1, and no
+    // numeric dynasty or character id takes it.
+    "0",
     "root",
     "this",
     "prev",

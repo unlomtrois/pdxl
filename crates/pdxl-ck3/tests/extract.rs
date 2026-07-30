@@ -3359,6 +3359,67 @@ fn task_contract_kinds_carry_their_implicit_localization() {
     );
 }
 
+// ── title history ───────────────────────────────────────────────────────────
+
+#[test]
+fn title_history_defines_nothing_and_references_everything() {
+    let f = extract(
+        "k_longshan = {\n\
+         \t1395.2.4 = {\n\
+         \t\tholder = Uozumi_10\n\
+         \t\tliege = e_china\n\
+         \t\tgovernment = celestial_government\n\
+         \t\tsuccession_laws = { fire_military_succession_law }\n\
+         \t\tname = MASYAF\n\
+         \t\ttributary_of = {\n\
+         \t\t\tsuzerain = d_angkor\n\
+         \t\t\tcontract_group = tributary_mandala\n\
+         \t\t}\n\
+         \t}\n\
+         \t1450.9.16 = {\n\
+         \t\tholder = 0\n\
+         \t\tliege = 0\n\
+         \t\tchange_development_level = 10\n\
+         \t}\n\
+         }\n",
+        "history/titles/00.txt",
+    );
+    assert!(f.defs.is_empty(), "{:?}", f.defs);
+
+    let by = |k| {
+        let mut v = f
+            .refs
+            .iter()
+            .filter(|r| r.kind == k)
+            .map(|r| r.name.as_str())
+            .collect::<Vec<_>>();
+        v.sort_unstable();
+        v.dedup();
+        v
+    };
+    // The top-level key, the lieges, and the tributary suzerain — but never
+    // the `0` vacate sentinel.
+    assert_eq!(
+        by(pdxl_ck3::kinds::TITLE),
+        vec!["d_angkor", "e_china", "k_longshan"]
+    );
+    assert_eq!(by(pdxl_ck3::kinds::CHARACTER), vec!["Uozumi_10"]);
+    assert_eq!(
+        by(pdxl_ck3::kinds::GOVERNMENT),
+        vec!["celestial_government"]
+    );
+    assert_eq!(
+        by(pdxl_ck3::kinds::LAW),
+        vec!["fire_military_succession_law"]
+    );
+    assert_eq!(
+        by(pdxl_ck3::kinds::SUBJECT_CONTRACT_GROUP),
+        vec!["tributary_mandala"]
+    );
+    assert_eq!(by(pdxl_ck3::kinds::LOC_KEY), vec!["MASYAF"]);
+    assert!(f.refs.iter().all(|r| r.name != "0"), "{:?}", f.refs);
+}
+
 // ── bookmarks ───────────────────────────────────────────────────────────────
 
 #[test]
