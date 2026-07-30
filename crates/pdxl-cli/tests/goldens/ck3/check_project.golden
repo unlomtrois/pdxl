@@ -80,6 +80,9 @@ guest_invite_rule       0
 activity_group_type      0
 task_contract_type      0
 task_contract_reward      0
+bookmark                0
+bookmark_group          0
+challenge_character      0
 message                 0
 message_filter_type      0
 message_group_type      0

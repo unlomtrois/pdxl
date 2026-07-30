@@ -3359,6 +3359,120 @@ fn task_contract_kinds_carry_their_implicit_localization() {
     );
 }
 
+// ── bookmarks ───────────────────────────────────────────────────────────────
+
+#[test]
+fn bookmark_refs_are_all_structure_carried() {
+    let f = extract(
+        "bm_867_persia = {\n\
+         \tstart_date = 867.1.1\n\
+         \tgroup = bm_group_867\n\
+         \tcharacter = {\n\
+         \t\tname = \"bookmark_persia_amir_yaqub\"\n\
+         \t\tdynasty = 812\n\
+         \t\ttype = male\n\
+         \t\ttitle = k_makran\n\
+         \t\tgovernment = clan_government\n\
+         \t\tculture = persian\n\
+         \t\treligion = ashari\n\
+         \t\tdifficulty = \"BOOKMARK_CHARACTER_DIFFICULTY_MEDIUM\"\n\
+         \t\thistory_id = 163101\n\
+         \t\tcharacter = {\n\
+         \t\t\tname = \"bookmark_persia_yaqub_alt_amr\"\n\
+         \t\t\trelation = \"BOOKMARK_RELATION_BROTHER\"\n\
+         \t\t\tdynasty_house = house_samanid\n\
+         \t\t\thistory_id = extra_turks_0001\n\
+         \t\t}\n\
+         \t}\n\
+         }\n",
+        "common/bookmarks/bookmarks/00.txt",
+    );
+    assert_eq!(f.defs[0].kind, pdxl_ck3::kinds::BOOKMARK);
+    assert_eq!(f.defs[0].name, "bm_867_persia");
+
+    let by = |k| {
+        let mut v = f
+            .refs
+            .iter()
+            .filter(|r| r.kind == k)
+            .map(|r| r.name.as_str())
+            .collect::<Vec<_>>();
+        v.sort_unstable();
+        v
+    };
+    assert_eq!(by(pdxl_ck3::kinds::BOOKMARK_GROUP), vec!["bm_group_867"]);
+    // The recursive character block carries refs at both depths, and the
+    // quoted loc-key values resolve with their quotes trimmed.
+    assert_eq!(
+        by(pdxl_ck3::kinds::CHARACTER),
+        vec!["163101", "extra_turks_0001"]
+    );
+    assert_eq!(by(pdxl_ck3::kinds::DYNASTY), vec!["812"]);
+    assert_eq!(by(pdxl_ck3::kinds::DYNASTY_HOUSE), vec!["house_samanid"]);
+    assert_eq!(by(pdxl_ck3::kinds::TITLE), vec!["k_makran"]);
+    assert_eq!(by(pdxl_ck3::kinds::GOVERNMENT), vec!["clan_government"]);
+    assert_eq!(by(pdxl_ck3::kinds::CULTURE), vec!["persian"]);
+    // `religion` holds a faith key, despite the name.
+    assert_eq!(by(pdxl_ck3::kinds::FAITH), vec!["ashari"]);
+    assert_eq!(
+        by(pdxl_ck3::kinds::LOC_KEY),
+        vec![
+            "BOOKMARK_CHARACTER_DIFFICULTY_MEDIUM",
+            "BOOKMARK_RELATION_BROTHER",
+            "bookmark_persia_amir_yaqub",
+            "bookmark_persia_yaqub_alt_amr",
+        ]
+    );
+}
+
+#[test]
+fn bookmark_groups_and_challenge_characters_define() {
+    let f = extract(
+        "bm_group_867 = { default_start_date = 867.1.1 }\n",
+        "common/bookmarks/groups/00.txt",
+    );
+    assert_eq!(f.defs[0].kind, pdxl_ck3::kinds::BOOKMARK_GROUP);
+
+    let f = extract(
+        "challenge_character_renaud_kerak = {\n\
+         \tstart_date = 1178.10.1\n\
+         \tachievements = { for_the_faith_achievement }\n\
+         \tcharacter = { history_id = 215053 religion = catholic }\n\
+         }\n",
+        "common/bookmarks/challenge_characters/00.txt",
+    );
+    assert_eq!(f.defs[0].kind, pdxl_ck3::kinds::CHALLENGE_CHARACTER);
+    assert!(
+        f.refs
+            .iter()
+            .any(|r| r.kind == pdxl_ck3::kinds::CHARACTER && r.name == "215053")
+    );
+    // Achievements are plain data until an achievement kind exists.
+    assert!(
+        f.refs.iter().all(|r| r.name != "for_the_faith_achievement"),
+        "{:?}",
+        f.refs
+    );
+}
+
+#[test]
+fn bookmark_kinds_carry_their_implicit_localization() {
+    let schema = pdxl_ck3::schema();
+    let suffixes = |k| {
+        schema
+            .implicit_loc_patterns(k)
+            .iter()
+            .map(|p| p.suffix)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(suffixes(pdxl_ck3::kinds::BOOKMARK), vec!["", "_desc"]);
+    assert_eq!(suffixes(pdxl_ck3::kinds::BOOKMARK_GROUP), vec![""]);
+    assert_eq!(
+        suffixes(pdxl_ck3::kinds::CHALLENGE_CHARACTER),
+        vec!["", "_desc"]
+    );
+}
+
 #[test]
 fn activity_kinds_carry_their_implicit_localization() {
     let schema = pdxl_ck3::schema();

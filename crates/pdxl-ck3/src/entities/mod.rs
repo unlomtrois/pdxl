@@ -23,6 +23,7 @@ pub(crate) mod common;
 
 mod activity;
 pub(crate) mod artifact;
+mod bookmark;
 mod building;
 mod casus_belli;
 mod character;
@@ -186,6 +187,7 @@ registry!(
     great_project::GreatProject,
     activity::Activity,
     task_contract::TaskContract,
+    bookmark::Bookmark,
     message::Message,
     loc::Loc,
 );
